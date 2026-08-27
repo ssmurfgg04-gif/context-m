@@ -66,7 +66,9 @@ cross-checks on our own numbers, not BEAM-comparable scores.
 **Finding:** both LLM judges grade the same contexts *lower* than the
 deterministic judge — the OOD numbers above are, if anything, slightly
 generous relative to independent graders. Two judge models, two samples,
-same direction. Artifacts:
+same direction. **Reproducibility:** a second, independent CI run of the
+Gemini sweep produced a byte-identical scored file (same 237 scores) —
+the judge is deterministic at temperature 0. Artifacts:
 `benchmarks/results/ood/llm_judge_crosscheck_gemini.json` (full sweep),
 `benchmarks/results/ood/llm_judge_crosscheck.json` (glm sample),
 `benchmarks/results/llm_eval_summary.md`.

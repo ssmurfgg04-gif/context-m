@@ -59,7 +59,7 @@ concurrency:
 jobs:
   gemini-eval:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       LLM_BACKEND: gemini
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -73,10 +73,11 @@ jobs:
       - uses: actions/checkout@v4
 
       # judge cache: per-item LLM results keyed by the judged inputs +
-      # backend + model — reruns resume and only re-bill missing items
-      # (validated the hard way: a rerun without cache re-billed the full
-      # 240-item sweep and exhausted the daily quota mid-run)
-      - uses: actions/cache@v4
+      # backend + model — reruns resume and only re-bill missing items.
+      # restore/save split (not plain actions/cache): a hard timeout
+      # cancel SKIPS post steps, which silently dropped the cache on the
+      # 3rd run. The explicit save step below runs under if: always().
+      - uses: actions/cache/restore@v4
         with:
           path: /tmp/llm-cache
           key: llm-${{ runner.os }}-${{ env.LLM_BACKEND }}-${{ env.LLM_MODEL }}-${{ hashFiles('benchmarks/ood/judge_items.jsonl', 'benchmarks/real_github/threads.jsonl') }}
@@ -138,6 +139,14 @@ jobs:
             git commit -m "bench(llm): canonical judge run — ${LLM_MODEL} ($(date -u +%Y-%m-%dT%H:%MZ))"
             git push origin bench/llm-eval
           fi
+
+      - name: Save judge cache (survives timeout cancels)
+        if: always()
+        continue-on-error: true   # exact-key save on a rerun is a no-op error
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/llm-cache
+          key: llm-${{ runner.os }}-${{ env.LLM_BACKEND }}-${{ env.LLM_MODEL }}-${{ hashFiles('benchmarks/ood/judge_items.jsonl', 'benchmarks/real_github/threads.jsonl') }}
 
       - name: Upload results artifact
         if: always()
