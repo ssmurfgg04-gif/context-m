@@ -1,0 +1,27 @@
+{
+ "n_items": 237,
+ "n_items_attempted": 240,
+ "sampling_note": "agreement computed over all 237 scored items (judge is resumable; attempted 240).",
+ "det_judge_mean": 0.3354,
+ "llm_judge_mean": 0.2215,
+ "exact_agreement": 0.827,
+ "within_half_point": 0.8776,
+ "llm_judge_per_ability": {
+  "AB": 1.0,
+  "CR": 0.0,
+  "EO": 0.3958,
+  "IE": 0.087,
+  "IF": 0.087,
+  "KU": 0.125,
+  "MH": 0.0833,
+  "PF": 0.0417,
+  "SZ": 0.125,
+  "TR": 0.2609
+ },
+ "judge_models": [
+  "gemini:gemini-3.5-flash-lite"
+ ],
+ "finding": "LLM judge mean 0.222 vs deterministic judge mean 0.335; exact agreement 82.7%. Two independent graders \u2014 the offline judge is not silently inflating scores (it grades higher here)",
+ "protocol": "BEAM-style context-sufficiency rubric replicated with the recorded judge model(s); canonical BEAM uses gpt-5 \u2014 numbers are NOT directly comparable across judge models.",
+ "generated_at": "2026-08-27T18:14:29.851636+00:00"
+}

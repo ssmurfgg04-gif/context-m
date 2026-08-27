@@ -1,0 +1,10 @@
+{
+ "n_questions": 19,
+ "llm_judge_overall": 0.2632,
+ "answerable": 0.0667,
+ "abstention": 1.0,
+ "judge_models": [
+  "gemini:gemini-3.5-flash-lite"
+ ],
+ "interpretation": "Context-M retrieval over REAL GitHub threads, graded by the BEAM-style LLM judge. Judge model identity recorded; canonical BEAM uses gpt-5 \u2014 not directly comparable."
+}

@@ -1,5 +1,5 @@
 window.LEADERBOARD_DATA = {
- "generated_at": "2026-08-27T17:23:17.374081+00:00",
+ "generated_at": "2026-08-27T18:23:12.125330+00:00",
  "sources": {
   "id": {
    "label": "In-distribution (synthetic, template-matched) \u2014 regression harness, NOT a capability claim",
@@ -208,7 +208,81 @@ window.LEADERBOARD_DATA = {
    "n_personas": 4,
    "disclaimer": "Renderings produced by an LLM (glm-4-plus; identity recorded in results JSON); judged by the deterministic nugget judge; renderer omissions excluded from extraction recall."
   },
+  "real_github": {
+   "label": "Real GitHub issue threads \u2014 zero-LLM vs LLM extractor on real human text",
+   "comparison": {
+    "n_threads": 5,
+    "n_comments": 150,
+    "u0": {
+     "facts": 16,
+     "seconds": 0.166,
+     "ms_per_comment": 1.11,
+     "cost_usd": 0.0
+    },
+    "llm_reference": {
+     "facts": 158,
+     "seconds": 416.9,
+     "ms_per_comment": 2779.39,
+     "tokens": 89655,
+     "model": "gemini:gemini-3.5-flash-lite"
+    },
+    "recall_vs_llm_reference": 0.0063,
+    "precision_vs_llm_reference": 0.0625,
+    "per_relation_recall": {
+     "uses": 0.04,
+     "encountered_error_in": 0.0,
+     "encountered_error_with_c": 0.0,
+     "ran_command": 0.0,
+     "is": 0.0,
+     "states": 0.0,
+     "thinks": 0.0,
+     "runs": 0.0,
+     "dislikes": 0.0,
+     "prefers": 0.0,
+     "proposes_syntax": 0.0,
+     "wants": 0.0
+    },
+    "interpretation": "recall = share of LLM-reference facts the \u03bc=0 extractor also produced on the same real comment; precision = share of \u03bc=0 facts the LLM reference corroborates. The LLM reference is a strong-but-imperfect yardstick, not gold truth."
+   },
+   "qa": {
+    "n_questions": 19,
+    "llm_judge_overall": 0.2632,
+    "answerable": 0.0667,
+    "abstention": 1.0,
+    "judge_models": [
+     "gemini:gemini-3.5-flash-lite"
+    ],
+    "interpretation": "Context-M retrieval over REAL GitHub threads, graded by the BEAM-style LLM judge. Judge model identity recorded; canonical BEAM uses gpt-5 \u2014 not directly comparable."
+   }
+  },
   "llm_judge_crosscheck": {
+   "n_items": 237,
+   "n_items_attempted": 240,
+   "sampling_note": "agreement computed over all 237 scored items (judge is resumable; attempted 240).",
+   "det_judge_mean": 0.3354,
+   "llm_judge_mean": 0.2215,
+   "exact_agreement": 0.827,
+   "within_half_point": 0.8776,
+   "llm_judge_per_ability": {
+    "AB": 1.0,
+    "CR": 0.0,
+    "EO": 0.3958,
+    "IE": 0.087,
+    "IF": 0.087,
+    "KU": 0.125,
+    "MH": 0.0833,
+    "PF": 0.0417,
+    "SZ": 0.125,
+    "TR": 0.2609
+   },
+   "judge_models": [
+    "gemini:gemini-3.5-flash-lite"
+   ],
+   "finding": "LLM judge mean 0.222 vs deterministic judge mean 0.335; exact agreement 82.7%. Two independent graders \u2014 the offline judge is not silently inflating scores (it grades higher here)",
+   "protocol": "BEAM-style context-sufficiency rubric replicated with the recorded judge model(s); canonical BEAM uses gpt-5 \u2014 numbers are NOT directly comparable across judge models.",
+   "generated_at": "2026-08-27T18:14:29.851636+00:00"
+  },
+  "llm_judge_crosscheck_glm": {
    "n_items": 58,
    "n_items_attempted": 240,
    "sampling_note": "API quota limited the run to 58 of 240 exported items; agreement stats are computed on this sample and labelled as such.",

@@ -54,6 +54,16 @@ helps only marginally today — it surfaces facts but does not reconstruct
 bi-temporal chains. [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md)
 documents which phrasings break, with worked examples.
 
+**Independent LLM judges grade these numbers *lower*, not higher.** The
+full 240-item OOD sweep was re-graded by `gemini-3.5-flash-lite` from a
+clean CI runner: LLM-judge mean **0.222** vs offline judge **0.335**,
+exact agreement 82.7% (237/240 items;
+[`results/ood/llm_judge_crosscheck_gemini.json`](benchmarks/results/ood/)).
+A second judge (glm-4-plus, 58-item quota sample) agrees: 0.250 vs 0.345.
+Two independent models, same conclusion — the offline grader is not
+inflating scores. Judge model ≠ canonical BEAM's gpt-5, so these are
+cross-checks, not BEAM-comparable numbers.
+
 **Tier 2 — In-distribution (the regression harness).** Synthetic
 BEAM-style conversations (arXiv:2510.27246 methodology), 10 abilities,
 deterministic nugget judge, μ=0 ingest asserted, 5 seeds:
@@ -76,9 +86,22 @@ apples-to-oranges comparison we refuse to make.
 **Tier 3 — Real GitHub data.** Real issue threads from public repos
 (rust-lang/rust, numpy/numpy, pydantic/pydantic; attribution in
 `benchmarks/real_github/`): the μ=0 extractor vs an LLM reference
-extractor on identical comments, with cost and latency for both — see
-[`benchmarks/results/real_github/`](benchmarks/results/) and the
-leaderboard for the current numbers.
+extractor (`gemini-3.5-flash-lite`) on identical comments, plus retrieval
+QA judged by the same LLM:
+
+| Track | Result |
+|---|---|
+| μ=0 extraction | 16 facts from 150 comments · 1.1 ms/comment · **$0.00** |
+| LLM reference extraction | 158 facts · 2,779 ms/comment · ~90K tokens |
+| μ=0 recall vs LLM reference | **0.6%** — the honest gap on real technical text |
+| Retrieval QA (LLM-judged, 19 Qs) | overall 0.263 · answerable 0.067 · abstention 100% |
+
+Read this as the cost/coverage frontier: the μ=0 path is ~2,500× faster
+and free but, on developer-issue language, captures ~10× fewer facts
+than an LLM extractor. The enrichment fallback and per-domain pattern
+packs are the bridge. Artifacts:
+[`benchmarks/results/real_github/`](benchmarks/results/) ·
+[`results/llm_eval_summary.md`](benchmarks/results/llm_eval_summary.md).
 
 Engineering facts measured alongside (see `docs/BENCHMARKS.md`):
 

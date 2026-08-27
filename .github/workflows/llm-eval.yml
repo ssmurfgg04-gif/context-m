@@ -124,7 +124,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "no new results to commit"
           else
-            git commit -m "bench(llm): canonical judge run — ${GEMINI_MODEL} ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git commit -m "bench(llm): canonical judge run — ${LLM_MODEL} ($(date -u +%Y-%m-%dT%H:%MZ))"
             git push origin bench/llm-eval
           fi
 

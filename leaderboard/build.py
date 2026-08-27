@@ -88,10 +88,16 @@ def build() -> dict:
             "qa": qa,
         }
 
-    # ---- LLM judge cross-check -----------------------------------------------
-    xchk = load(RESULTS / "ood" / "llm_judge_crosscheck.json")
-    if xchk:
-        data["sources"]["llm_judge_crosscheck"] = xchk
+    # ---- LLM judge cross-checks ----------------------------------------------
+    # gemini run is the canonical one (full 240-item sweep); glm-4-plus run
+    # was quota-limited to 58 items — both kept, both labelled.
+    for name, path in (
+        ("llm_judge_crosscheck", RESULTS / "ood" / "llm_judge_crosscheck_gemini.json"),
+        ("llm_judge_crosscheck_glm", RESULTS / "ood" / "llm_judge_crosscheck.json"),
+    ):
+        xchk = load(path)
+        if xchk:
+            data["sources"][name] = xchk
 
     # ---- rust acceleration scorecard ---------------------------------------
     rust = load(RESULTS / "rust_accel.json")

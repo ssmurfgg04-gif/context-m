@@ -43,20 +43,49 @@ conveyance tracking in `benchmarks/ood/rendered_p4.jsonl`.
 
 ### LLM-judge cross-check (canonical-protocol replication)
 
-240 probe/context pairs were exported in the BEAM judge format; the LLM
-judge (glm-4-plus — NOT gpt-5, so not directly comparable to canonical
-BEAM numbers) graded the 58-item sample the API quota allowed:
+240 probe/context pairs were exported in the BEAM judge format and graded
+by two independent LLM judges. Judge models are NOT gpt-5, so these are
+cross-checks on our own numbers, not BEAM-comparable scores.
+
+**Canonical sweep — `gemini-3.5-flash-lite` from a clean CI runner
+([.github/workflows/llm-eval.yml](../.github/workflows/llm-eval.yml)),
+237/240 items:**
+
+| Grader | Mean | Exact agreement | Within ½ point |
+|---|---:|---:|---:|
+| Deterministic nugget judge | 0.335 | 82.7% | 87.8% |
+| LLM judge (gemini-3.5-flash-lite) | 0.222 | — | — |
+
+**Second judge — glm-4-plus (58-item quota sample from an earlier run):**
 
 | Grader | Mean | Exact agreement | Within ½ point |
 |---|---:|---:|---:|
 | Deterministic nugget judge | 0.345 | 75.9% (44/58) | 77.6% (45/58) |
 | LLM judge (glm-4-plus) | 0.250 | — | — |
 
-**Finding:** the LLM judge grades the same contexts *lower* than the
+**Finding:** both LLM judges grade the same contexts *lower* than the
 deterministic judge — the OOD numbers above are, if anything, slightly
-generous relative to an independent grader. Two-grader agreement of 76%
-with the LLM systematically stricter is the credibility bar a self-graded
-number should clear. Artifacts: `benchmarks/results/ood/llm_judge_crosscheck.json`.
+generous relative to independent graders. Two judge models, two samples,
+same direction. Artifacts:
+`benchmarks/results/ood/llm_judge_crosscheck_gemini.json` (full sweep),
+`benchmarks/results/ood/llm_judge_crosscheck.json` (glm sample),
+`benchmarks/results/llm_eval_summary.md`.
+
+### Real-GitHub track (LLM reference + LLM-judged QA)
+
+Ran end-to-end in CI with `gemini-3.5-flash-lite` as both reference
+extractor and QA judge (5 threads, 150 comments):
+
+- μ=0 extractor: 16 facts, 1.1 ms/comment, $0.00
+- LLM reference extractor: 158 facts, 2,779 ms/comment, ~90K tokens
+- μ=0 recall vs LLM reference: **0.6%**; precision 6.3%
+- Retrieval QA (19 questions): overall 0.263, answerable 0.067,
+  abstention 1.0
+
+The μ=0 path is ~2,500× faster and free, but on real developer-issue
+language it captures ~10× fewer facts than an LLM extractor — that is
+the honest cost/coverage frontier. Artifacts:
+`benchmarks/results/real_github/`.
 
 ## Tier 2 — In-distribution (regression harness)
 

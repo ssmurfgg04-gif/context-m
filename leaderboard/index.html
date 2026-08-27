@@ -161,16 +161,20 @@ if (rg) {
 
 // ---------------------------------------------------------------- judge xchk
 const xchk = D.sources.llm_judge_crosscheck;
+const xchkGlm = D.sources.llm_judge_crosscheck_glm;
 if (xchk) {
   app.appendChild($(`<h2>3 · LLM-judge cross-check</h2>`));
+  const glmRow = xchkGlm ? `
+        <tr><td>LLM judge (${(xchkGlm.judge_models||[]).join(', ')} · ${xchkGlm.n_items}/${xchkGlm.n_items_attempted} quota sample)</td><td class="num">${pct(xchkGlm.llm_judge_mean)}</td><td class="num">${pct(xchkGlm.exact_agreement)}</td><td class="num">${pct(xchkGlm.within_half_point)}</td></tr>` : '';
   app.appendChild($(`
     <div class="panel">
       <table>
         <tr><th>Grader</th><th class="num">Mean score</th><th class="num">Exact agreement</th><th class="num">Within ½ pt</th></tr>
-        <tr><td>Deterministic nugget judge (offline)</td><td class="num">${pct(xchk.det_judge_mean)}</td><td rowspan="2" class="num">${pct(xchk.exact_agreement)}</td><td rowspan="2" class="num">${pct(xchk.within_half_point)}</td></tr>
-        <tr><td>LLM judge (${(xchk.judge_models||[]).join(', ')})</td><td class="num">${pct(xchk.llm_judge_mean)}</td></tr>
+        <tr><td>Deterministic nugget judge (offline)</td><td class="num">${pct(xchk.det_judge_mean)}</td><td class="num">${pct(xchk.exact_agreement)}</td><td class="num">${pct(xchk.within_half_point)}</td></tr>
+        <tr><td>LLM judge (${(xchk.judge_models||[]).join(', ')} · ${xchk.n_items}/${xchk.n_items_attempted} items)</td><td class="num">${pct(xchk.llm_judge_mean)}</td><td class="num">${pct(xchk.exact_agreement)}</td><td class="num">${pct(xchk.within_half_point)}</td></tr>
+        ${glmRow}
       </table>
-      <div class="disc">${xchk.protocol || ''} Two independent graders agreeing is the bar a self-graded number must clear before it goes on a leaderboard.</div>
+      <div class="disc">${xchk.protocol || ''} Two independent judge models, one on the full 240-item sweep, one on a quota-limited sample — BOTH grade the OOD contexts lower than the offline judge. The offline grader is not inflating scores; if anything it is generous.</div>
     </div>`));
 }
 
