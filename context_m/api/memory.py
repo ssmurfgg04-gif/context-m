@@ -50,7 +50,8 @@ class Memory:
                        if hasattr(config, k)}
             config = dataclasses.replace(config, **changes)
         self.config = config
-        self.store = TraceStore(config.db_path, HashProvider(config.hash_provider))
+        self.store = TraceStore(config.db_path, HashProvider(config.hash_provider),
+                               wal_sync=getattr(config, "wal_sync", "normal"))
         self.palace = MemoryPalace(config, self.store)
         self.extractor = Extractor(config)
         self.prefetcher = Prefetcher()
@@ -373,6 +374,41 @@ class Memory:
         self.reader.invalidate_caches()
         return len(derived)
 
+    # -------------------------------------------------- async enrichment
+    def enrich(self, user_id: str | None = None, *, extractor=None,
+               limit: int | None = None, min_confidence: float | None = None,
+               dry_run: bool = False) -> dict:
+        """Post-store LLM enrichment fallback (μ=0 stays intact on the
+        synchronous ingest path; this is the plan's graceful-degradation
+        second pass over zero-signal chunks). Returns an EnrichmentReport
+        as a dict — LLM call count and provenance markers are auditable.
+        """
+        from context_m.bridge.enrich import enrich as _enrich
+        rep = _enrich(self.writer, user_id, extractor=extractor,
+                      limit=limit, min_confidence=min_confidence,
+                      dry_run=dry_run)
+        self.reader.invalidate_caches()
+        return rep.to_dict()
+
+    def enrich_async(self, user_id: str | None = None, **kw):
+        """Background-thread variant of enrich(). Returns (thread, holder)."""
+        from context_m.bridge.enrich import enrich_async as _ea
+        return _ea(self.writer, user_id, **kw)
+
+    # -------------------------------------------------- scope sandbox
+    def promote(self, fact_ids: list[str], *, reviewed_by: str = "system",
+                force: bool = False) -> dict:
+        """Promote agent-scoped facts into the user scope (InjecMEM policy).
+
+        Gated on confidence + a fresh InjecMEM/MINJA rescan of the source
+        chunk; every decision lands in the tamper-evident audit chain.
+        """
+        from context_m.security.sandbox import ScopeSandbox
+        sandbox = ScopeSandbox(self.config, self.store, self.audit_log)
+        out = sandbox.promote(fact_ids, reviewed_by=reviewed_by, force=force)
+        self.reader.invalidate_caches()
+        return out
+
     def consolidate(self, now=None) -> dict:
         return lifecycle.consolidate(self.store, now)
 
@@ -410,7 +446,8 @@ class Memory:
         from context_m.enterprise.audit import AuditLog
         from context_m.enterprise.governance import Governance
         self.store = TraceStore(self.config.db_path,
-                                HashProvider(self.config.hash_provider))
+                                HashProvider(self.config.hash_provider),
+                                wal_sync=getattr(self.config, "wal_sync", "normal"))
         self.palace = MemoryPalace(self.config, self.store)
         self.writer = MemoryWriter(self.config, self.store, self.palace,
                                    self.extractor)

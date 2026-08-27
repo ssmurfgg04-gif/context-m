@@ -85,6 +85,13 @@ class Config:
 
     # --- scopes -----------------------------------------------------------
     default_user_id: str = "default"
+    sandbox_enabled: bool = True        # agent-scoped facts isolated from
+    #                                       user-scope reads until promoted
+    sandbox_promote_min_confidence: float = 0.5  # promotion gate
+
+    # --- durability ---------------------------------------------------------
+    wal_sync: str = "normal"            # normal | full (full = fsync every
+    #                                       commit; survives power loss)
 
     # --- enterprise ---------------------------------------------------------
     pii_mode: str = "off"              # off | redact | block | tag
