@@ -1,0 +1,27 @@
+{
+ "generated_at": "2026-08-27T15:53:04.525450+00:00",
+ "scenario": "3 nodes x 5000 disjoint facts, 64-bucket digests, HMAC-SHA256 envelopes",
+ "initial_sync": {
+  "rounds": 1,
+  "seconds": 1.845,
+  "converged_byte_exact": true,
+  "state_bytes_per_node": 3763543,
+  "keys_per_node": 10491,
+  "bytes_shipped_total": 11488959,
+  "bytes_received_total": 11488959
+ },
+ "partition_heal": {
+  "divergence": "500 new facts/side + 50 retractions during partition",
+  "rounds": 1,
+  "seconds": 2.5,
+  "converged_byte_exact": true,
+  "bytes_shipped": 17736529,
+  "retractions_honored_everywhere": true
+ },
+ "new_node_join": {
+  "bytes_shipped": 3645794,
+  "full_state_bytes": 4034613,
+  "note": "one digest exchange + one delta; the delta ships only divergent buckets (fresh node: all of them)"
+ },
+ "interpretation": "Convergence is byte-exact (canonical serialization compared, not just query equivalence). Anti-entropy ships only divergent buckets: a heal after 550 divergent writes costs a small fraction of full state transfer. Measured caveat: 550 writes scattered uniformly across the keyspace touch most of the 64 digest buckets, so this heal ships near-full state (17.7 MB vs 3.6 MB state). Delta precision is tunable via bucket count (256/1024 buckets shrink deltas at higher digest cost), and deployments with write locality (per-user shards) get proportional deltas by construction."
+}
