@@ -58,10 +58,13 @@ Last updated: CRDT federation + Rust port + Quadrant session, 2026-08-27.
 
 ## Push status
 
-- **No GitHub PAT available this session** (previous PAT revoked/not
-  stored). 7 local commits ahead of origin/main (federation, rust,
-  leaderboard, llm-harness, docs). Push when a PAT is provided:
-  `git push origin main`.
+- Repo lineage RESTORED this session: environment reset wiped context-m/.git;
+  re-cloned public remote (14dd0eb) and committed the lost CRDT/Rust/Quadrant
+  work as 6 commits on top (llm-backend, federation, rust, docs, session, ci)
+- 116/116 tests green with freshly rebuilt wheels (rustup+maturin reinstalled)
+- CI workflow added: test matrix + Rust parity job (CONTEXTM_RUST=1)
+- PUSH STILL BLOCKED: no PAT in environment (previous one never persisted).
+  Ready: `git push origin main` from /home/z/my-project/context-m
 
 ## Known honest caveats (do not silently "fix")
 
