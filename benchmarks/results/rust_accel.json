@@ -1,0 +1,82 @@
+{
+ "generated_at": "2026-08-27T15:51:17.982344+00:00",
+ "dims": 768,
+ "rust_status": {
+  "cortexm_core": true,
+  "quadrant": true,
+  "env": "auto",
+  "hint": ""
+ },
+ "host": "linux x86_64 (Xeon, AVX2+FMA runtime dispatch), release profile (lto, opt-level 3); SIMD kernels dispatch at runtime \u2014 scalar fallback on non-AVX2 CPUs",
+ "h64_x200": {
+  "python_us": 180.5,
+  "rust_us": 83.9,
+  "speedup": 2.2,
+  "parity": true
+ },
+ "bind_perm": {
+  "python_us": 4.59,
+  "rust_us": 1.34,
+  "speedup": 3.4
+ },
+ "encode_fact": {
+  "python_us": 31.23,
+  "rust_us": 6.47,
+  "speedup": 4.8
+ },
+ "slb_hit": {
+  "python_us": 4.89,
+  "rust_us": 4.78,
+  "speedup": 1.0
+ },
+ "quadrant_clustered": {
+  "n": 20000,
+  "build_seconds": 0.71,
+  "depth": 14,
+  "pages": 529,
+  "points": {
+   "max_leaves=1": {
+    "recall_at_10": 0.393,
+    "node_visits": 11.9,
+    "latency_us": 34.2
+   },
+   "max_leaves=4": {
+    "recall_at_10": 0.641,
+    "node_visits": 16.9,
+    "latency_us": 82.5
+   },
+   "max_leaves=16": {
+    "recall_at_10": 0.974,
+    "node_visits": 31.2,
+    "latency_us": 237.7
+   }
+  },
+  "numpy_brute_force_us": 1679.2,
+  "note": "clustered = realistic hologram geometry (shared bound components); random = adversarial structure-free corpus where pruned search cannot beat brute force \u2014 recall collapse reported, not hidden"
+ },
+ "quadrant_random": {
+  "n": 20000,
+  "build_seconds": 0.7,
+  "depth": 13,
+  "pages": 529,
+  "points": {
+   "max_leaves=1": {
+    "recall_at_10": 0.122,
+    "node_visits": 11.7,
+    "latency_us": 33.6
+   },
+   "max_leaves=4": {
+    "recall_at_10": 0.14,
+    "node_visits": 16.5,
+    "latency_us": 83.6
+   },
+   "max_leaves=16": {
+    "recall_at_10": 0.186,
+    "node_visits": 44.4,
+    "latency_us": 311.4
+   }
+  },
+  "numpy_brute_force_us": 2509.9,
+  "note": "clustered = realistic hologram geometry (shared bound components); random = adversarial structure-free corpus where pruned search cannot beat brute force \u2014 recall collapse reported, not hidden"
+ }
+}

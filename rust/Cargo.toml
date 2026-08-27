@@ -1,0 +1,3 @@
+[workspace]
+members = ["cortexm-core", "quadrant"]
+resolver = "2"

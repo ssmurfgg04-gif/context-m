@@ -1,0 +1,19 @@
+[package]
+name = "quadrant"
+version = "0.1.0"
+edition = "2021"
+description = "Page-clustered hierarchical vector index for Context-M's VSA memory palace"
+license = "Apache-2.0"
+
+[lib]
+name = "quadrant"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+numpy = { version = "0.23" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

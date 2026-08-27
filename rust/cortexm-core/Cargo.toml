@@ -1,0 +1,21 @@
+[package]
+name = "cortexm-core"
+version = "0.1.0"
+edition = "2021"
+description = "Accelerated hot paths for Context-M: hashing, VSA binding, SLB"
+license = "Apache-2.0"
+
+[lib]
+name = "cortexm_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+numpy = { version = "0.23" }
+blake2 = "0.10"
+rustfft = "6.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
