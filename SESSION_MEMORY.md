@@ -36,25 +36,27 @@ Last updated: CRDT federation + Rust port + Quadrant session, 2026-08-27.
    runners with secrets.GEMINI_API_KEY — commits to bench/llm-eval
    branch. aggregate_judge.py merges judge scores into crosscheck JSON.
 
-## LLM evaluation status (IMPORTANT for next session)
+## LLM evaluation status (RESOLVED this session)
 
-- z-ai gateway: 429 quota-blocked ALL session (previous session burned
-  it); probe loop ran in background — check
-  `/home/z/my-project/scripts/llm_probe.log`
-- Gemini API key AQ.Ab8R...OFpg: VALID but the sandbox egresses from
-  Hong Kong → generativelanguage.googleapis.com refuses (region block,
-  deterministic). Vertex aiplatform.googleapis.com works network-wise
-  but the Agent Platform API is disabled in the key's project
-  (555137337191) and enabling needs console access.
-- To get the Gemini numbers: user adds GEMINI_API_KEY secret to the
-  GitHub repo and runs the llm-eval workflow, OR runs from a supported
-  region: `LLM_BACKEND=gemini GEMINI_API_KEY=... node
-  benchmarks/llm/judge_llm.mjs benchmarks/ood/judge_items.jsonl
-  benchmarks/ood/judge_items_scored_gemini.jsonl` then
-  `python benchmarks/aggregate_judge.py --ood-items ... --ood-scored
-  ... --out benchmarks/results`
-- 58/240 OOD cross-check items already scored with glm-4-plus
-  (agreement 75.9%, LLM judge grades LOWER — det judge not inflating).
+- Canonical Gemini judge RAN TO COMPLETION via GitHub Actions US runners
+  (llm-eval workflow). OOD: 237/240, LLM judge 0.222 vs det 0.335,
+  agreement 82.7% -> llm_judge_crosscheck_gemini.json. Real-GitHub:
+  mu=0 recall 0.6% vs LLM reference, QA 0.263 -> results/real_github/.
+- GEMINI_API_KEY is set as a repo secret (do not re-set unless rotated).
+- Direct-from-sandbox Gemini remains region-blocked (HK egress); the
+  Actions path is the permanent solution. Rerun: Actions -> llm-eval ->
+  Run workflow.
+
+## Resilience post-mortem (second llm-eval run)
+
+- Run 2 failed after 85 min: no cross-run judge cache -> full 240-item
+  OOD sweep re-billed -> Gemini daily quota exhausted -> qa_generate got
+  0 pairs through backoff -> judge wrote no file -> python crashed.
+- Fixes shipped (b4f9c70): actions/cache@v4 on /tmp/llm-cache keyed by
+  backend+model+input hashes (reruns resume, never re-bill); judge_llm.mjs
+  materialises output on 0 items; run_real_github_eval.py degrades to an
+  explicit "degraded" qa_eval.json instead of crashing or faking zeros.
+- aggregate_judge.py was already None-guarded; read_jsonl returns [].
 
 ## Push status
 
