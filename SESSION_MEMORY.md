@@ -108,14 +108,68 @@ into fusion. Config: `ppr_enabled/damping/iters/weight/graph_size/seeds`.
 - All prior war stories (SLB scope-keying, uuid4 tie-breaks, bench DB
   reuse, f-string quantifier braces, re.M in judge parser) still apply.
 
-## Next actions
 
-1. LLM reader/judge replication of canonical BEAM (`llm_judge=` slot).
-2. Rust port of `vsa/codecs.py` + `vsa/index.py` behind the codec seam.
-3. ArcadeDB backend behind `TraceStore`'s API.
-4. CRDT federated Trace sync; leaderboard site from results JSON.
-5. SSO (SAML/OIDC) federation on top of the RBAC layer.
-6. LangChain / LlamaIndex / OpenAI Agents SDK adapters.
+## Session 3 — honesty pass, OOD benchmark, sandbox/enrichment/WAL (v0.3.0 work)
+
+**The reviewer was right.** The 100% ± 0% headline was circular
+(generator and extractor share template families) and the response this
+session was evidence, not marketing:
+
+- **OOD benchmark shipped** (`context_m/bench/ood.py`,
+  `benchmarks/run_ood_pipeline.py`): 4 personas × 6 styles re-rendered
+  by glm-4-plus; paraphrase 9.4%/28.2%, negation 75.6%/69.3%, indirect
+  44.9%/48.6%, informal 5.1%/15.0%, non-English 0.0%/15.7%, code-switch
+  57.9%/60.7%. `docs/FAILURE_MODES.md` has the worked examples.
+- **LLM-judge cross-check** (58/240 under API quota): LLM judge grades
+  LOWER (0.250 vs 0.345), exact agreement 75.9% — the deterministic
+  judge is not inflating.
+- **Real-GitHub track**: 5 threads/150 comments fetched (rust-lang/rust,
+  numpy, pydantic) with attribution; comparison harness ready, LLM stages
+  queued behind quota.
+- **Scope sandbox** (InjecMEM isolation): agent facts invisible to user
+  reads; audited promote(). Building it exposed THREE pre-existing
+  read-path leaks (empty-scope VSA fallback = cross-user leak, falsy
+  scope checks, unscoped supersession chains) — all fixed, all tested.
+- **Async LLM enrichment fallback**: explicit, confidence-capped 0.85,
+  provenance-marked, μ=0 counters stay honest. Recovery measured
+  honestly: +1-2 pts on hardest styles, can HURT (-4 pts on negation) —
+  it surfaces facts, doesn't rebuild bi-temporal chains.
+- **WAL durability**: wal_sync knob + checkpoint-on-close + SIGKILL
+  crash-recovery test.
+- **Migration verified** end-to-end vs real vendor formats; new
+  user_summary pattern for Mem0's third-person summaries.
+- **Leaderboard site** (`leaderboard/`): static, honest ordering, judge
+  identities per table; rebuild via `python leaderboard/build.py`.
+- **81 tests green** (was 63). Commit history is now a real iteration
+  log (fix/feat/docs split), not a single 10.7K-line drop.
+
+**War stories (new):**
+- Sandbox honesty test: simulate missing blake3 by intercepting
+  builtins.__import__ — assert the WARNING, not just the fallback.
+- `get_all()` returns {"results": [...]}, not a list.
+- OOD persona names must be alphabetic: digits break the NAME regex
+  (User19 -> value "user"). Use word lists.
+- SIGKILL tests: ack-file must record the batch INDEX; kill lands 0-1
+  batches after the ack (accept both). Supersession means only the LAST
+  state survives by design — assert on last-acked state, not counts.
+- The z-ai API hard-throttles (429) under sustained load: 15s→180s
+  exponential backoff, resumable per-item JSONL flush, and foreground
+  chunked runs (background processes get reaped between tool calls).
+- Enrichment subject alignment: LLM returns subject "user" when the
+  name was never learned; re-subject generic labels or entity queries
+  never find the facts.
+
+**Next actions (updated):**
+1. Complete the real-GitHub LLM comparison when the API quota resets
+   (harness ready: `benchmarks/run_real_github_eval.py`).
+2. Finish the 240-item LLM judge sample (58/240 scored, resumable).
+3. Enrichment v2: temporal-chain reconstruction from enriched facts
+   (retractions + valid_to), the current gap between "surface facts"
+   and "answer probes".
+4. Human-written held-out OOD set (current renderings are LLM-written;
+  stricter still).
+5. Rust port of codecs/index behind the seam; ArcadeDB backend.
+
 
 ## Environment notes
 
