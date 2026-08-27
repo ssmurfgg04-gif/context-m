@@ -444,6 +444,29 @@ PATTERNS.append(("third_person", re.compile(TP_RX, re.I),
                                retraction=TP_VERBS[m.group("verb").lower()] == "left")]))
 
 
+# Mem0/Zep-style migrated summaries: "User prefers oat milk lattes.",
+# "User knows Rust." — competitor exports state facts in exactly this
+# third-person shape, so the migration path needs to catch them.
+SUMMARY_VERBS = {
+    "prefers": "prefers", "likes": "likes", "knows": "knows",
+    "uses": "uses", "lives in": "lives_in", "works at": "works_at",
+    "speaks": "speaks", "owns": "owns", "enjoys": "likes",
+    "hates": "dislikes", "dislikes": "dislikes",
+    "studied": "studied", "plays": "plays",
+}
+_SUMMARY_RX = (rf"\b(?P<subj>User|[A-Z][a-z]{{2,}})\s+(?P<verb>"
+               + "|".join(re.escape(k) for k in
+                          sorted(SUMMARY_VERBS, key=len, reverse=True))
+               + rf")\s+(?P<val>[a-zA-Z][\w' +#.-]{{1,44}}?)"
+               + rf"(?=[.!?]|$|,|\s+(?:but|and|however|so)\b)")
+PATTERNS.append(("user_summary", re.compile(_SUMMARY_RX),
+                 lambda m, ctx, sp, ts, sent: [
+                     Candidate(clean_value(m.group("subj")),
+                               SUMMARY_VERBS[m.group("verb").lower()],
+                               clean_value(m.group("val")), 0.80,
+                               "user_summary")]))
+
+
 @pattern("team_uses", rf"\bthe\s+(?P<val>[A-Z][\w-]*(?:\s+[\w-]+)*?)\s+team\s+uses?\s+(?P<tech>[A-Za-z+#.][\w+#.]*)")
 def _team_uses(m, ctx, sp, ts, sent):
     team = f"{clean_value(m.group('val'))} team"
