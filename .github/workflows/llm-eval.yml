@@ -65,7 +65,10 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       LLM_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.5-flash-lite' }}
       LLM_CONCURRENCY: "4"
-      LLM_CACHE_DIR: ${{ runner.temp }}/llm-cache
+      # NB: the `runner` context is unavailable in job-level env — use a
+      # writable absolute path outside the workspace so the cache is
+      # never picked up by `git add` in the commit step.
+      LLM_CACHE_DIR: /tmp/llm-cache
     steps:
       - uses: actions/checkout@v4
 
