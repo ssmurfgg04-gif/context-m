@@ -63,6 +63,9 @@ async function main() {
     process.exit(1);
   }
   const items = readJSONL(inPath);
+  // always materialise the output file — downstream readers must not
+  // crash on a 0-item run (e.g. quota exhaustion upstream)
+  if (!fs.existsSync(outPath)) fs.writeFileSync(outPath, "");
   // resumable: previously scored ids are kept, never re-billed
   const done = new Map();
   if (fs.existsSync(outPath)) {

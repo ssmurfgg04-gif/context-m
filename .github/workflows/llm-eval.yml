@@ -72,6 +72,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # judge cache: per-item LLM results keyed by the judged inputs +
+      # backend + model — reruns resume and only re-bill missing items
+      # (validated the hard way: a rerun without cache re-billed the full
+      # 240-item sweep and exhausted the daily quota mid-run)
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/llm-cache
+          key: llm-${{ runner.os }}-${{ env.LLM_BACKEND }}-${{ env.LLM_MODEL }}-${{ hashFiles('benchmarks/ood/judge_items.jsonl', 'benchmarks/real_github/threads.jsonl') }}
+          restore-keys: |
+            llm-${{ runner.os }}-${{ env.LLM_BACKEND }}-${{ env.LLM_MODEL }}-
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"

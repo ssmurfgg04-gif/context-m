@@ -53,6 +53,14 @@ def read_jsonl(p: Path) -> list[dict]:
     return [json.loads(l) for l in p.read_text().split("\n") if l.strip()]
 
 
+def read_jsonl_opt(p: Path) -> list[dict]:
+    """Like read_jsonl but tolerant of a missing/empty LLM-stage output
+    (quota exhaustion upstream must degrade, not crash the pipeline)."""
+    if not p.exists() or not p.stat().st_size:
+        return []
+    return read_jsonl(p)
+
+
 def write_jsonl(p: Path, rows: list[dict]) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("".join(json.dumps(r) + "\n" for r in rows))
@@ -198,7 +206,22 @@ def qa_eval(threads: list[dict]) -> dict:
     qa_path = RG_DIR / "qa_pairs.jsonl"
     sh(["node", str(LLM_DIR / "qa_generate.mjs"), str(threads_path),
         str(qa_path)])
-    qa = {row["id"]: row for row in read_jsonl(qa_path)}
+    qa = {row["id"]: row for row in read_jsonl_opt(qa_path)}
+    if not qa:
+        print("WARNING: qa_generate produced no pairs (LLM quota exhausted?) "
+              "— writing degraded qa_eval.json instead of crashing")
+        return {
+            "n_questions": 0,
+            "degraded": True,
+            "reason": "LLM quota exhausted before QA generation; rerun the "
+                      "workflow later (the judge cache resumes, only the "
+                      "missing items are re-billed)",
+            "judge_models": [],
+            "interpretation": "Degraded run — no numbers, by design. A "
+                              "self-crashing pipeline would hide the quota "
+                              "problem behind a red X; this keeps the "
+                              "extraction comparison usable.",
+        }
 
     # ---- ingest threads into the fabric ------------------------------------
     cfg = Config()
@@ -239,7 +262,7 @@ def qa_eval(threads: list[dict]) -> dict:
     scored_path = RG_DIR / "qa_judge_scored.jsonl"
     sh(["node", str(LLM_DIR / "judge_llm.mjs"), str(items_path),
         str(scored_path)])
-    scored = {r["id"]: r for r in read_jsonl(scored_path)}
+    scored = {r["id"]: r for r in read_jsonl_opt(scored_path)}
 
     n = vals = 0
     per_kind = {"answerable": [0, 0], "abstention": [0, 0]}
@@ -253,6 +276,15 @@ def qa_eval(threads: list[dict]) -> dict:
         per_kind[kind][0] += s
         per_kind[kind][1] += 1
     m.close()
+    if n == 0:
+        return {
+            "n_questions": 0,
+            "degraded": True,
+            "reason": "LLM judge scored 0 items (quota exhausted?) — rerun "
+                      "later; the judge resumes from cache",
+            "judge_models": [],
+            "interpretation": "Degraded run — no numbers reported.",
+        }
     return {
         "n_questions": n,
         "llm_judge_overall": round(vals / max(n, 1), 4),
