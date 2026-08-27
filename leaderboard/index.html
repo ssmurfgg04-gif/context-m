@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context-M — Benchmark Leaderboard (honest edition)</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --good: #3fb950; --warn: #d29922; --bad: #f85149;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 40px 0 10px; border-bottom: 1px solid var(--border);
+       padding-bottom: 8px; }
+  .sub { color: var(--muted); margin-bottom: 24px; }
+  .banner { background: linear-gradient(90deg, #21262d, #161b22);
+            border: 1px solid var(--border); border-left: 4px solid var(--warn);
+            border-radius: 8px; padding: 14px 18px; margin: 18px 0 28px;
+            font-size: 14px; }
+  .banner b { color: var(--warn); }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+           border-radius: 8px; padding: 18px 20px; margin: 14px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px;
+       text-transform: uppercase; letter-spacing: .04em; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { display: inline-block; height: 8px; border-radius: 4px;
+         background: var(--accent); vertical-align: middle; margin-left: 8px; }
+  .bar.g { background: var(--good); } .bar.y { background: var(--warn); }
+  .bar.r { background: var(--bad); }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 10px;
+          font-size: 12px; border: 1px solid var(--border); color: var(--muted); }
+  .pill.upper { color: var(--warn); border-color: var(--warn); }
+  .pill.honest { color: var(--good); border-color: var(--good); }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--mono); font-size: 13px; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 12px 0; }
+  .kpi .card { flex: 1 1 180px; background: var(--panel);
+               border: 1px solid var(--border); border-radius: 8px;
+               padding: 12px 16px; }
+  .kpi .v { font-size: 22px; font-weight: 700; }
+  .kpi .l { color: var(--muted); font-size: 12.5px; }
+  .disc { font-size: 13px; color: var(--muted); border-top: 1px dashed var(--border);
+          margin-top: 10px; padding-top: 10px; }
+  footer { margin-top: 56px; color: var(--muted); font-size: 13px;
+           border-top: 1px solid var(--border); padding-top: 16px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .fail { color: var(--bad); font-weight: 600; }
+  .ok { color: var(--good); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Context-M Benchmark Leaderboard</h1>
+  <div class="sub">Neuro-symbolic memory fabric · self-hosted results ·
+    generated from <span class="mono">benchmarks/results/</span> ·
+    <span class="mono" id="gen-time"></span></div>
+
+  <div class="banner">
+    <b>Read before citing.</b> These are <b>self-run, self-graded benchmarks,
+    not canonical BEAM numbers.</b> The in-distribution table is an upper
+    bound by construction (corpus templates and extractor patterns were
+    authored together — see <a href="../docs/FAILURE_MODES.md">FAILURE_MODES.md</a>).
+    Judge models differ from BEAM's gpt-5 protocol; identities are recorded
+    per table. Every artifact is reproducible from the repo.
+  </div>
+
+  <div id="app"></div>
+
+  <footer>
+    Context-M · Apache-2.0 · benchmark harness: <span class="mono">context_m/bench/</span> ·
+    OOD pipeline: <span class="mono">benchmarks/run_ood_pipeline.py</span> ·
+    real-data track: <span class="mono">benchmarks/run_real_github_eval.py</span> ·
+    rebuild this page: <span class="mono">python leaderboard/build.py</span>
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+const D = window.LEADERBOARD_DATA || { sources: {} };
+const $ = (h) => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstChild; };
+const pct = (v) => v == null ? '—' : (100 * v).toFixed(1) + '%';
+const bar = (v, cls, scale=1) => v == null ? '' :
+  `<span class="bar ${cls||''}" style="width:${Math.max(2, 88*v/scale)}px"></span>`;
+
+document.getElementById('gen-time').textContent =
+  D.generated_at ? new Date(D.generated_at).toUTCString() : '';
+
+const app = document.getElementById('app');
+
+// ---------------------------------------------------------------- OOD first
+const ood = D.sources.ood;
+if (ood) {
+  app.appendChild($(`<h2>1 · Out-of-Distribution benchmark <span class="pill honest">the honest number</span></h2>`));
+  app.appendChild($(`<div class="muted" style="margin-bottom:10px">${ood.label}. ${ood.n_personas} personas × 6 styles; ground-truth facts re-rendered by an independent LLM in phrasings the pattern extractor never saw; same probes and judge as the in-distribution run.</div>`));
+  const rows = ood.rows.map(r => `
+    <tr>
+      <td class="mono">${r.style}</td>
+      <td class="num">${pct(r.extraction_recall)}${r.extraction_sd != null ? ` <span class="muted">±${(100*r.extraction_sd).toFixed(1)}</span>` : ''}${bar(r.extraction_recall, r.extraction_recall > .5 ? 'g' : (r.extraction_recall > .2 ? 'y' : 'r'))}</td>
+      <td class="num">${pct(r.e2e)}${bar(r.e2e, r.e2e > .5 ? 'g' : 'r')}</td>
+      <td class="num">${r.enriched == null ? '—' : pct(r.enriched)}</td>
+      <td class="num muted">${r.renderer_omissions ?? '—'}</td>
+      <td class="num muted">${r.n_questions ?? '—'}</td>
+    </tr>`).join('');
+  app.appendChild($(`
+    <div class="panel">
+      <table>
+        <tr><th>Style</th><th class="num">Extraction recall</th><th class="num">End-to-end (10 abilities)</th><th class="num">+ LLM enrichment</th><th class="num">Renderer omissions</th><th class="num">Probes</th></tr>
+        ${rows}
+      </table>
+      <div class="disc">${ood.disclaimer} Enrichment = async second-pass LLM extraction over zero-signal chunks (confidence-capped 0.85, budget-capped per run) — it recovers little and can hurt; see the failure-modes doc before relying on it.</div>
+    </div>`));
+}
+
+// ---------------------------------------------------------------- real data
+const rg = D.sources.real_github;
+if (rg) {
+  app.appendChild($(`<h2>2 · Real GitHub data <span class="pill honest">real human text</span></h2>`));
+  const c = rg.comparison;
+  if (c) {
+    app.appendChild($(`
+      <div class="kpi">
+        <div class="card"><div class="v">${pct(c.recall_vs_llm_reference)}</div><div class="l">μ=0 recall vs LLM extractor<br>(real comments)</div></div>
+        <div class="card"><div class="v">${pct(c.precision_vs_llm_reference)}</div><div class="l">μ=0 precision vs LLM corroboration</div></div>
+        <div class="card"><div class="v">${(c.u0.ms_per_comment).toFixed(2)} ms</div><div class="l">μ=0 latency / comment</div></div>
+        <div class="card"><div class="v">${(c.llm_reference.ms_per_comment/1000).toFixed(1)} s</div><div class="l">LLM latency / comment</div></div>
+        <div class="card"><div class="v">$0</div><div class="l">μ=0 cost vs ${c.llm_reference.tokens.toLocaleString()} LLM tokens</div></div>
+      </div>`));
+    const relRows = Object.entries(c.per_relation_recall || {}).map(([k, v]) =>
+      `<tr><td class="mono">${k}</td><td class="num">${pct(v)}${bar(v, v > .5 ? 'g' : 'r')}</td></tr>`).join('');
+    app.appendChild($(`
+      <div class="panel">
+        <div class="muted" style="margin-bottom:8px">${rg.label} — ${c.n_threads} threads, ${c.n_comments} comments from ${c.n_threads ? 'public repos' : ''} (attribution in benchmarks/real_github/threads.provenance.json).</div>
+        <table><tr><th>Relation (LLM reference)</th><th class="num">μ=0 recall</th></tr>${relRows}</table>
+        <div class="disc">${c.interpretation}</div>
+      </div>`));
+    if (rg.qa) {
+      const q = rg.qa;
+      app.appendChild($(`
+        <div class="panel">
+          <table>
+            <tr><th>Real-thread QA (retrieval + LLM judge)</th><th class="num">Score</th></tr>
+            <tr><td>Overall (${q.n_questions} questions)</td><td class="num">${pct(q.llm_judge_overall)}</td></tr>
+            <tr><td>Answerable questions</td><td class="num">${pct(q.answerable)}</td></tr>
+            <tr><td>Abstention (unanswerable)</td><td class="num">${pct(q.abstention)}</td></tr>
+          </table>
+          <div class="disc">${q.interpretation} Judge: ${(q.judge_models||[]).join(', ') || 'recorded in results'}.</div>
+        </div>`));
+    }
+  }
+}
+
+// ---------------------------------------------------------------- judge xchk
+const xchk = D.sources.llm_judge_crosscheck;
+if (xchk) {
+  app.appendChild($(`<h2>3 · LLM-judge cross-check</h2>`));
+  app.appendChild($(`
+    <div class="panel">
+      <table>
+        <tr><th>Grader</th><th class="num">Mean score</th><th class="num">Exact agreement</th><th class="num">Within ½ pt</th></tr>
+        <tr><td>Deterministic nugget judge (offline)</td><td class="num">${pct(xchk.det_judge_mean)}</td><td rowspan="2" class="num">${pct(xchk.exact_agreement)}</td><td rowspan="2" class="num">${pct(xchk.within_half_point)}</td></tr>
+        <tr><td>LLM judge (${(xchk.judge_models||[]).join(', ')})</td><td class="num">${pct(xchk.llm_judge_mean)}</td></tr>
+      </table>
+      <div class="disc">${xchk.protocol || ''} Two independent graders agreeing is the bar a self-graded number must clear before it goes on a leaderboard.</div>
+    </div>`));
+}
+
+// ---------------------------------------------------------------- ID last
+const idata = D.sources.id;
+if (idata) {
+  app.appendChild($(`<h2>4 · In-distribution (synthetic) <span class="pill upper">upper bound · regression harness</span></h2>`));
+  const rows = idata.rows.map(r => {
+    const base = Object.entries(r.baselines || {}).map(([k, v]) =>
+      `<div class="muted mono" style="font-size:12px">${k}: ${pct(v)}</div>`).join('');
+    return `
+    <tr>
+      <td class="mono">${r.bucket}</td>
+      <td class="num"><b>${pct(r.mean)}</b> <span class="muted">±${(100*r.sd).toFixed(1)}</span>${bar(r.mean, 'g')}</td>
+      <td class="num muted">${r.n_questions}</td>
+      <td>${base}</td>
+    </tr>`;
+  }).join('');
+  app.appendChild($(`
+    <div class="panel">
+      <table>
+        <tr><th>Bucket</th><th class="num">Context-M (5 seeds)</th><th class="num">Probes</th><th>Baselines</th></tr>
+        ${rows}
+      </table>
+      <div class="disc">${idata.disclaimer} The 100.0% ± 0.0% across every seed is expected in-distribution: the extractor was authored against these templates. Treat it as "template extraction still works", not as a capability claim. The published SOTA on canonical BEAM (Exabase M-1, 68.0%) used a different corpus, judge and protocol — comparing it against this table would be dishonest, so we don't.</div>
+    </div>`));
+}
+
+// ---------------------------------------------------------------- micro
+const micro = D.sources.micro;
+if (micro) {
+  app.appendChild($(`<h2>5 · Systems micro-benchmarks</h2>`));
+  const cards = [];
+  const mj = (o, keys) => keys.forEach(k => { if (o && o[k] != null) cards.push([k, o[k]]); });
+  if (Array.isArray(micro)) {
+    micro.slice(0, 6).forEach(mo => Object.entries(mo).forEach(([k, v]) =>
+      cards.push([k, typeof v === 'number' ? (v < 10 ? v.toFixed(3) : v.toLocaleString()) : v])));
+  }
+  if (cards.length) {
+    app.appendChild($(`
+      <div class="kpi">` + cards.slice(0, 8).map(([k, v]) =>
+        `<div class="card"><div class="v mono" style="font-size:17px">${v}</div><div class="l">${k}</div></div>`).join('') + `</div>`));
+  }
+}
+
+if (!Object.keys(D.sources).length) {
+  app.appendChild($(`<div class="panel">No results found — run the benchmark pipelines first, then <span class="mono">python leaderboard/build.py</span>.</div>`));
+}
+</script>
+</body>
+</html>
