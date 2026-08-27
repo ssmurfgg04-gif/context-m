@@ -1,0 +1,138 @@
+# Canonical LLM-judge evaluation — runs the BEAM-style judge with a real
+# frontier-tier API model from GitHub-hosted runners.
+#
+# WHY THIS WORKFLOW EXISTS
+# ------------------------
+# The Gemini Generative Language API is not reachable from every region
+# (HTTP 400 FAILED_PRECONDITION "User location is not supported"). GitHub-
+# hosted runners sit in supported regions, so the canonical judge runs here.
+# Locally, the same commands run unchanged once LLM_BACKEND/GEMINI_API_KEY
+# are exported from a supported egress.
+#
+# SETUP (one time):
+#   repo Settings -> Secrets and variables -> Actions ->
+#     New repository secret: GEMINI_API_KEY = <your Google API key>
+#   optional repo variable: GEMINI_MODEL (default gemini-3.5-flash-lite)
+#
+# WHAT IT RUNS
+#   1. OOD judge cross-check — judges the EXACT tracked contexts in
+#      benchmarks/ood/judge_items.jsonl (240 items, det_score attached), so
+#      the Gemini grades are directly comparable with the published
+#      deterministic-judge numbers. Resumable per item; never re-bills.
+#   2. Real-GitHub track — LLM reference extraction over real issue threads,
+#      QA generation, Context-M retrieval, and LLM judging of the retrieved
+#      context blocks.
+#   3. Aggregation — writes results/ JSONs + a job summary table.
+#
+# RESULTS: committed to the bench/llm-eval branch + uploaded as an artifact.
+
+name: llm-eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      threads:
+        description: "real-GitHub threads to evaluate"
+        default: "9"
+      skip_ood:
+        description: "skip the OOD judge cross-check"
+        type: boolean
+        default: false
+      skip_real_github:
+        description: "skip the real-GitHub track"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "benchmarks/ood/judge_items.jsonl"
+      - "benchmarks/llm/**"
+      - ".github/workflows/llm-eval.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: llm-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gemini-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      LLM_BACKEND: gemini
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      LLM_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.5-flash-lite' }}
+      LLM_CONCURRENCY: "4"
+      LLM_CACHE_DIR: ${{ runner.temp }}/llm-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Context-M
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Sanity — key configured?
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::error::GEMINI_API_KEY secret is not set. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: OOD judge cross-check (canonical contexts)
+        if: ${{ !inputs.skip_ood }}
+        run: |
+          node benchmarks/llm/judge_llm.mjs \
+            benchmarks/ood/judge_items.jsonl \
+            benchmarks/ood/judge_items_scored_gemini.jsonl
+
+      - name: Real-GitHub track (extract + QA + judge)
+        if: ${{ !inputs.skip_real_github }}
+        run: |
+          python benchmarks/run_real_github_eval.py --threads ${{ inputs.threads || '9' }}
+
+      - name: Aggregate results + job summary
+        run: |
+          python benchmarks/aggregate_judge.py \
+            --ood-items benchmarks/ood/judge_items.jsonl \
+            --ood-scored benchmarks/ood/judge_items_scored_gemini.jsonl \
+            --real-github benchmarks/results/real_github \
+            --out benchmarks/results
+          cat benchmarks/results/llm_eval_summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Commit results to bench/llm-eval
+        run: |
+          set -eu
+          git config user.name "bench-bot"
+          git config user.email "bench-bot@users.noreply.github.com"
+          git checkout -B bench/llm-eval
+          git add benchmarks/ood/judge_items_scored_gemini.jsonl \
+                  benchmarks/real_github benchmarks/results
+          if git diff --cached --quiet; then
+            echo "no new results to commit"
+          else
+            git commit -m "bench(llm): canonical judge run — ${GEMINI_MODEL} ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git push origin bench/llm-eval
+          fi
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-eval-results
+          path: |
+            benchmarks/ood/judge_items_scored_gemini.jsonl
+            benchmarks/real_github/
+            benchmarks/results/
+          if-no-files-found: ignore
+          retention-days: 90
