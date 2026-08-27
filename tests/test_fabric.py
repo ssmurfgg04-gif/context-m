@@ -5,6 +5,7 @@ Run:  python -m pytest tests/ -q
 
 import datetime as dt
 import json
+import logging
 import os
 import tempfile
 
@@ -41,11 +42,56 @@ def mem():
 
 # ---------------------------------------------------------------- security
 def test_blake3_hashes():
-    hp = HashProvider("blake3")
-    assert hp.name == "blake3-256"
+    """Honest hashing contract.
+
+    If the blake3 wheel is installed, the default provider MUST be BLAKE3.
+    If it is missing, the provider downgrades to BLAKE2b-256 **and warns
+    loudly** — silent capability downgrade is a bug, not a convenience.
+    """
+    from context_m.security import hashes as _hashes
+
+    if _hashes.has_blake3():
+        hp = HashProvider("blake3")
+        assert hp.name == "blake3-256"
+    else:
+        _hashes._DOWNGRADE_WARNED = False  # re-arm the once-per-process guard
+        with _capture_logs() as records:
+            hp = HashProvider("blake3")
+        assert hp.name == "blake2b-256"
+        assert any("blake3" in r.getMessage().lower() and
+                   "downgrad" in r.getMessage().lower() for r in records), (
+            "BLAKE2b fallback must emit a loud warning, not degrade silently")
     h1, h2 = hp.hash_text("hello"), hp.hash_text("hello")
     assert h1 == h2 and len(h1) == 64
     assert hp.hash_text("hellp") != h1
+
+
+def _capture_logs():
+    """Capture context_m.security log records at WARNING+ level."""
+    import contextlib
+
+    class _ListHandler(logging.Handler):
+        def __init__(self):
+            super().__init__(level=logging.WARNING)
+            self.records: list[logging.LogRecord] = []
+
+        def emit(self, record):
+            self.records.append(record)
+
+    @contextlib.contextmanager
+    def _ctx():
+        handler = _ListHandler()
+        logger = logging.getLogger("context_m.security")
+        logger.addHandler(handler)
+        old_level = logger.level
+        logger.setLevel(logging.WARNING)
+        try:
+            yield handler.records
+        finally:
+            logger.removeHandler(handler)
+            logger.setLevel(old_level)
+
+    return _ctx()
 
 
 def test_merkle_roundtrip():

@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 
 try:  # optional dependency, preferred per spec
     import blake3 as _blake3
@@ -21,9 +22,32 @@ except Exception:  # pragma: no cover - environment dependent
     _blake3 = None
     _HAS_BLAKE3 = False
 
+_log = logging.getLogger("context_m.security")
+_DOWNGRADE_WARNED = False
+
 
 def has_blake3() -> bool:
     return _HAS_BLAKE3
+
+
+def _warn_downgrade() -> None:
+    """Loud, once-per-process warning when BLAKE3 is unavailable.
+
+    Silent capability downgrade is a credibility bug: the docs promise
+    BLAKE3 and the user must know when they are actually getting
+    BLAKE2b. Install with ``pip install context-m[blake3]`` to silence.
+    """
+    global _DOWNGRADE_WARNED
+    if not _DOWNGRADE_WARNED:
+        _DOWNGRADE_WARNED = True
+        _log.warning(
+            "blake3 wheel not installed — downgrading hash provider to "
+            "BLAKE2b-256. Integrity guarantees hold (collision resistance "
+            "is equivalent at 256-bit) but this differs from the documented "
+            "default. Fix: pip install 'context-m[blake3]'. "
+            "The active provider is always reported in stats() and audit "
+            "output as hash_provider."
+        )
 
 
 class HashProvider:
@@ -31,6 +55,7 @@ class HashProvider:
 
     def __init__(self, algo: str = "blake3") -> None:
         if algo == "blake3" and not _HAS_BLAKE3:
+            _warn_downgrade()
             algo = "blake2b"
         if algo not in ("blake3", "blake2b"):
             raise ValueError(f"unsupported hash provider {algo!r}")
