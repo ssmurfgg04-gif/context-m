@@ -1,0 +1,1192 @@
+{
+ "personas": [
+  {
+   "user_id": "user0",
+   "full_name": "Priya Johnson",
+   "sessions": [
+    {
+     "session": 0,
+     "date": "2026-03-01",
+     "facts": [
+      {
+       "id": "s0f0",
+       "text": "The user's full name is Priya Johnson.",
+       "type": "name",
+       "match": [
+        "Priya Johnson",
+        "Priya"
+       ]
+      },
+      {
+       "id": "s0f1",
+       "text": "The user works at Databricks as a researcher.",
+       "type": "employment",
+       "match": [
+        "Databricks"
+       ]
+      },
+      {
+       "id": "s0f2",
+       "text": "The user lives in Berlin.",
+       "type": "city",
+       "match": [
+        "Berlin"
+       ]
+      },
+      {
+       "id": "s0f3",
+       "text": "The user's birthday is April 18.",
+       "type": "birthday",
+       "match": [
+        "april 18"
+       ]
+      },
+      {
+       "id": "s0f4",
+       "text": "The user has a sister named Nadia Williams.",
+       "type": "family",
+       "match": [
+        "Nadia"
+       ]
+      },
+      {
+       "id": "s0f5",
+       "text": "The user gave the assistant a standing instruction: \"Always keep my answers short and concise.\"",
+       "type": "instruction",
+       "match": [
+        "short",
+        "concise",
+        "brief"
+       ]
+      },
+      {
+       "id": "s0f6",
+       "text": "The user has been at Databricks since April 2024.",
+       "type": "employment_since",
+       "match": [
+        "Databricks"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 1,
+     "date": "2026-03-22",
+     "facts": [
+      {
+       "id": "s1f0",
+       "text": "For coffee, the user used to like oat milk lattes but now prefers espresso.",
+       "type": "preference",
+       "match": [
+        "oat milk lattes",
+        "espresso"
+       ]
+      },
+      {
+       "id": "s1f1",
+       "text": "For music, the user used to like techno but now prefers indie rock.",
+       "type": "preference",
+       "match": [
+        "techno",
+        "indie rock"
+       ]
+      },
+      {
+       "id": "s1f2",
+       "text": "The user knows TypeScript.",
+       "type": "skill",
+       "match": [
+        "TypeScript"
+       ]
+      },
+      {
+       "id": "s1f3",
+       "text": "The user knows Swift.",
+       "type": "skill",
+       "match": [
+        "Swift"
+       ]
+      },
+      {
+       "id": "s1f4",
+       "text": "The user knows Python.",
+       "type": "skill",
+       "match": [
+        "Python"
+       ]
+      },
+      {
+       "id": "s1f5",
+       "text": "In their free time the user enjoys rock climbing.",
+       "type": "hobby",
+       "match": [
+        "rock climbing"
+       ]
+      },
+      {
+       "id": "s1f6",
+       "text": "The user also enjoys photography.",
+       "type": "hobby",
+       "match": [
+        "photography"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 2,
+     "date": "2026-04-12",
+     "facts": [
+      {
+       "id": "s2f0",
+       "text": "The user left Databricks in May 2025.",
+       "type": "left_job",
+       "match": [
+        "Databricks"
+       ]
+      },
+      {
+       "id": "s2f1",
+       "text": "The user joined Google in May 2025 as a researcher.",
+       "type": "joined_job",
+       "match": [
+        "Google"
+       ]
+      },
+      {
+       "id": "s2f2",
+       "text": "The user later left Google in August 2026.",
+       "type": "left_job",
+       "match": [
+        "Google"
+       ]
+      },
+      {
+       "id": "s2f3",
+       "text": "These days the user works at Vercel.",
+       "type": "employment",
+       "match": [
+        "Vercel"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 3,
+     "date": "2026-05-03",
+     "facts": [
+      {
+       "id": "s3f0",
+       "text": "The user moved to Seattle in May 2025, previously living in Berlin.",
+       "type": "moved",
+       "match": [
+        "Seattle",
+        "Berlin"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 4,
+     "date": "2026-05-24",
+     "facts": [
+      {
+       "id": "s4f0",
+       "text": "The user's manager is Dana.",
+       "type": "manager",
+       "match": [
+        "Dana"
+       ]
+      },
+      {
+       "id": "s4f1",
+       "text": "Dana manages the Platform team.",
+       "type": "manager_team",
+       "match": [
+        "Platform"
+       ]
+      },
+      {
+       "id": "s4f2",
+       "text": "The Platform team uses TypeScript.",
+       "type": "team_tech",
+       "match": [
+        "TypeScript"
+       ]
+      },
+      {
+       "id": "s4f3",
+       "text": "The user is on the Platform team.",
+       "type": "on_team",
+       "match": [
+        "Platform"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 5,
+     "date": "2026-06-14",
+     "facts": [
+      {
+       "id": "s5f0",
+       "text": "The user worked on Project Granite, finished in May 2026.",
+       "type": "project",
+       "match": [
+        "Project Granite"
+       ]
+      },
+      {
+       "id": "s5f1",
+       "text": "The user is currently working on Project Beacon.",
+       "type": "project",
+       "match": [
+        "Project Beacon"
+       ]
+      },
+      {
+       "id": "s5f2",
+       "text": "The user worked on Project Atlas, finished in March 2026.",
+       "type": "project",
+       "match": [
+        "Project Atlas"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 6,
+     "date": "2026-07-05",
+     "facts": [
+      {
+       "id": "s6f0",
+       "text": "On July 3, 2025, the user organized a hackathon.",
+       "type": "event",
+       "match": [
+        "organized a hackathon"
+       ]
+      },
+      {
+       "id": "s6f1",
+       "text": "On July 24, 2026, the user published a blog post.",
+       "type": "event",
+       "match": [
+        "published a blog post"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 7,
+     "date": "2026-07-26",
+     "facts": [
+      {
+       "id": "s7f0",
+       "text": "On November 14, 2025, the user spoke at a conference.",
+       "type": "event",
+       "match": [
+        "spoke at a conference"
+       ]
+      },
+      {
+       "id": "s7f1",
+       "text": "On January 15, 2026, the user ran the marathon.",
+       "type": "event",
+       "match": [
+        "ran the marathon"
+       ]
+      },
+      {
+       "id": "s7f2",
+       "text": "The user has since switched to indie rock for music.",
+       "type": "preference",
+       "match": [
+        "indie rock"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "user_id": "user1",
+   "full_name": "Tom Brooks",
+   "sessions": [
+    {
+     "session": 0,
+     "date": "2026-03-01",
+     "facts": [
+      {
+       "id": "s0f0",
+       "text": "The user's full name is Tom Brooks.",
+       "type": "name",
+       "match": [
+        "Tom Brooks",
+        "Tom"
+       ]
+      },
+      {
+       "id": "s0f1",
+       "text": "The user works at Microsoft as a designer.",
+       "type": "employment",
+       "match": [
+        "Microsoft"
+       ]
+      },
+      {
+       "id": "s0f2",
+       "text": "The user lives in Prague.",
+       "type": "city",
+       "match": [
+        "Prague"
+       ]
+      },
+      {
+       "id": "s0f3",
+       "text": "The user's birthday is November 7.",
+       "type": "birthday",
+       "match": [
+        "november 7"
+       ]
+      },
+      {
+       "id": "s0f4",
+       "text": "The user has a sister named Ken Rossi.",
+       "type": "family",
+       "match": [
+        "Ken"
+       ]
+      },
+      {
+       "id": "s0f5",
+       "text": "The user goes by the nickname \"tom\".",
+       "type": "alias",
+       "match": [
+        "tom"
+       ]
+      },
+      {
+       "id": "s0f6",
+       "text": "The user gave the assistant a standing instruction: \"Please always respond in French.\"",
+       "type": "instruction",
+       "match": [
+        "french"
+       ]
+      },
+      {
+       "id": "s0f7",
+       "text": "The user has been at Microsoft since January 2024.",
+       "type": "employment_since",
+       "match": [
+        "Microsoft"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 1,
+     "date": "2026-03-22",
+     "facts": [
+      {
+       "id": "s1f0",
+       "text": "For coffee, the user used to like green tea but now prefers black coffee.",
+       "type": "preference",
+       "match": [
+        "green tea",
+        "black coffee"
+       ]
+      },
+      {
+       "id": "s1f1",
+       "text": "For music, the user used to like indie rock but now prefers classical.",
+       "type": "preference",
+       "match": [
+        "indie rock",
+        "classical"
+       ]
+      },
+      {
+       "id": "s1f2",
+       "text": "The user knows TypeScript.",
+       "type": "skill",
+       "match": [
+        "TypeScript"
+       ]
+      },
+      {
+       "id": "s1f3",
+       "text": "The user knows Rust.",
+       "type": "skill",
+       "match": [
+        "Rust"
+       ]
+      },
+      {
+       "id": "s1f4",
+       "text": "The user knows Python.",
+       "type": "skill",
+       "match": [
+        "Python"
+       ]
+      },
+      {
+       "id": "s1f5",
+       "text": "In their free time the user enjoys birdwatching.",
+       "type": "hobby",
+       "match": [
+        "birdwatching"
+       ]
+      },
+      {
+       "id": "s1f6",
+       "text": "The user also enjoys rock climbing.",
+       "type": "hobby",
+       "match": [
+        "rock climbing"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 2,
+     "date": "2026-04-12",
+     "facts": [
+      {
+       "id": "s2f0",
+       "text": "The user left Microsoft in July 2025.",
+       "type": "left_job",
+       "match": [
+        "Microsoft"
+       ]
+      },
+      {
+       "id": "s2f1",
+       "text": "The user joined Notion in July 2025 as a designer.",
+       "type": "joined_job",
+       "match": [
+        "Notion"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 3,
+     "date": "2026-05-03",
+     "facts": [
+      {
+       "id": "s3f0",
+       "text": "The user moved to Toronto in April 2025, previously living in Prague.",
+       "type": "moved",
+       "match": [
+        "Toronto",
+        "Prague"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 4,
+     "date": "2026-05-24",
+     "facts": [
+      {
+       "id": "s4f0",
+       "text": "The user's manager is Sofia.",
+       "type": "manager",
+       "match": [
+        "Sofia"
+       ]
+      },
+      {
+       "id": "s4f1",
+       "text": "Sofia manages the Payments team.",
+       "type": "manager_team",
+       "match": [
+        "Payments"
+       ]
+      },
+      {
+       "id": "s4f2",
+       "text": "The Payments team uses TypeScript.",
+       "type": "team_tech",
+       "match": [
+        "TypeScript"
+       ]
+      },
+      {
+       "id": "s4f3",
+       "text": "The user is on the Payments team.",
+       "type": "on_team",
+       "match": [
+        "Payments"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 5,
+     "date": "2026-06-14",
+     "facts": [
+      {
+       "id": "s5f0",
+       "text": "The user worked on Project Granite, finished in January 2026.",
+       "type": "project",
+       "match": [
+        "Project Granite"
+       ]
+      },
+      {
+       "id": "s5f1",
+       "text": "The user is currently working on Project Fable.",
+       "type": "project",
+       "match": [
+        "Project Fable"
+       ]
+      },
+      {
+       "id": "s5f2",
+       "text": "The user worked on Project Cedar, finished in January 2026.",
+       "type": "project",
+       "match": [
+        "Project Cedar"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 6,
+     "date": "2026-07-05",
+     "facts": [
+      {
+       "id": "s6f0",
+       "text": "On March 7, 2025, the user deployed the payment service.",
+       "type": "event",
+       "match": [
+        "deployed the payment service"
+       ]
+      },
+      {
+       "id": "s6f1",
+       "text": "On April 4, 2026, the user spoke at a conference.",
+       "type": "event",
+       "match": [
+        "spoke at a conference"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 7,
+     "date": "2026-07-26",
+     "facts": [
+      {
+       "id": "s7f0",
+       "text": "On June 5, 2025, the user adopted a cat.",
+       "type": "event",
+       "match": [
+        "adopted a cat"
+       ]
+      },
+      {
+       "id": "s7f1",
+       "text": "On April 23, 2026, the user published a blog post.",
+       "type": "event",
+       "match": [
+        "published a blog post"
+       ]
+      },
+      {
+       "id": "s7f2",
+       "text": "The user has since switched to classical for music.",
+       "type": "preference",
+       "match": [
+        "classical"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "user_id": "user2",
+   "full_name": "Ken Sharma",
+   "sessions": [
+    {
+     "session": 0,
+     "date": "2026-03-01",
+     "facts": [
+      {
+       "id": "s0f0",
+       "text": "The user's full name is Ken Sharma.",
+       "type": "name",
+       "match": [
+        "Ken Sharma",
+        "Ken"
+       ]
+      },
+      {
+       "id": "s0f1",
+       "text": "The user works at Anthropic as a engineering manager.",
+       "type": "employment",
+       "match": [
+        "Anthropic"
+       ]
+      },
+      {
+       "id": "s0f2",
+       "text": "The user lives in Denver.",
+       "type": "city",
+       "match": [
+        "Denver"
+       ]
+      },
+      {
+       "id": "s0f3",
+       "text": "The user's birthday is May 26.",
+       "type": "birthday",
+       "match": [
+        "may 26"
+       ]
+      },
+      {
+       "id": "s0f4",
+       "text": "The user has a sister named Chloe Kova\u010d.",
+       "type": "family",
+       "match": [
+        "Chloe"
+       ]
+      },
+      {
+       "id": "s0f5",
+       "text": "The user gave the assistant a standing instruction: \"Always keep my answers short and concise.\"",
+       "type": "instruction",
+       "match": [
+        "short",
+        "concise",
+        "brief"
+       ]
+      },
+      {
+       "id": "s0f6",
+       "text": "The user has been at Anthropic since May 2024.",
+       "type": "employment_since",
+       "match": [
+        "Anthropic"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 1,
+     "date": "2026-03-22",
+     "facts": [
+      {
+       "id": "s1f0",
+       "text": "For coffee, the user used to like cold brew but now prefers black coffee.",
+       "type": "preference",
+       "match": [
+        "cold brew",
+        "black coffee"
+       ]
+      },
+      {
+       "id": "s1f1",
+       "text": "For music, the user used to like lo-fi beats but now prefers jazz.",
+       "type": "preference",
+       "match": [
+        "lo-fi beats",
+        "jazz"
+       ]
+      },
+      {
+       "id": "s1f2",
+       "text": "The user knows Go.",
+       "type": "skill",
+       "match": [
+        "Go"
+       ]
+      },
+      {
+       "id": "s1f3",
+       "text": "The user knows Rust.",
+       "type": "skill",
+       "match": [
+        "Rust"
+       ]
+      },
+      {
+       "id": "s1f4",
+       "text": "The user knows TypeScript.",
+       "type": "skill",
+       "match": [
+        "TypeScript"
+       ]
+      },
+      {
+       "id": "s1f5",
+       "text": "In their free time the user enjoys photography.",
+       "type": "hobby",
+       "match": [
+        "photography"
+       ]
+      },
+      {
+       "id": "s1f6",
+       "text": "The user also enjoys birdwatching.",
+       "type": "hobby",
+       "match": [
+        "birdwatching"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 2,
+     "date": "2026-04-12",
+     "facts": [
+      {
+       "id": "s2f0",
+       "text": "The user left Anthropic in October 2025.",
+       "type": "left_job",
+       "match": [
+        "Anthropic"
+       ]
+      },
+      {
+       "id": "s2f1",
+       "text": "The user joined Ramp in October 2025 as a engineering manager.",
+       "type": "joined_job",
+       "match": [
+        "Ramp"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 3,
+     "date": "2026-05-03",
+     "facts": [
+      {
+       "id": "s3f0",
+       "text": "The user moved to Austin in October 2025, previously living in Denver.",
+       "type": "moved",
+       "match": [
+        "Austin",
+        "Denver"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 4,
+     "date": "2026-05-24",
+     "facts": [
+      {
+       "id": "s4f0",
+       "text": "The user's manager is Tom.",
+       "type": "manager",
+       "match": [
+        "Tom"
+       ]
+      },
+      {
+       "id": "s4f1",
+       "text": "Tom manages the Payments team.",
+       "type": "manager_team",
+       "match": [
+        "Payments"
+       ]
+      },
+      {
+       "id": "s4f2",
+       "text": "The Payments team uses Swift.",
+       "type": "team_tech",
+       "match": [
+        "Swift"
+       ]
+      },
+      {
+       "id": "s4f3",
+       "text": "The user is on the Payments team.",
+       "type": "on_team",
+       "match": [
+        "Payments"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 5,
+     "date": "2026-06-14",
+     "facts": [
+      {
+       "id": "s5f0",
+       "text": "The user worked on Project Falcon, finished in February 2026.",
+       "type": "project",
+       "match": [
+        "Project Falcon"
+       ]
+      },
+      {
+       "id": "s5f1",
+       "text": "The user is currently working on Project Atlas.",
+       "type": "project",
+       "match": [
+        "Project Atlas"
+       ]
+      },
+      {
+       "id": "s5f2",
+       "text": "The user worked on Project Fable, finished in May 2026.",
+       "type": "project",
+       "match": [
+        "Project Fable"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 6,
+     "date": "2026-07-05",
+     "facts": [
+      {
+       "id": "s6f0",
+       "text": "On September 21, 2025, the user rebuilt the CI pipeline.",
+       "type": "event",
+       "match": [
+        "rebuilt the CI pipeline"
+       ]
+      },
+      {
+       "id": "s6f1",
+       "text": "On May 17, 2026, the user organized a hackathon.",
+       "type": "event",
+       "match": [
+        "organized a hackathon"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 7,
+     "date": "2026-07-26",
+     "facts": [
+      {
+       "id": "s7f0",
+       "text": "On April 26, 2025, the user deployed the payment service.",
+       "type": "event",
+       "match": [
+        "deployed the payment service"
+       ]
+      },
+      {
+       "id": "s7f1",
+       "text": "On January 9, 2026, the user ran the marathon.",
+       "type": "event",
+       "match": [
+        "ran the marathon"
+       ]
+      },
+      {
+       "id": "s7f2",
+       "text": "The user has since switched to jazz for music.",
+       "type": "preference",
+       "match": [
+        "jazz"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "user_id": "user3",
+   "full_name": "Maya Garcia",
+   "sessions": [
+    {
+     "session": 0,
+     "date": "2026-03-01",
+     "facts": [
+      {
+       "id": "s0f0",
+       "text": "The user's full name is Maya Garcia.",
+       "type": "name",
+       "match": [
+        "Maya Garcia",
+        "Maya"
+       ]
+      },
+      {
+       "id": "s0f1",
+       "text": "The user works at Notion as a designer.",
+       "type": "employment",
+       "match": [
+        "Notion"
+       ]
+      },
+      {
+       "id": "s0f2",
+       "text": "The user lives in Lisbon.",
+       "type": "city",
+       "match": [
+        "Lisbon"
+       ]
+      },
+      {
+       "id": "s0f3",
+       "text": "The user's birthday is June 22.",
+       "type": "birthday",
+       "match": [
+        "june 22"
+       ]
+      },
+      {
+       "id": "s0f4",
+       "text": "The user has a sister named Priya Sharma.",
+       "type": "family",
+       "match": [
+        "Priya"
+       ]
+      },
+      {
+       "id": "s0f5",
+       "text": "The user gave the assistant a standing instruction: \"Please always respond in French.\"",
+       "type": "instruction",
+       "match": [
+        "french"
+       ]
+      },
+      {
+       "id": "s0f6",
+       "text": "The user has been at Notion since June 2024.",
+       "type": "employment_since",
+       "match": [
+        "Notion"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 1,
+     "date": "2026-03-22",
+     "facts": [
+      {
+       "id": "s1f0",
+       "text": "For coffee, the user used to like oat milk lattes but now prefers black coffee.",
+       "type": "preference",
+       "match": [
+        "oat milk lattes",
+        "black coffee"
+       ]
+      },
+      {
+       "id": "s1f1",
+       "text": "For music, the user used to like techno but now prefers lo-fi beats.",
+       "type": "preference",
+       "match": [
+        "techno",
+        "lo-fi beats"
+       ]
+      },
+      {
+       "id": "s1f2",
+       "text": "The user knows Kotlin.",
+       "type": "skill",
+       "match": [
+        "Kotlin"
+       ]
+      },
+      {
+       "id": "s1f3",
+       "text": "The user knows Rust.",
+       "type": "skill",
+       "match": [
+        "Rust"
+       ]
+      },
+      {
+       "id": "s1f4",
+       "text": "The user knows Go.",
+       "type": "skill",
+       "match": [
+        "Go"
+       ]
+      },
+      {
+       "id": "s1f5",
+       "text": "In their free time the user enjoys kayaking.",
+       "type": "hobby",
+       "match": [
+        "kayaking"
+       ]
+      },
+      {
+       "id": "s1f6",
+       "text": "The user also enjoys chess.",
+       "type": "hobby",
+       "match": [
+        "chess"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 2,
+     "date": "2026-04-12",
+     "facts": [
+      {
+       "id": "s2f0",
+       "text": "The user left Notion in March 2025.",
+       "type": "left_job",
+       "match": [
+        "Notion"
+       ]
+      },
+      {
+       "id": "s2f1",
+       "text": "The user joined Ramp in March 2025 as a designer.",
+       "type": "joined_job",
+       "match": [
+        "Ramp"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 3,
+     "date": "2026-05-03",
+     "facts": [
+      {
+       "id": "s3f0",
+       "text": "The user moved to Toronto in September 2025, previously living in Lisbon.",
+       "type": "moved",
+       "match": [
+        "Toronto",
+        "Lisbon"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 4,
+     "date": "2026-05-24",
+     "facts": [
+      {
+       "id": "s4f0",
+       "text": "The user's manager is Priya.",
+       "type": "manager",
+       "match": [
+        "Priya"
+       ]
+      },
+      {
+       "id": "s4f1",
+       "text": "Priya manages the Payments team.",
+       "type": "manager_team",
+       "match": [
+        "Payments"
+       ]
+      },
+      {
+       "id": "s4f2",
+       "text": "The Payments team uses Kotlin.",
+       "type": "team_tech",
+       "match": [
+        "Kotlin"
+       ]
+      },
+      {
+       "id": "s4f3",
+       "text": "The user is on the Payments team.",
+       "type": "on_team",
+       "match": [
+        "Payments"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 5,
+     "date": "2026-06-14",
+     "facts": [
+      {
+       "id": "s5f0",
+       "text": "The user worked on Project Cedar, finished in January 2026.",
+       "type": "project",
+       "match": [
+        "Project Cedar"
+       ]
+      },
+      {
+       "id": "s5f1",
+       "text": "The user is currently working on Project Falcon.",
+       "type": "project",
+       "match": [
+        "Project Falcon"
+       ]
+      },
+      {
+       "id": "s5f2",
+       "text": "The user worked on Project Fable, finished in April 2026.",
+       "type": "project",
+       "match": [
+        "Project Fable"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 6,
+     "date": "2026-07-05",
+     "facts": [
+      {
+       "id": "s6f0",
+       "text": "On September 25, 2025, the user adopted a cat.",
+       "type": "event",
+       "match": [
+        "adopted a cat"
+       ]
+      },
+      {
+       "id": "s6f1",
+       "text": "On April 27, 2026, the user rebuilt the CI pipeline.",
+       "type": "event",
+       "match": [
+        "rebuilt the CI pipeline"
+       ]
+      }
+     ]
+    },
+    {
+     "session": 7,
+     "date": "2026-07-26",
+     "facts": [
+      {
+       "id": "s7f0",
+       "text": "On May 1, 2025, the user spoke at a conference.",
+       "type": "event",
+       "match": [
+        "spoke at a conference"
+       ]
+      },
+      {
+       "id": "s7f1",
+       "text": "On September 11, 2026, the user deployed the payment service.",
+       "type": "event",
+       "match": [
+        "deployed the payment service"
+       ]
+      },
+      {
+       "id": "s7f2",
+       "text": "The user has since switched to lo-fi beats for music.",
+       "type": "preference",
+       "match": [
+        "lo-fi beats"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

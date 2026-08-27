@@ -1,0 +1,26 @@
+{
+ "n_items": 58,
+ "n_items_attempted": 240,
+ "sampling_note": "API quota limited the run to 58 of 240 exported items; agreement stats are computed on this sample and labelled as such.",
+ "det_judge_mean": 0.3448,
+ "llm_judge_mean": 0.25,
+ "exact_agreement": 0.7586,
+ "within_half_point": 0.7759,
+ "llm_judge_per_ability": {
+  "AB": 1.0,
+  "CR": 0.0,
+  "EO": 0.5,
+  "IE": 0.0,
+  "IF": 0.0,
+  "KU": 0.25,
+  "MH": 0.0,
+  "PF": 0.0,
+  "SZ": 0.125,
+  "TR": 0.25
+ },
+ "judge_models": [
+  "glm-4-plus"
+ ],
+ "finding": "The LLM judge grades OOD contexts LOWER (0.250) than the deterministic judge (0.345): the deterministic grader is not inflating OOD scores relative to an independent LLM grader \u2014 if anything it is slightly generous.",
+ "protocol": "BEAM-style context-sufficiency rubric replicated with the recorded judge model(s); canonical BEAM uses gpt-5 \u2014 numbers are NOT directly comparable across judge models."
+}

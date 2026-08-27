@@ -1,0 +1,278 @@
+{
+ "generated_at": "2026-08-27T13:08:39.995079+00:00",
+ "n_personas": 4,
+ "styles": {
+  "paraphrase": {
+   "extraction_recall_mean": 0.0937,
+   "extraction_recall_stdev": 0.0943,
+   "renderer_omissions_mean": 0.25,
+   "end_to_end": {
+    "overall": 0.2821,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.2188,
+     "EO": 0.1667,
+     "IE": 0.3333,
+     "IF": 0.25,
+     "KU": 0.1667,
+     "MH": 0.0,
+     "PF": 0.0,
+     "SZ": 0.75,
+     "TR": 0.0833
+    },
+    "n_questions": 140,
+    "facts": 166,
+    "corpus_tokens": 120054
+   }
+  },
+  "negation": {
+   "extraction_recall_mean": 0.7562,
+   "extraction_recall_stdev": 0.0329,
+   "renderer_omissions_mean": 0,
+   "end_to_end": {
+    "overall": 0.6929,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.4375,
+     "EO": 0.875,
+     "IE": 0.6667,
+     "IF": 0.375,
+     "KU": 0.3333,
+     "MH": 0.75,
+     "PF": 0.5625,
+     "SZ": 1.0,
+     "TR": 0.9167
+    },
+    "n_questions": 140,
+    "facts": 256,
+    "corpus_tokens": 120082
+   },
+   "with_llm_enrichment": {
+    "overall": 0.6571,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.25,
+     "EO": 0.875,
+     "IE": 0.5417,
+     "IF": 0.375,
+     "KU": 0.25,
+     "MH": 0.75,
+     "PF": 0.75,
+     "SZ": 1.0,
+     "TR": 0.8333
+    },
+    "report": {
+     "chunks_total": 2328,
+     "chunks_eligible": 60,
+     "llm_calls": 1,
+     "llm_tokens": 0,
+     "facts_extracted": 178,
+     "facts_committed": 127,
+     "quarantined": 0,
+     "seconds": 0.574,
+     "extractor_model": null
+    }
+   }
+  },
+  "indirect": {
+   "extraction_recall_mean": 0.4488,
+   "extraction_recall_stdev": 0.1025,
+   "renderer_omissions_mean": 0.25,
+   "end_to_end": {
+    "overall": 0.4857,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.375,
+     "EO": 0.75,
+     "IE": 0.4167,
+     "IF": 0.125,
+     "KU": 0.3333,
+     "MH": 0.0,
+     "PF": 0.25,
+     "SZ": 0.5,
+     "TR": 0.5833
+    },
+    "n_questions": 140,
+    "facts": 223,
+    "corpus_tokens": 120189
+   },
+   "with_llm_enrichment": {
+    "overall": 0.4929,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.4375,
+     "EO": 0.75,
+     "IE": 0.4167,
+     "IF": 0.25,
+     "KU": 0.25,
+     "MH": 0.0,
+     "PF": 0.25,
+     "SZ": 0.5,
+     "TR": 0.5833
+    },
+    "report": {
+     "chunks_total": 2312,
+     "chunks_eligible": 60,
+     "llm_calls": 1,
+     "llm_tokens": 0,
+     "facts_extracted": 175,
+     "facts_committed": 138,
+     "quarantined": 0,
+     "seconds": 0.534,
+     "extractor_model": null
+    }
+   }
+  },
+  "informal": {
+   "extraction_recall_mean": 0.0509,
+   "extraction_recall_stdev": 0.0587,
+   "renderer_omissions_mean": 0,
+   "end_to_end": {
+    "overall": 0.15,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.0,
+     "EO": 0.0,
+     "IE": 0.0,
+     "IF": 0.5,
+     "KU": 0.0,
+     "MH": 0.125,
+     "PF": 0.0,
+     "SZ": 0.0,
+     "TR": 0.0
+    },
+    "n_questions": 140,
+    "facts": 136,
+    "corpus_tokens": 120181
+   },
+   "with_llm_enrichment": {
+    "overall": 0.1714,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.0,
+     "EO": 0.0,
+     "IE": 0.0833,
+     "IF": 0.5,
+     "KU": 0.0,
+     "MH": 0.125,
+     "PF": 0.0,
+     "SZ": 0.0,
+     "TR": 0.0833
+    },
+    "report": {
+     "chunks_total": 2308,
+     "chunks_eligible": 60,
+     "llm_calls": 1,
+     "llm_tokens": 0,
+     "facts_extracted": 228,
+     "facts_committed": 173,
+     "quarantined": 0,
+     "seconds": 0.741,
+     "extractor_model": null
+    }
+   }
+  },
+  "non_english": {
+   "extraction_recall_mean": 0.0,
+   "extraction_recall_stdev": 0.0,
+   "renderer_omissions_mean": 0.25,
+   "end_to_end": {
+    "overall": 0.1571,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.0,
+     "EO": 0.0,
+     "IE": 0.125,
+     "IF": 0.0,
+     "KU": 0.0,
+     "MH": 0.0,
+     "PF": 0.0,
+     "SZ": 0.5,
+     "TR": 0.0833
+    },
+    "n_questions": 140,
+    "facts": 146,
+    "corpus_tokens": 120274
+   },
+   "with_llm_enrichment": {
+    "overall": 0.1643,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.0,
+     "EO": 0.0,
+     "IE": 0.125,
+     "IF": 0.0,
+     "KU": 0.0,
+     "MH": 0.0,
+     "PF": 0.0,
+     "SZ": 0.25,
+     "TR": 0.25
+    },
+    "report": {
+     "chunks_total": 2388,
+     "chunks_eligible": 60,
+     "llm_calls": 1,
+     "llm_tokens": 0,
+     "facts_extracted": 202,
+     "facts_committed": 159,
+     "quarantined": 0,
+     "seconds": 0.695,
+     "extractor_model": null
+    }
+   }
+  },
+  "code_switch": {
+   "extraction_recall_mean": 0.5788,
+   "extraction_recall_stdev": 0.1806,
+   "renderer_omissions_mean": 0,
+   "end_to_end": {
+    "overall": 0.6071,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.375,
+     "EO": 0.75,
+     "IE": 0.5833,
+     "IF": 0.0,
+     "KU": 0.5,
+     "MH": 0.625,
+     "PF": 0.375,
+     "SZ": 1.0,
+     "TR": 0.8333
+    },
+    "n_questions": 140,
+    "facts": 241,
+    "corpus_tokens": 120185
+   },
+   "with_llm_enrichment": {
+    "overall": 0.5857,
+    "per_ability": {
+     "AB": 1.0,
+     "CR": 0.4375,
+     "EO": 0.75,
+     "IE": 0.5833,
+     "IF": 0.25,
+     "KU": 0.4167,
+     "MH": 0.5,
+     "PF": 0.3125,
+     "SZ": 1.0,
+     "TR": 0.5833
+    },
+    "report": {
+     "chunks_total": 2354,
+     "chunks_eligible": 60,
+     "llm_calls": 1,
+     "llm_tokens": 0,
+     "facts_extracted": 165,
+     "facts_committed": 131,
+     "quarantined": 0,
+     "seconds": 0.481,
+     "extractor_model": null
+    }
+   }
+  }
+ },
+ "notes": [
+  "OOD scores measure generalization to phrasings the pattern extractor was never tuned against; renderer omissions are excluded from extraction recall and reported separately.",
+  "ID (in-distribution) numbers in benchmarks/results/ are an upper bound: the extractor was authored against the generator's templates."
+ ]
+}

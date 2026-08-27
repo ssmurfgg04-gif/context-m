@@ -1,0 +1,1635 @@
+{
+ "summary": {
+  "extraction_recall_mean": 0.0,
+  "extraction_recall_stdev": 0.0,
+  "renderer_omissions_mean": 0.25,
+  "end_to_end": {
+   "overall": 0.1571,
+   "per_ability": {
+    "AB": 1.0,
+    "CR": 0.0,
+    "EO": 0.0,
+    "IE": 0.125,
+    "IF": 0.0,
+    "KU": 0.0,
+    "MH": 0.0,
+    "PF": 0.0,
+    "SZ": 0.5,
+    "TR": 0.0833
+   },
+   "n_questions": 140,
+   "facts": 146,
+   "corpus_tokens": 120274
+  },
+  "with_llm_enrichment": {
+   "overall": 0.1643,
+   "per_ability": {
+    "AB": 1.0,
+    "CR": 0.0,
+    "EO": 0.0,
+    "IE": 0.125,
+    "IF": 0.0,
+    "KU": 0.0,
+    "MH": 0.0,
+    "PF": 0.0,
+    "SZ": 0.25,
+    "TR": 0.25
+   },
+   "report": {
+    "chunks_total": 2388,
+    "chunks_eligible": 60,
+    "llm_calls": 1,
+    "llm_tokens": 0,
+    "facts_extracted": 202,
+    "facts_committed": 159,
+    "quarantined": 0,
+    "seconds": 0.695,
+    "extractor_model": null
+   }
+  }
+ },
+ "extraction_per_persona": [
+  {
+   "user_id": "user0",
+   "recall": 0.0,
+   "n_ground_truth": 31,
+   "n_renderer_omitted": 0,
+   "n_candidates": 0,
+   "per_type": {
+    "name": 0.0,
+    "employment": 0.0,
+    "city": 0.0,
+    "birthday": 0.0,
+    "family": 0.0,
+    "instruction": 0.0,
+    "employment_since": 0.0,
+    "preference": 0.0,
+    "skill": 0.0,
+    "hobby": 0.0,
+    "left_job": 0.0,
+    "joined_job": 0.0,
+    "moved": 0.0,
+    "manager": 0.0,
+    "manager_team": 0.0,
+    "team_tech": 0.0,
+    "on_team": 0.0,
+    "project": 0.0,
+    "event": 0.0
+   },
+   "missed": [
+    "s0f0",
+    "s0f1",
+    "s0f2",
+    "s0f3",
+    "s0f4",
+    "s0f5",
+    "s0f6",
+    "s1f0",
+    "s1f1",
+    "s1f2",
+    "s1f3",
+    "s1f4",
+    "s1f5",
+    "s1f6",
+    "s2f0",
+    "s2f1",
+    "s2f2",
+    "s2f3",
+    "s3f0",
+    "s4f0",
+    "s4f1",
+    "s4f2",
+    "s4f3",
+    "s5f0",
+    "s5f1",
+    "s5f2",
+    "s6f0",
+    "s6f1",
+    "s7f0",
+    "s7f1",
+    "s7f2"
+   ],
+   "definition": "entity-level recall: share of ground-truth facts whose key appears in any non-fallback candidate; temporal precision is measured end-to-end by the TR/EO probes, not here"
+  },
+  {
+   "user_id": "user1",
+   "recall": 0.0,
+   "n_ground_truth": 29,
+   "n_renderer_omitted": 1,
+   "n_candidates": 0,
+   "per_type": {
+    "name": 0.0,
+    "employment": 0.0,
+    "city": 0.0,
+    "birthday": 0.0,
+    "family": 0.0,
+    "alias": 0.0,
+    "employment_since": 0.0,
+    "preference": 0.0,
+    "skill": 0.0,
+    "hobby": 0.0,
+    "left_job": 0.0,
+    "joined_job": 0.0,
+    "moved": 0.0,
+    "manager": 0.0,
+    "manager_team": 0.0,
+    "team_tech": 0.0,
+    "on_team": 0.0,
+    "project": 0.0,
+    "event": 0.0
+   },
+   "missed": [
+    "s0f0",
+    "s0f1",
+    "s0f2",
+    "s0f3",
+    "s0f4",
+    "s0f5",
+    "s0f7",
+    "s1f0",
+    "s1f1",
+    "s1f2",
+    "s1f3",
+    "s1f4",
+    "s1f5",
+    "s1f6",
+    "s2f0",
+    "s2f1",
+    "s3f0",
+    "s4f0",
+    "s4f1",
+    "s4f2",
+    "s4f3",
+    "s5f0",
+    "s5f1",
+    "s5f2",
+    "s6f0",
+    "s6f1",
+    "s7f0",
+    "s7f1",
+    "s7f2"
+   ],
+   "definition": "entity-level recall: share of ground-truth facts whose key appears in any non-fallback candidate; temporal precision is measured end-to-end by the TR/EO probes, not here"
+  },
+  {
+   "user_id": "user2",
+   "recall": 0.0,
+   "n_ground_truth": 29,
+   "n_renderer_omitted": 0,
+   "n_candidates": 0,
+   "per_type": {
+    "name": 0.0,
+    "employment": 0.0,
+    "city": 0.0,
+    "birthday": 0.0,
+    "family": 0.0,
+    "instruction": 0.0,
+    "employment_since": 0.0,
+    "preference": 0.0,
+    "skill": 0.0,
+    "hobby": 0.0,
+    "left_job": 0.0,
+    "joined_job": 0.0,
+    "moved": 0.0,
+    "manager": 0.0,
+    "manager_team": 0.0,
+    "team_tech": 0.0,
+    "on_team": 0.0,
+    "project": 0.0,
+    "event": 0.0
+   },
+   "missed": [
+    "s0f0",
+    "s0f1",
+    "s0f2",
+    "s0f3",
+    "s0f4",
+    "s0f5",
+    "s0f6",
+    "s1f0",
+    "s1f1",
+    "s1f2",
+    "s1f3",
+    "s1f4",
+    "s1f5",
+    "s1f6",
+    "s2f0",
+    "s2f1",
+    "s3f0",
+    "s4f0",
+    "s4f1",
+    "s4f2",
+    "s4f3",
+    "s5f0",
+    "s5f1",
+    "s5f2",
+    "s6f0",
+    "s6f1",
+    "s7f0",
+    "s7f1",
+    "s7f2"
+   ],
+   "definition": "entity-level recall: share of ground-truth facts whose key appears in any non-fallback candidate; temporal precision is measured end-to-end by the TR/EO probes, not here"
+  },
+  {
+   "user_id": "user3",
+   "recall": 0.0,
+   "n_ground_truth": 29,
+   "n_renderer_omitted": 0,
+   "n_candidates": 0,
+   "per_type": {
+    "name": 0.0,
+    "employment": 0.0,
+    "city": 0.0,
+    "birthday": 0.0,
+    "family": 0.0,
+    "instruction": 0.0,
+    "employment_since": 0.0,
+    "preference": 0.0,
+    "skill": 0.0,
+    "hobby": 0.0,
+    "left_job": 0.0,
+    "joined_job": 0.0,
+    "moved": 0.0,
+    "manager": 0.0,
+    "manager_team": 0.0,
+    "team_tech": 0.0,
+    "on_team": 0.0,
+    "project": 0.0,
+    "event": 0.0
+   },
+   "missed": [
+    "s0f0",
+    "s0f1",
+    "s0f2",
+    "s0f3",
+    "s0f4",
+    "s0f5",
+    "s0f6",
+    "s1f0",
+    "s1f1",
+    "s1f2",
+    "s1f3",
+    "s1f4",
+    "s1f5",
+    "s1f6",
+    "s2f0",
+    "s2f1",
+    "s3f0",
+    "s4f0",
+    "s4f1",
+    "s4f2",
+    "s4f3",
+    "s5f0",
+    "s5f1",
+    "s5f2",
+    "s6f0",
+    "s6f1",
+    "s7f0",
+    "s7f1",
+    "s7f2"
+   ],
+   "definition": "entity-level recall: share of ground-truth facts whose key appears in any non-fallback candidate; temporal precision is measured end-to-end by the TR/EO probes, not here"
+  }
+ ],
+ "result": {
+  "style": "non_english",
+  "overall": 0.1571,
+  "per_ability": {
+   "AB": 1.0,
+   "CR": 0.0,
+   "EO": 0.0,
+   "IE": 0.125,
+   "IF": 0.0,
+   "KU": 0.0,
+   "MH": 0.0,
+   "PF": 0.0,
+   "SZ": 0.5,
+   "TR": 0.0833
+  },
+  "n_questions": 140,
+  "ingest": {
+   "wall_seconds": 1.12,
+   "messages": 2388,
+   "tokens": 120274,
+   "tokens_per_second": 107523,
+   "llm_calls": 0,
+   "u0_protocol": "verified",
+   "facts": 146,
+   "enrichment": {
+    "chunks_total": 2388,
+    "chunks_eligible": 60,
+    "llm_calls": 1,
+    "llm_tokens": 0,
+    "facts_extracted": 202,
+    "facts_committed": 159,
+    "quarantined": 0,
+    "seconds": 0.695,
+    "extractor_model": null
+   },
+   "wall_seconds_total": 3.16
+  },
+  "extraction": {
+   "facts": 146
+  },
+  "details": [
+   {
+    "ability": "AB",
+    "question": "What is Priya's favorite podcast?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an arti"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Priya's middle name?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an arti"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Priya's blood type?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5872345f; src #2909e672; \"I read an article abou"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Priya's zodiac sign?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5872345f; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article abou"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Tom's favorite podcast?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea made...\"]\n- (Sahara Desert, mentioned, Sahara Desert) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9344eeca; src #f369052a; \"I read an article about the Baltic Sea y"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Tom's middle name?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 09ae5ead; src #3414bde7; \"I read an article about Voyager Program yesterday. Apparently Voyager Program at...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a58d6762; src #dfa72f5c; \"I read an article abou"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Tom's blood type?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea made...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal "
+   },
+   {
+    "ability": "AB",
+    "question": "What is Tom's zodiac sign?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was redisc...\"]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic S"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Ken's favorite podcast?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id e074476a; src #04ed46d7; \"I read an article about Silk Road yesterday. Apparently Silk Road was rediscover...\"]\n- (Apparently Yellowstone, mentioned, Apparently Yellowstone) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 8e5b7609; src #890680bd; \"I read an article about Yellowstone Park yesterday. Apparently Yellowstone Park ...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 733ac678; src #933ea3d8; \"I read an ar"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Ken's middle name?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c215ab2a; src #962ae515; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One hosted...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id b419db2c; src #e7b374be; \""
+   },
+   {
+    "ability": "AB",
+    "question": "What is Ken's blood type?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c215ab2a; src #962ae515; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One hosted...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 733ac678; src #933ea3d8; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal surprised ...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id b419db2c; src #e7b374be; \"I read an arti"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Ken's zodiac sign?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 733ac678; src #933ea3d8; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal surprised ...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 64d8b863; src #933ea3d8; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal surprised ...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id b419db2c; src #e7b374be; \"I read an article about "
+   },
+   {
+    "ability": "AB",
+    "question": "What is Maya's favorite podcast?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert attrac...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 8ee9eb73; src #511da712; \"I read an article abou"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Maya's middle name?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One inspir...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 8ee9eb73; src #511da712; \"I read an article about Silk Road yesterday. Apparently Silk Road was renovated ...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 69bd8193; src #21e98e3d; \"I re"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Maya's blood type?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One inspir...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 8ee9eb73; src #511da712; \"I read an articl"
+   },
+   {
+    "ability": "AB",
+    "question": "What is Maya's zodiac sign?",
+    "score": 1.0,
+    "detail": {
+     "reason": "correct abstention"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 6334e87c; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \"I read an articl"
+   },
+   {
+    "ability": "CR",
+    "question": "Where does Priya work now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One made h...\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 21a88c26; src #874ef644; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Bo"
+   },
+   {
+    "ability": "CR",
+    "question": "What is Priya's current employer?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 3a831ddb; src #17958253; \"I read a"
+   },
+   {
+    "ability": "CR",
+    "question": "Which company does Priya currently work at?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 3a831ddb; src #17958253; \"I read an article about Voyager Program yesterday. Apparently Voyager Program ma...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5872345f; src #2909e672; \"I read an arti"
+   },
+   {
+    "ability": "CR",
+    "question": "Has Priya always worked at Google?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 84cd78d5; src #f54f7f0b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert inspir...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an "
+   },
+   {
+    "ability": "CR",
+    "question": "Where does Tom work now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id e8b614cb; src #1dbda0a8; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa...\"]\n- (Sahara Desert, mentioned, Sahara Desert) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9344eeca; src #f369052a; \"I read an article about the Balt"
+   },
+   {
+    "ability": "CR",
+    "question": "What is Tom's current employer?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was redisc...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 2db57f5f; src #dfa72f5c; \"I read an article about Silk"
+   },
+   {
+    "ability": "CR",
+    "question": "Which company does Tom currently work at?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 09ae5ead; src #3414bde7; \"I read an article about Voyager Program yesterday. Apparently Voyager Program at...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article abou"
+   },
+   {
+    "ability": "CR",
+    "question": "Has Tom always worked at Microsoft?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was redisc...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 2db57f5f; src #dfa72f5c; \"I read an article about Silk"
+   },
+   {
+    "ability": "CR",
+    "question": "Where does Ken work now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 8ac7be9c; src #5d213349; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis wa...\"]\n- (Sahara Desert, mentioned, Sahara Desert) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c54d49cf; src #dcb477a9; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea host...\"]\n- ("
+   },
+   {
+    "ability": "CR",
+    "question": "What is Ken's current employer?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Yellowstone, mentioned, Apparently Yellowstone) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 8e5b7609; src #890680bd; \"I read an article about Yellowstone Park yesterday. Apparently Yellowstone Park ...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id e074476a; src #04ed46d7; \"I read an article about Silk Road yesterday. Apparently Silk Road was rediscover...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50;"
+   },
+   {
+    "ability": "CR",
+    "question": "Which company does Ken currently work at?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c215ab2a; src #962ae515; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One hosted...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id b419db2c; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \""
+   },
+   {
+    "ability": "CR",
+    "question": "Has Ken always worked at Anthropic?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id b419db2c; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c215ab2a; src #962ae515; \""
+   },
+   {
+    "ability": "CR",
+    "question": "Where does Maya work now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was "
+   },
+   {
+    "ability": "CR",
+    "question": "What is Maya's current employer?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert attrac...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 69bd8193; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 8ee9eb73; src #511da712; \"I read an "
+   },
+   {
+    "ability": "CR",
+    "question": "Which company does Maya currently work at?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 69bd8193; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One inspir...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an ar"
+   },
+   {
+    "ability": "CR",
+    "question": "Has Maya always worked at Notion?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 69bd8193; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One inspir...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 9d77209a; src #b2826627;"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: organized a hackathon or spoke at a conference?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2b41ee46; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id e4a76314; src #d103b89d; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Treaty ...\"]\n- (Hyperloop One, mentioned, Hyperloop One) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id b317b5eb; src #7da59022; \"I read an article about Si"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: organized a hackathon or ran the marathon?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2b41ee46; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c717f6ed; src #1ca0634f; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id e4a76314; src #d103b89d; \"I read an article about Antarcti"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: organized a hackathon or published a blog post?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c645e349; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2b41ee46; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5467640f; src #2909e672; \"I read an article about Gr"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: spoke at a conference or ran the marathon?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id e4a76314; src #d103b89d; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Treaty ...\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5b49bce3; src #1ca0634f; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2b41ee46; src #2909e672; \"I read an "
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: spoke at a conference or published a blog post?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c645e349; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5467640f; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Nadia Williams, mentioned, Nadia Williams) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c43306da; src #493f20e6; \"Tengo una hermana llam"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: ran the marathon or published a blog post?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c645e349; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Nadia Williams, mentioned, Nadia Williams) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c43306da; src #493f20e6; \"Tengo una hermana llamada Nadia Williams.\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5467640f; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: deployed the payment service or adopted a cat?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 90422122; src #52316721; \"I read an article about Aztec Calendar yesterday. Apparently Aztec Calendar brok...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a58d6762; src #dfa72f5c; \"I read an article about Silk Road yesterday. Apparently Silk Road was rediscover...\"]\n- (Mount Kilimanjaro, mentioned, Mount Kilimanjaro) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9c9dafc4; src #96211d7f; \"I read an article "
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: deployed the payment service or spoke at a conference?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 90422122; src #52316721; \"I read an article about Aztec Calendar yesterday. Apparently Aztec Calendar brok...\"]\n- (Mount Kilimanjaro, mentioned, Mount Kilimanjaro) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9c9dafc4; src #96211d7f; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 704ba070; src #33b36f16; \"I read an article about "
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: deployed the payment service or published a blog post?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 90422122; src #52316721; \"I read an article about Aztec Calendar yesterday. Apparently Aztec Calendar brok...\"]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 30fc21ca; src #33b36f16; \"I read an article about Great "
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: adopted a cat or spoke at a conference?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 09ae5ead; src #3414bde7; \"I read an article about Voyager Program yesterday. Apparently Voyager Program at...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 45b47dfc; src #c39ef452; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was su...\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id c823c045; src #f369052"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: adopted a cat or published a blog post?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 90422122; src #52316721; \"I read an article about Aztec Calendar yesterday. Apparently Aztec Calendar brok...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 30fc21ca; src #33b36f16; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks e"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: spoke at a conference or published a blog post?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 90422122; src #52316721; \"I read an article about Aztec Calendar yesterday. Apparently Aztec Calendar brok...\"]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 30fc21ca; src #33b36f16; \"I read an article about Great "
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: deployed the payment service or rebuilt the CI pipeline?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Yellowstone Park, mentioned, Yellowstone Park) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id a9f54afe; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Project Fable, mentioned, Project Fable) [valid 2026-06-18\u2192\u221e; learned 2026-06-18; conf 0.35; id 8e8b3e3a; src #c75a0607; \"Tambi\u00e9n trabaj\u00e9 en Project Fable, que termin\u00f3 en mayo de 2026.\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f5283386; src #79a2bc50; \"I read an article about Voyager Program y"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: deployed the payment service or ran the marathon?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Project Fable, mentioned, Project Fable) [valid 2026-06-18\u2192\u221e; learned 2026-06-18; conf 0.35; id 8e8b3e3a; src #c75a0607; \"Tambi\u00e9n trabaj\u00e9 en Project Fable, que termin\u00f3 en mayo de 2026.\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 967ca285; src #4ddb5538; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis at...\"]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 3d92758a; src #e7b374be; \"I read an article about Great Barrier Reef yester"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: deployed the payment service or organized a hackathon?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 3d92758a; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 8ba47c85; src #b5ed41a8; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was re...\"]\n- (Project Fable, mentioned, Project Fable) [valid 2026-06-18\u2192\u221e; learned 2026-06-18; conf 0.35; id 8e8b3e3a; src #c75a0607; \"Tambi\u00e9n trabaj\u00e9 en Project Fable"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: rebuilt the CI pipeline or ran the marathon?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Yellowstone Park, mentioned, Yellowstone Park) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id a9f54afe; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f5283386; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Project Fable, mentioned, Project Fable) [valid 2026-06-18\u2192\u221e; learned 2026-06-18; conf 0.35; id 8e8b3e3a; src #c75a0607; \"Tambi\u00e9n trabaj\u00e9 en P"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: rebuilt the CI pipeline or organized a hackathon?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 3d92758a; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f5283386; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Silk Road, mentioned, Silk Road) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id daf96c67; src #9aee8c18; \"I read an article about Mariana Tren"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: ran the marathon or organized a hackathon?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 3d92758a; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Project Falcon, mentioned, Project Falcon) [valid 2026-06-18\u2192\u221e; learned 2026-06-18; conf 0.35; id 534bd05e; src #3e784587; \"Hola, trabaj\u00e9 en Project Falcon, que termin\u00f3 en febrero de 2026.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yes"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: spoke at a conference or adopted a cat?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id e3e3020a; src #fe4cc6f6; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 9bbca8b5; src #f1d67428; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 4cb1d993; src #56a473b4; \"I read an "
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: spoke at a conference or rebuilt the CI pipeline?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Yellowstone Park, mentioned, Yellowstone Park) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 3bd41e7f; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7a88cd9f; src #4abcbe34; \"I read an article about Gutenberg Press yesterday. Apparently Gutenberg Press wa...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 57326d75; src #f1d67428; \"I read an arti"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: spoke at a conference or deployed the payment service?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id e3e3020a; src #fe4cc6f6; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7a88cd9f; src #4abcbe34; \"I read an article about Gutenberg Press yesterday. Apparently Gutenberg Press wa...\"]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 294cfd40; src #fe4cc6f6; \"I read an article about Gr"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: adopted a cat or rebuilt the CI pipeline?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Yellowstone Park, mentioned, Yellowstone Park) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 3bd41e7f; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 57326d75; src #f1d67428; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an ar"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: adopted a cat or deployed the payment service?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id e3e3020a; src #fe4cc6f6; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One inspir...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 57326d75; src #f1d67428; \"I read an ar"
+   },
+   {
+    "ability": "EO",
+    "question": "Which happened first: rebuilt the CI pipeline or deployed the payment service?",
+    "score": 0.0,
+    "detail": {
+     "reason": "event(s) missing from context"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Yellowstone Park, mentioned, Yellowstone Park) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 3bd41e7f; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Great Barrier, mentioned, Great Barrier) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id e3e3020a; src #fe4cc6f6; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 57326d75; src #f1d67428; \"I read an article ab"
+   },
+   {
+    "ability": "IE",
+    "question": "What is Priya's birthday?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One made h...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Project Granite, mentioned, Project Granite) [valid 2026-06-16\u2192\u221e; learned 2026-06-16; conf 0.35; id 3f94a68e; src #887683bc; \"Acabo de ter"
+   },
+   {
+    "ability": "IE",
+    "question": "When was Priya born?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 84cd78d5; src #f54f7f0b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert inspir...\"]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road att"
+   },
+   {
+    "ability": "IE",
+    "question": "Who is Priya's sister?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 22cb0326; src #1ca0634f; \"I read a"
+   },
+   {
+    "ability": "IE",
+    "question": "What does Priya do for a living?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 84cd78d5; src #f54f7f0b; \"I read an article about Sahara Desert yesterday. Apparently S"
+   },
+   {
+    "ability": "IE",
+    "question": "What is Priya's full name?",
+    "score": 1.0,
+    "detail": {
+     "reason": "nugget(s) present"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 22cb0326; src #1ca0634f; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read a"
+   },
+   {
+    "ability": "IE",
+    "question": "What does Priya do in their free time?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 12829132; src #87ec4c66; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench was ...\"]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road a"
+   },
+   {
+    "ability": "IE",
+    "question": "What is Tom's birthday?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Kafka Museum, mentioned, Kafka Museum) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id cc7b6146; src #995b38ee; \"I read an article about Kafka Museum yesterday. Apparently Kafka Museum hosted a...\"]\n- (Sahara Desert, mentioned, Sahara Desert) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9344eeca; src #f369052a; \"I read an article about the Baltic Sea"
+   },
+   {
+    "ability": "IE",
+    "question": "When was Tom born?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was redisc...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 2db57f5f; src #dfa72f5c; \"I read an article about Silk"
+   },
+   {
+    "ability": "IE",
+    "question": "Who is Tom's sister?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Mount Kilimanjaro, mentioned, Mount Kilimanjaro) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9c9dafc4; src #96211d7f; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 97fd89b4; src #fc7f02f2; \"I read an article "
+   },
+   {
+    "ability": "IE",
+    "question": "What does Tom do for a living?",
+    "score": 1.0,
+    "detail": {
+     "reason": "nugget(s) present"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 2db57f5f; src #dfa72f5c; \"I read an article about Silk Road yesterday. Apparently Silk Road was rediscover...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 09ae5ead; src #3414bde7; \"I read an article abou"
+   },
+   {
+    "ability": "IE",
+    "question": "What is Tom's full name?",
+    "score": 1.0,
+    "detail": {
+     "reason": "nugget(s) present"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 97fd89b4; src #fc7f02f2; \"I read an article about Gutenberg Press yesterday. Apparently Gutenberg Press su...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a58d6762; src #dfa72f5c; \"I read an article abou"
+   },
+   {
+    "ability": "IE",
+    "question": "What does Tom do in their free time?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 09ae5ead; src #3414bde7; \"I read an article about Voyager Program yesterday. Apparently Voyager Program at...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article abou"
+   },
+   {
+    "ability": "IE",
+    "question": "What is Ken's birthday?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Kafka Museum, mentioned, Kafka Museum) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 480f49ef; src #6fbc1261; \"I read an article about Kafka Museum yesterday. Apparently Kafka Museum broke re...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id d28349c0; src #b5ed41a8; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was re...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article "
+   },
+   {
+    "ability": "IE",
+    "question": "When was Ken born?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 3d92758a; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Project Falcon, mentioned, Project Falcon) [valid 2026-06-18\u2192\u221e; learned 2026-06-18; conf 0.35; id 534bd05e; src #3e784587; \"Hola, trabaj\u00e9 en Project Falcon, que termin\u00f3 en febrero de 2026.\"]\n- (Gutenberg Press, mentio"
+   },
+   {
+    "ability": "IE",
+    "question": "Who is Ken's sister?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f74faee8; src #dfd23421; \"I read an article about Florence Cathedral yesterday. Apparently Florence Cathed...\"]\n- (Apparently Florence, mentioned, Apparently Florence) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 9de018d9; src #dfd23421; \"I read an article about Florence Cathedral yesterday. Apparently Florence Cathed...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I "
+   },
+   {
+    "ability": "IE",
+    "question": "What does Ken do for a living?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Project Falcon, mentioned, Project Falcon) [valid 2026-06-18\u2192\u221e; learned 2026-06-18; conf 0.35; id 534bd05e; src #3e784587; \"Hola, trabaj\u00e9 en Project Falcon, que termin\u00f3 en febrero de 2026.\"]\n- (Barrier Reef, mentioned, Barrier Reef) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 3d92758a; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Aurora, ment"
+   },
+   {
+    "ability": "IE",
+    "question": "What is Ken's full name?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f74faee8; src #dfd23421; \"I read an article about Florence Cathedral yesterday. Apparently Florence Cathed...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f5283386; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \"I read"
+   },
+   {
+    "ability": "IE",
+    "question": "What does Ken do in their free time?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id b419db2c; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c215ab2a; src #962ae515; \""
+   },
+   {
+    "ability": "IE",
+    "question": "What is Maya's birthday?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Kafka Museum, mentioned, Kafka Museum) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 283bae41; src #b2826627; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench surp...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert attrac...\"]\n- (Apparently Gutenberg, mentioned, Apparently Gutenberg) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id f81a6d0f; src #4abcbe34; \"I read an "
+   },
+   {
+    "ability": "IE",
+    "question": "When was Maya born?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert attrac...\"]\n- "
+   },
+   {
+    "ability": "IE",
+    "question": "Who is Maya's sister?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 4cb1d993; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Apparently Florence, mentioned, Apparently Florence) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 106fa3f5; src #a23"
+   },
+   {
+    "ability": "IE",
+    "question": "What does Maya do for a living?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert attrac...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 69bd8193; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \""
+   },
+   {
+    "ability": "IE",
+    "question": "What is Maya's full name?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 4cb1d993; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Apparently Silk, mentioned, Apparently Silk) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id 8ee9eb73; src #511da712; \""
+   },
+   {
+    "ability": "IE",
+    "question": "What does Maya do in their free time?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 69bd8193; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Apparently Mariana, mentioned, Apparently Mariana) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 9d77209a; src #b2826627; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench surp...\"]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e;"
+   },
+   {
+    "ability": "IF",
+    "question": "How should answers to Priya be formatted?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Gutenberg, mentioned, Apparently Gutenberg) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id e6654b21; src #84d439fe; \"I read an article about Gutenberg Press yesterday. Apparently Gutenberg Press in...\"]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id fb2fc427; src #874ef644; \"I read an article about Aurora Borealis yesterday. Appare"
+   },
+   {
+    "ability": "IF",
+    "question": "What standing instruction did Priya give you?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Mariana Trench, mentioned, Mariana Trench) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 668ad017; src #b1f662c6; \"I read an article about Silk Road yesterday. Apparently Silk Road attracted rese...\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One"
+   },
+   {
+    "ability": "IF",
+    "question": "In what language should you respond to Tom?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 30fc21ca; src #33b36f16; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Sahara Desert, mentioned, Sahara Desert) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9344eeca; src #f369052a; \"I read an article about the Ba"
+   },
+   {
+    "ability": "IF",
+    "question": "What standing instruction did Tom give you?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea made...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a58d6762; src #dfa72f5c; \"I read an article about Silk Road ye"
+   },
+   {
+    "ability": "IF",
+    "question": "How should answers to Ken be formatted?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id d28349c0; src #b5ed41a8; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was re...\"]\n- (Apparently Yellowstone, mentioned, Apparently Yellowstone) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 8e5b7609; src #890680bd; \"I read an article about Yellowstone Park yesterday. Apparently Yell"
+   },
+   {
+    "ability": "IF",
+    "question": "What standing instruction did Ken give you?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c215ab2a; src #962ae515; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One hosted...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id b419db2c; src #e7b374be; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 733ac678; src #933ea3d8; \"I read an arti"
+   },
+   {
+    "ability": "IF",
+    "question": "In what language should you respond to Maya?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id df216bc0; src #fe4cc6f6; \"I read an article about Great Barrier Reef yesterday. Apparently Gre"
+   },
+   {
+    "ability": "IF",
+    "question": "What standing instruction did Maya give you?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Hyperloop, mentioned, Apparently Hyperloop) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 74202108; src #79442a3e; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One inspir...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 69bd8193; src #21e98e3d; \"I read an ar"
+   },
+   {
+    "ability": "KU",
+    "question": "Is Priya still working at Google?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Apparently Antarctic, mentioned, Apparently Antarctic) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 24f1b274; src #d103b89d; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Treaty ...\"]\n- (Apparently Mount, mentioned, Apparently Mount) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id b8d2bc54; src #75399bf9; \"I read an article about Mount Kilimanjaro yesterday. Appare"
+   },
+   {
+    "ability": "KU",
+    "question": "Is Priya still working at Google?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One made h...\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 21a88c26; src #874ef644; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis su...\"]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 22cb0326; src #1ca0634f; \"I read an ar"
+   },
+   {
+    "ability": "KU",
+    "question": "Where does Priya live these days?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5872345f; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One made "
+   },
+   {
+    "ability": "KU",
+    "question": "Is Tom still working at Microsoft?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Mount Kilimanjaro, mentioned, Mount Kilimanjaro) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9c9dafc4; src #96211d7f; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Sahara Desert, mentioned, Sahara Desert) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9344eeca; src #f369052a; \"I read an article about the "
+   },
+   {
+    "ability": "KU",
+    "question": "Is Tom still working at Microsoft?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was redisc...\"]\n- (Ken Rossi, mentioned, Ken Rossi) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1c0fd999; src #d1150fc3; \"Mon anniversaire est le 7 novembre. J'ai une s\u0153ur appel\u00e9e Ken Rossi.\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 30fc21ca; src #33b36f16; \"I read an article about Great Barrier Reef "
+   },
+   {
+    "ability": "KU",
+    "question": "Where does Tom live these days?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea made...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal "
+   },
+   {
+    "ability": "KU",
+    "question": "Is Ken still working at Anthropic?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Kafka Museum, mentioned, Kafka Museum) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 480f49ef; src #6fbc1261; \"I read an article about Kafka Museum yesterday. Apparently Kafka Museum broke re...\"]\n- (Apparently Kafka, mentioned, Apparently Kafka) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 04b7355a; src #6fbc1261; \"I read an article about Kafka Museum yesterday. Apparently Kafka Museum broke re...\"]\n- ("
+   },
+   {
+    "ability": "KU",
+    "question": "Is Ken still working at Anthropic?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Kafka, mentioned, Apparently Kafka) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 04b7355a; src #6fbc1261; \"I read an article about Kafka Museum yesterday. Apparently Kafka Museum broke re...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Kafka Museum, mentioned, Kafka Museum) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 480f49ef; src #6fbc1261; \"I read an articl"
+   },
+   {
+    "ability": "KU",
+    "question": "Where does Ken live these days?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c53e7a9c; src #5d213349; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis w"
+   },
+   {
+    "ability": "KU",
+    "question": "Is Maya still working at Notion?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was "
+   },
+   {
+    "ability": "KU",
+    "question": "Is Maya still working at Notion?",
+    "score": 0.0,
+    "detail": {
+     "reason": "missing current value"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Kafka Museum, mentioned, Kafka Museum) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 283bae41; src #b2826627; \"I read an article about Mariana Trench yesterday. Apparently Mariana Trench surp...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an article about Saha"
+   },
+   {
+    "ability": "KU",
+    "question": "Where does Maya live these days?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was "
+   },
+   {
+    "ability": "MH",
+    "question": "What programming language does the team of Priya's manager use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mount, mentioned, Apparently Mount) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id b8d2bc54; src #75399bf9; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 84cd78d5; src #f54f7f0b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert inspir...\"]\n- (Mount Kilimanjaro, mentioned, Mount Kilimanjaro) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c21542a5; src #75399bf9; \"I read a"
+   },
+   {
+    "ability": "MH",
+    "question": "Priya's manager leads a team \u2014 which language does that team use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id e4a76314; src #d103b89d; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Treaty ...\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 21a88c26; src #874ef644; \"I read an article about Aurora Borealis yesterday. Apparently Aurora "
+   },
+   {
+    "ability": "MH",
+    "question": "What programming language does the team of Tom's manager use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mount, mentioned, Apparently Mount) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 797a37ce; src #96211d7f; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 45b47dfc; src #c39ef452; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was su...\"]\n- (Kafka Museum, mentioned, Kafka Museum) [valid 2026-03-23\u2192\u221e; learned 2026-03-23; conf 0.35; id cc7b6146; src #995b38ee; \"I read an article "
+   },
+   {
+    "ability": "MH",
+    "question": "Tom's manager leads a team \u2014 which language does that team use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 868071de; src #6c8aa5a5; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Treaty ...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea made...\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id e8b614cb; src #1dbda0a8; \"I read an article about "
+   },
+   {
+    "ability": "MH",
+    "question": "What programming language does the team of Ken's manager use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mount, mentioned, Apparently Mount) [valid 2026-05-04\u2192\u221e; learned 2026-05-04; conf 0.35; id c5c6ffe4; src #49a7cdc2; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 8ac7be9c; src #5d213349; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis wa..."
+   },
+   {
+    "ability": "MH",
+    "question": "Ken's manager leads a team \u2014 which language does that team use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 8ac7be9c; src #5d213349; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis wa...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 733ac678; src #933ea3d8; \"I read an article about "
+   },
+   {
+    "ability": "MH",
+    "question": "What programming language does the team of Maya's manager use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Mount, mentioned, Apparently Mount) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 3e9ae6e8; src #ae5dd11d; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 2a6ab36a; src #f7ab882b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert attrac...\"]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 53215a45; src #21e98e3d; \"I read an ar"
+   },
+   {
+    "ability": "MH",
+    "question": "Maya's manager leads a team \u2014 which language does that team use?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Aurora Borealis, mentioned, Aurora Borealis) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 53215a45; src #21e98e3d; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis ma...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7a88cd9f; src #4abcbe34; \"I read an article about Gutenberg Press yesterday. Apparently Gutenberg Press wa...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about "
+   },
+   {
+    "ability": "PF",
+    "question": "What coffee does Priya prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id e4a76314; src #d103b89d; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Treaty ...\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop"
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking coffee for Priya, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 603c6843; src #17958253; \"I read an article about Voyager Program yesterday. Apparently Voyager Program ma...\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop O"
+   },
+   {
+    "ability": "PF",
+    "question": "What music does Priya prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One made h...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id fb2fc427; src #874ef644; \"I read an article about Aurora Borealis yesterday. Apparently Auror"
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking music for Priya, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One made h...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5872345f; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier "
+   },
+   {
+    "ability": "PF",
+    "question": "What coffee does Tom prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea made...\"]\n- (Sahara Desert, mentioned, Sahara Desert) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9344eeca; src #f369052a; \"I read an article about the Baltic Sea y"
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking coffee for Tom, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a58d6762; src #dfa72f5c; \"I read an article about Silk Road yesterday. Apparently Silk Road was rediscover...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake"
+   },
+   {
+    "ability": "PF",
+    "question": "What music does Tom prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Mount Kilimanjaro, mentioned, Mount Kilimanjaro) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9c9dafc4; src #96211d7f; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Apparently Great, mentioned, Apparently Great) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 30fc21ca; src #33b36f16; \"I read an article abou"
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking music for Tom, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Mount Kilimanjaro, mentioned, Mount Kilimanjaro) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 9c9dafc4; src #96211d7f; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a58d6762; src #dfa72f5c; \"I read an article about "
+   },
+   {
+    "ability": "PF",
+    "question": "What coffee does Ken prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id d28349c0; src #b5ed41a8; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was r"
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking coffee for Ken, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f5283386; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa..."
+   },
+   {
+    "ability": "PF",
+    "question": "What music does Ken prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program"
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking music for Ken, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa...\"]\n- (Apparently Antarctic, mentioned, Apparently Antarctic) [valid 2026-04-14\u2192\u221e; learned 2026-04-14; conf 0.35; id b8d0687a; src #23753688; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic "
+   },
+   {
+    "ability": "PF",
+    "question": "What coffee does Maya prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garc"
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking coffee for Maya, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Florence Cathedral, mentioned, Florence Cathedral) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 4cb1d993; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n"
+   },
+   {
+    "ability": "PF",
+    "question": "What music does Maya prefer now?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was "
+   },
+   {
+    "ability": "PF",
+    "question": "If you were picking music for Maya, what would you choose?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Florence Ca"
+   },
+   {
+    "ability": "SZ",
+    "question": "List all the projects Priya has worked on.",
+    "score": 1.0,
+    "detail": {
+     "f1": 0.8,
+     "retrieved": [
+      "project atlas",
+      "project beacon"
+     ]
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 84cd78d5; src #f54f7f0b; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert inspir...\"]\n- (Project Beacon, mentioned, Project Beacon) [valid 2026-06-16\u2192\u221e; learned 2026-06-16; conf 0.35; id f5bd4f26; src #f78314cf; \"Ahora estoy trabajando en Project Beacon.\"]\n- (Project Atlas, mention"
+   },
+   {
+    "ability": "SZ",
+    "question": "List all the projects Tom has worked on.",
+    "score": 0.0,
+    "detail": {
+     "f1": 0.0,
+     "retrieved": []
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 45b47dfc; src #c39ef452; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was su...\"]\n- (Yellowstone Park, mentioned, Yellowstone Park) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 7af2f874; src #33b36f16; \"I read an article abou"
+   },
+   {
+    "ability": "SZ",
+    "question": "List all the projects Ken has worked on.",
+    "score": 1.0,
+    "detail": {
+     "f1": 1.0,
+     "retrieved": [
+      "project atlas",
+      "project fable",
+      "project falcon"
+     ]
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Voyager Program, mentioned, Voyager Program) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id f5283386; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voyager Program su...\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id d28349c0; src #b5ed41a8; \"I read an article about Sahara Desert yesterday. Apparently Sahara Desert was re."
+   },
+   {
+    "ability": "SZ",
+    "question": "List all the projects Maya has worked on.",
+    "score": 0.0,
+    "detail": {
+     "f1": 0.0,
+     "retrieved": []
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was "
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Priya live before Seattle?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 5872345f; src #2909e672; \"I read an article about Great Barrier Reef yesterday. Apparently Great Barrier R...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id e4a76314; src #d103b89d; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Trea"
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Priya work in 2024?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 2021f899; src #92ddf48c; \"I read an article about Hyperloop One yesterday. Apparently Hyperloop One made h...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id fb2fc427; src #874ef644; \"I read an article about Aurora Borealis yesterday. Apparently Auror"
+   },
+   {
+    "ability": "TR",
+    "question": "What did Priya do in July 2025?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Yellowstone, mentioned, Apparently Yellowstone) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id dd8bb150; src #be5f0df5; \"I read an article about Yellowstone Park yesterday. Apparently Yellowstone Park ...\"]\n- (Priya Johnson, mentioned, Priya Johnson) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 7e1b654c; src #cc261b6d; \"\u00a1Hola! Mi nombre es Priya Johnson.\"]\n- (Apparently Sahara, mentioned, Apparently Sahara) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 84cd78d5; src #f54f7f0b; \"I read an article about Sahara Desert yesterday. Appa"
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Tom live before Toronto?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id a85decb3; src #03b58e3d; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea made...\"]\n- (Apparently Lake, mentioned, Apparently Lake) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 1a9c0ab1; src #e356529e; \"I read an article about Lake Baikal "
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Tom work in 2024?",
+    "score": 1.0,
+    "detail": {
+     "reason": "nugget(s) present"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Tom Brooks, mentioned, Tom Brooks) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id ded1661b; src #122d12d3; \"Bonjour ! Je suis Tom Brooks et je travaille chez Microsoft comme designer. J'ha...\"]\n- (Apparently Mount, mentioned, Apparently Mount) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 797a37ce; src #96211d7f; \"I read an article about Mount Kilimanjaro yesterday. Apparently Mount Kilimanjar...\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 867d9cb7; src #3414bde7; \"I read an article about Vo"
+   },
+   {
+    "ability": "TR",
+    "question": "What did Tom do in March 2025?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Apparently Yellowstone, mentioned, Apparently Yellowstone) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 105485d5; src #ba5ae05c; \"I read an article about Yellowstone Park yesterday. Apparently Yellowstone Park ...\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 868071de; src #6c8aa5a5; \"I read an article about Antarctic Treaty yesterday. Apparently Antarctic Treaty ...\"]\n- (Apparently Antarctic, mentioned, Apparently Antarctic) [valid 2026-03-05\u2192\u221e; learned 2026-03-05; conf 0.35; id 2bbbbdd4; src #6c8"
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Ken live before Austin?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Antarctic Treaty, mentioned, Antarctic Treaty) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id c33dc5e7; src #cb3def80; \"I read an article about Voyager Program yesterday. Apparently Voyager Program wa...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 733ac678; src #933ea3d8; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal surprised ...\"]\n- (Ap"
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Ken work in 2024?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Gutenberg Press, mentioned, Gutenberg Press) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 967ca285; src #4ddb5538; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis at...\"]\n- (Apparently Aurora, mentioned, Apparently Aurora) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c53e7a9c; src #5d213349; \"I read an article about Aurora Borealis yesterday. Apparently Aurora Borealis wa."
+   },
+   {
+    "ability": "TR",
+    "question": "What did Ken do in April 2025?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Ken Sharma, mentioned, Ken Sharma) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id c8309c1b; src #6f7e98c3; \"Hola, me llamo Ken Sharma.\"]\n- (Apparently Yellowstone, mentioned, Apparently Yellowstone) [valid 2026-03-26\u2192\u221e; learned 2026-03-26; conf 0.35; id 8e5b7609; src #890680bd; \"I read an article about Yellowstone Park yesterday. Apparently Yellowstone Park ...\"]\n- (Apparently Voyager, mentioned, Apparently Voyager) [valid 2026-03-02\u2192\u221e; learned 2026-03-02; conf 0.35; id 07ee4d83; src #79a2bc50; \"I read an article about Voyager Program yesterday. Apparently Voy"
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Maya live before Toronto?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Lake Baikal, mentioned, Lake Baikal) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 0e1bdfd9; src #82690811; \"I read an article about Lake Baikal yesterday. Apparently Lake Baikal was survey...\"]\n- (Florence Ca"
+   },
+   {
+    "ability": "TR",
+    "question": "Where did Maya work in 2024?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was "
+   },
+   {
+    "ability": "TR",
+    "question": "What did Maya do in May 2025?",
+    "score": 0.0,
+    "detail": {
+     "reason": "nugget missing"
+    },
+    "context": "[Memory \u2014 Known facts]\n- (Maya Garcia, mentioned, Maya Garcia) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id c369b512; src #cc9a9d45; \"Hola, me llamo Maya Garcia.\"]\n- (Apparently the Baltic, mentioned, Apparently the Baltic) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id 7f539767; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was ...\"]\n- (Baltic Sea, mentioned, Baltic Sea) [valid 2026-03-04\u2192\u221e; learned 2026-03-04; conf 0.35; id ce7a2658; src #56a473b4; \"I read an article about the Baltic Sea yesterday. Apparently the Baltic Sea was "
+   }
+  ],
+  "enriched": {
+   "overall": 0.1643,
+   "per_ability": {
+    "AB": 1.0,
+    "CR": 0.0,
+    "EO": 0.0,
+    "IE": 0.125,
+    "IF": 0.0,
+    "KU": 0.0,
+    "MH": 0.0,
+    "PF": 0.0,
+    "SZ": 0.25,
+    "TR": 0.25
+   },
+   "report": {
+    "chunks_total": 2388,
+    "chunks_eligible": 60,
+    "llm_calls": 1,
+    "llm_tokens": 0,
+    "facts_extracted": 202,
+    "facts_committed": 159,
+    "quarantined": 0,
+    "seconds": 0.695,
+    "extractor_model": null
+   }
+  }
+ }
+}
