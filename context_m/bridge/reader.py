@@ -153,8 +153,19 @@ class MemoryReader:
         if hit is not None:
             return hit
         facts = self.store.query_facts(
-            user_id=user_id, agent_id=agent_id, run_id=run_id,
+            user_id=user_id, agent_id=None, run_id=run_id,
             active=True, include_quarantined=False)
+        # InjecMEM scope sandbox:
+        #  * user-scope query (agent_id=None) sees ONLY user-scoped facts;
+        #    agent-written facts stay invisible until explicitly promoted.
+        #  * agent query (agent_id=A) sees A's own facts PLUS the shared
+        #    user scope — agents read the user's memory, never each
+        #    other's.
+        if agent_id is None:
+            if getattr(self.cfg, "sandbox_enabled", True):
+                facts = [f for f in facts if f.agent_id is None]
+        else:
+            facts = [f for f in facts if f.agent_id in (None, agent_id)]
         ids = frozenset(f.id for f in facts)
         if branch is not None:
             active = self.store.active_ids(branch)
@@ -284,7 +295,9 @@ class MemoryReader:
         if cached is not None:
             facts = self.store.get_facts([fid for fid, _ in cached])
             facts = [f for f in facts if f.is_active and not f.quarantined
-                     and f.matches_scope(user_id, agent_id, run_id)]
+                     and f.matches_scope(user_id, agent_id, run_id)
+                     and (agent_id is not None or f.agent_id is None
+                          or not getattr(self.cfg, "sandbox_enabled", True))]
             facts = facts[:k]
             t1 = time.perf_counter()
             self.slb.record_latency(True, t1 - t0)
@@ -300,8 +313,13 @@ class MemoryReader:
         scope = self._scope_ids(user_id, agent_id, run_id, branch)
 
         # --- VSA path (neural recall) ------------------------------------
+        # NOTE: an EMPTY scope is a real state (scope sandbox: the user
+        # owns no visible facts, e.g. everything is agent-scoped). It must
+        # filter to nothing — the old `if scope else None` fallback turned
+        # it into an UNRESTRICTED search that leaked agent-scoped (and
+        # cross-user) vectors into the result set.
         vsa_hits = self.palace.search(q_vec, max(k * self.cfg.search_k_mult, 24),
-                                      candidate_ids=set(scope) if scope else None)
+                                      candidate_ids=set(scope))
         vsa_scores = {fid: float(s) for fid, s in vsa_hits}
 
         # --- symbolic path -------------------------------------------------
@@ -407,7 +425,10 @@ class MemoryReader:
         add = lambda f, w: out.append((f, w))  # noqa: E731
 
         def in_scope(f: Fact) -> bool:
-            return (not scope or f.id in scope) and f.is_active and not f.quarantined
+            # scope is always a frozenset; an EMPTY scope means "nothing
+            # visible" (scope sandbox) and must not fall through to
+            # unfiltered access the way a falsy check would.
+            return (f.id in scope) and f.is_active and not f.quarantined
 
         if plan.entities:
             for ent in plan.entities[:2]:
@@ -440,7 +461,7 @@ class MemoryReader:
             for ent in plan.entities[:2]:
                 for rel in (plan.relations or [])[:3]:
                     for f in self.store.history_of(ent, rel, user_id=user_id)[:6]:
-                        if f.id not in pulled:
+                        if f.id not in pulled and f.id in scope:
                             if f.value in plan.entities:
                                 b = 0.9
                             elif f.is_active:
@@ -455,10 +476,11 @@ class MemoryReader:
             for f in self.store.temporal_window(
                     plan.window_start, plan.window_end, user_id=user_id,
                     active=False):
-                if not f.quarantined and (not plan.entities or
-                                          any(e in (f.subject, f.value)
-                                              for e in plan.entities) or
-                                          f.relation in plan.relations):
+                if (not f.quarantined and f.id in scope
+                        and (not plan.entities or
+                             any(e in (f.subject, f.value)
+                                 for e in plan.entities) or
+                             f.relation in plan.relations)):
                     hinted = f.relation in plan.relations
                     # tier 1: the fact BEGAN inside the window — this is what
                     # "what happened in <window>" asks for. tier 2: still-valid
