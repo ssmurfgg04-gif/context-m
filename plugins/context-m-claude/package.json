@@ -1,0 +1,21 @@
+{
+  "name": "context-m-claude",
+  "version": "0.1.0",
+  "description": "Context-M memory fabric for Claude Code — persistent, auditable, neuro-symbolic memory across every session, repo, and team.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {"context-m-claude": "dist/cli.js"},
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js"
+  },
+  "keywords": ["claude-code", "memory", "mcp", "agents", "context-m"],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}

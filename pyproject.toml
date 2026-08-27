@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "context-m"
+version = "0.1.0"
+description = "Context-M: The Universal Neuro-Symbolic Memory Fabric — bi-temporal symbolic Trace + VSA Memory Palace with μ=0 deterministic ingest, cryptographic provenance, and edge-first deployment."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Context-M Contributors" }]
+keywords = [
+    "memory", "agents", "llm", "neuro-symbolic", "vsa", "hrr", "hdc",
+    "knowledge-graph", "temporal", "provenance", "mcp", "edge", "rag",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+blake3 = ["blake3>=1.0"]
+test = ["pytest>=7"]
+
+[project.scripts]
+cortexm = "context_m.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/context-m/context-m"
+
+[tool.setuptools]
+py-modules = ["cortexm"]
+
+[tool.setuptools.packages.find]
+include = ["context_m*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
