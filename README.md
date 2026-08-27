@@ -25,13 +25,38 @@ m.search("Where does Alice work?", user_id="alice")
 
 ---
 
-## Benchmark results — BEAM-style long-horizon memory
+## Benchmark results — read this part carefully
 
-Synthetic multi-session conversations (BEAM methodology, arXiv:2510.27246),
-10 memory abilities, deterministic nugget judge, **μ=0 ingest asserted**
-(zero LLM calls including the judge). Mean ± sd across five generator
-seeds (42 / 44 / 45 / 46 / 47 — the last two never inspected during
-development), fully reproducible offline:
+We run three tiers of evaluation, and **the honest number is not the
+biggest one**. Full methodology, judge identities and failure analysis:
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) ·
+[`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md) ·
+[open the leaderboard →](leaderboard/index.html)
+
+**Tier 1 — Out-of-distribution (what the system actually does on natural
+phrasing).** Ground-truth fact registries were re-rendered by an
+independent LLM in styles the pattern extractor never saw, then evaluated
+with the same probes and judge as the in-distribution run:
+
+| OOD style | Extraction recall | End-to-end (10 abilities) | + async LLM enrichment |
+|---|---|---|---|
+| paraphrase | 9.4% ± 9.4% | 28.2% | — |
+| negation | 75.6% ± 3.3% | 69.3% | 65.7% |
+| indirect speech | 44.9% ± 10.2% | 48.6% | 49.3% |
+| informal/slang | 5.1% ± 5.9% | 15.0% | 17.1% |
+| non-English | **0.0%** | 15.7% | 16.4% |
+| code-switching | 57.9% ± 18.1% | 60.7% | 58.6% |
+
+That is the capability profile of the μ=0 extractor on real phrasing:
+strong on change-of-state statements, weak on identity/preference
+restatements, zero on non-English. The async LLM enrichment fallback
+helps only marginally today — it surfaces facts but does not reconstruct
+bi-temporal chains. [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md)
+documents which phrasings break, with worked examples.
+
+**Tier 2 — In-distribution (the regression harness).** Synthetic
+BEAM-style conversations (arXiv:2510.27246 methodology), 10 abilities,
+deterministic nugget judge, μ=0 ingest asserted, 5 seeds:
 
 | Bucket | questions | **Context-M** | BM25-RAG | vector-only |
 |---|---|---|---|---|
@@ -40,11 +65,20 @@ development), fully reproducible offline:
 | 1M | 107 | **100.0% ± 0.0%** | 68.8% | 70.1% |
 | **10M** | 216 | **100.0% ± 0.0%** | 61.6% | 66.1% |
 
-Per-seed 10M scores: 100.0% / 100.0% / 100.0% / 100.0% / 100.0% — all
-**ten abilities at 100.0%** at the 10M bucket. Context: the plan targeted
-**70%+ at BEAM-10M**; the August-2026 SOTA it cites is Exabase M-1 at
-**68.0%** (LLM-in-loop ingest). Every probe is answered from a
-hash-verified provenance chain, at $0 LLM cost.
+**Why 100% here is not a capability claim:** the corpus generator and the
+extractor patterns were authored against the same template families, so
+this tier measures *template coverage*, ceiling by construction. Its job
+is regression detection — "did we break template extraction?" — not
+marketing. We do **not** compare it against canonical BEAM SOTA (Exabase
+M-1, 68.0%): different corpus, different judge, different protocol — an
+apples-to-oranges comparison we refuse to make.
+
+**Tier 3 — Real GitHub data.** Real issue threads from public repos
+(rust-lang/rust, numpy/numpy, pydantic/pydantic; attribution in
+`benchmarks/real_github/`): the μ=0 extractor vs an LLM reference
+extractor on identical comments, with cost and latency for both — see
+[`benchmarks/results/real_github/`](benchmarks/results/) and the
+leaderboard for the current numbers.
 
 Engineering facts measured alongside (see `docs/BENCHMARKS.md`):
 
@@ -52,6 +86,8 @@ Engineering facts measured alongside (see `docs/BENCHMARKS.md`):
 - **Memory grows sublinearly:** 10M tokens → ~590 facts (repeated noise dedupes)
 - **Provenance:** 100% of retrieved facts hash-verified; audit latency ~6 ms
 - **Retrieval:** tree index p50 ≈ 0.4–1.1 ms at 10K–100K vectors (flat: 16–194 ms)
+- **Crash-recoverable:** WAL journaling with SIGKILL-recovery tests
+  (`tests/test_wal_recovery.py`) — committed memories survive hard kills
 - **Reproducible:** runs are process-independent — score ties break on fact
   content, never on random ids (verified across four PYTHONHASHSEED values)
 
@@ -93,9 +129,14 @@ tier. Permutation binding is the default algebra because it maps
 directly to binary HDC hardware (XOR/permutation) — when edge ASICs
 arrive, the same code compiles down.
 
-**The Bridge.** μ=0 ingest: a 60-pattern deterministic extractor
+**The Bridge.** μ=0 ingest: a 61-pattern deterministic extractor
 (first/third/second-person, pronoun resolution, relative dates,
-retractions) — no LLM anywhere on the write path. The read path is a
+retractions, Mem0-summary shapes) — no LLM anywhere on the synchronous
+write path. When patterns find nothing (non-English, heavy slang,
+indirect speech), an **explicit async enrichment fallback**
+(`memory.enrich()`) re-extracts those chunks with an LLM post-store —
+confidence-capped at 0.85, provenance-marked `llm_enrichment`, auditable,
+and counted in the μ=0 honesty counters. The read path is a
 deterministic query planner (temporal windows, ordering proofs,
 counting, supersession chains, **Personalized PageRank graph diffusion**
 for multi-hop — HippoRAG 2 lineage) fused with VSA retrieval, and
@@ -126,18 +167,29 @@ Measured codec quality (20K fact holograms): int8 overlap@10 vs FP32 =
 1.00/1.00/0.9995 — shortlist codecs, exactly as designed. See
 `docs/COMPRESSION.md`.
 
-## Security (InjecMEM + MINJA defense)
+## Security (InjecMEM + MINJA defense + scope sandbox)
 
 Every fact carries a BLAKE3 hash of its source text, re-verified on
-retrieval. Memory-injection patterns ("ignore all previous
-instructions…") are quarantined at ingest — stored for audit, never
-active, never retrieved into prompt context. On top of that, the
-**MINJA contagion guard** treats quarantined text as a tainted corpus:
-any later ingest that quotes or substantially overlaps it (even when
-light edits defeat every regex) is quarantined too — closing the
-query-only injection loop where an attacker poisons memory through the
-agent's own write-back. Scopes (user/agent/run) sandbox facts and the
-retrieval cache alike; `verify_integrity()` audits the whole store.
+retrieval (BLAKE2b-256 fallback with a **loud warning** if the optional
+`blake3` wheel is absent — `pip install cortexm[blake3]`; the active
+provider is always reported in `stats()` and audit output). Memory-
+injection patterns ("ignore all previous instructions…") are
+quarantined at ingest — stored for audit, never active, never retrieved
+into prompt context. On top of that, the **MINJA contagion guard**
+treats quarantined text as a tainted corpus: any later ingest that
+quotes or substantially overlaps it (even when light edits defeat every
+regex) is quarantined too — closing the query-only injection loop where
+an attacker poisons memory through the agent's own write-back.
+
+The **scope sandbox** enforces the isolation the InjecMEM threat model
+implies: facts written by an agent (`agent_id=...`) are invisible to
+user-scope reads until explicitly `promote()`d — and promotion is
+gated on confidence, re-scans the source chunk through both injection
+detectors, and lands in the tamper-evident audit chain
+(`tests/test_sandbox_enrich.py`). Building it surfaced and fixed three
+genuine pre-existing read-path leaks (empty-scope fallback, falsy scope
+checks, unscoped supersession chains). `verify_integrity()` audits the
+whole store.
 
 ## Enterprise controls (shipped, not roadmap)
 
@@ -182,19 +234,40 @@ cortexm migrate --from zep --path zep_export.jsonl
 cortexm migrate --from chroma --path chroma.sqlite3
 ```
 
+Each importer handles the vendor's real on-disk formats (mem0's
+`history` JSON payloads and bare `memories` tables, Zep graph triples
+with bi-temporal windows, Chroma's `embeddings` table) and is verified
+end-to-end against fixture stores built in those exact formats
+(`tests/test_migration.py`).
+
+## Durability
+
+WAL journaling (Aeon-inspired) with a `wal_sync` durability knob
+(`normal` — survives process crash; `full` — fsyncs every commit,
+survives power loss), WAL checkpoint-on-close, and a test that
+SIGKILLs a writer mid-stream and verifies every acknowledged commit
+survives (`tests/test_wal_recovery.py`).
+
 ## More
 
 - `docs/ARCHITECTURE.md` — every layer in detail
 - `docs/BENCHMARKS.md` — full results, methodology, per-ability tables
+- `docs/FAILURE_MODES.md` — where the extractor breaks on real phrasing,
+  with worked examples (read before citing any number)
 - `docs/ENTERPRISE.md` — enterprise control matrix + compliance mapping
 - `docs/DEPLOYMENT.md` — SDK / MCP / REST / Docker / K8s / Helm runbooks
 - `docs/RESEARCH.md` — literature lineage: every paper we adopted,
   aligned with, or rejected (with reasons)
-- `docs/SECURITY.md` — InjecMEM + MINJA defenses, provenance model
+- `docs/SECURITY.md` — InjecMEM + MINJA defenses, scope sandbox,
+  provenance model
 - `docs/COMPRESSION.md` — the tier stack and measured trade-offs
 - `docs/ROADMAP.md` — phase status vs the strategic plan
-- `examples/` — 10 runnable scripts, offline, no API keys
-- `tests/` — 63 tests: fabric + enterprise + PPR + concurrency
+- `docs/GOVERNANCE.md` — foundation governance + licensing commitments
+- `leaderboard/` — self-hosted benchmark site (rebuild: `python
+  leaderboard/build.py`; open `leaderboard/index.html`)
+- `examples/` — runnable scripts, offline, no API keys
+- `tests/` — 80+ tests: fabric + enterprise + PPR + concurrency +
+  sandbox + enrichment + WAL crash-recovery + migration
 
 ## License
 

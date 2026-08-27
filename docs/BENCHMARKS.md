@@ -1,6 +1,76 @@
 # Context-M — Benchmark Results
 
-BEAM-style long-horizon memory benchmark (methodology mirrors arXiv:2510.27246; see `docs/METHODOLOGY.md`). All runs: seed 42, μ=0 protocol asserted (zero LLM calls for ingest, retrieval, and judging), BLAKE3 provenance verified on every retrieval.
+Three tiers of evaluation, ordered by honesty. **Read the OOD tier first:
+it measures what the system does on phrasing the extractor was not
+written against.** The in-distribution tier is a regression harness whose
+ceiling is structural (corpus templates and extractor patterns were
+authored together — see `docs/FAILURE_MODES.md`). Methodology details in
+`docs/METHODOLOGY.md`; interactive view: `leaderboard/index.html`.
+
+## Tier 1 — Out-of-distribution benchmark (the honest number)
+
+Ground-truth fact registries for 4 personas were re-rendered by an
+independent LLM (glm-4-plus) in six styles the pattern author never saw;
+probes and deterministic judge are identical to the in-distribution run,
+so ID-vs-OOD deltas are apples-to-apples. Renderer omissions (3/714
+facts) are excluded from extraction recall and tracked separately.
+
+| OOD style | Extraction recall (mean ± sd over 4 personas) | End-to-end (10 abilities) | + async LLM enrichment |
+|---|---|---:|---:|
+| paraphrase | 0.094 ± 0.094 | 0.282 | — |
+| negation | 0.756 ± 0.033 | 0.693 | 0.657 |
+| indirect speech | 0.449 ± 0.102 | 0.486 | 0.493 |
+| informal/slang | 0.051 ± 0.059 | 0.150 | 0.171 |
+| non-English | 0.000 ± 0.000 | 0.157 | 0.164 |
+| code-switching | 0.579 ± 0.181 | 0.607 | 0.586 |
+
+Key readings:
+
+* **The generalization gap is real and large.** In-distribution 100% →
+  OOD paraphrase 9-28%. Non-English ingest is zero without the LLM
+  fallback. See `docs/FAILURE_MODES.md` for per-fact-type recall and
+  worked failure examples.
+* **Async LLM enrichment is not a rescue** in its current form: +1-2
+  points on the hardest styles, −4 points on negation. It surfaces facts
+  but does not reconstruct the bi-temporal chains the contradiction
+  engine and temporal probes need.
+* The VSA layer keeps e2e above extraction recall on every style —
+  lexical holograms buy partial credit even when extraction fails.
+
+Reproduce: `python benchmarks/run_ood_pipeline.py --personas 4`.
+Artifacts: `benchmarks/results/ood/*.json`, rendered corpora with
+conveyance tracking in `benchmarks/ood/rendered_p4.jsonl`.
+
+### LLM-judge cross-check (canonical-protocol replication)
+
+240 probe/context pairs were exported in the BEAM judge format; the LLM
+judge (glm-4-plus — NOT gpt-5, so not directly comparable to canonical
+BEAM numbers) graded the 58-item sample the API quota allowed:
+
+| Grader | Mean | Exact agreement | Within ½ point |
+|---|---:|---:|---:|
+| Deterministic nugget judge | 0.345 | 75.9% (44/58) | 77.6% (45/58) |
+| LLM judge (glm-4-plus) | 0.250 | — | — |
+
+**Finding:** the LLM judge grades the same contexts *lower* than the
+deterministic judge — the OOD numbers above are, if anything, slightly
+generous relative to an independent grader. Two-grader agreement of 76%
+with the LLM systematically stricter is the credibility bar a self-graded
+number should clear. Artifacts: `benchmarks/results/ood/llm_judge_crosscheck.json`.
+
+## Tier 2 — In-distribution (regression harness)
+
+BEAM-style synthetic benchmark (methodology mirrors arXiv:2510.27246;
+see `docs/METHODOLOGY.md`). All runs: seed 42, μ=0 protocol asserted
+(zero LLM calls for ingest, retrieval, and judging), BLAKE3 provenance
+verified on every retrieval.
+
+**Caveat, stated up front:** the corpus generator and the extractor
+patterns were authored against the same template families. This tier
+measures template coverage — its job is regression detection ("did we
+break template extraction?"), not capability. It is NOT comparable to
+canonical BEAM SOTA (Exabase M-1, 68.0%): different corpus, judge, and
+protocol.
 
 ## Headline
 
@@ -11,7 +81,14 @@ BEAM-style long-horizon memory benchmark (methodology mirrors arXiv:2510.27246; 
 | 1M | 1,001,133 | 107 | **100.0%** | 71.0% | 67.3% |
 | 10M | 10,000,078 | 212 | **100.0%** | 62.3% | 63.4% |
 
-**Strategic context** (from the research brief): the plan's target was 70%+ at BEAM-10M; the cited August-2026 SOTA is Exabase M-1 at 68.0% — using LLM-in-loop ingest at materially higher cost. Context-M clears both the target and the SOTA reference while spending $0 on LLM calls.
+**Strategic context, honestly framed:** the plan's target was 70%+ at
+BEAM-10M and the cited August-2026 SOTA is Exabase M-1 at 68.0%
+(LLM-in-loop ingest). The in-distribution table clears both — but that
+comparison is **not apples-to-apples** (different corpus, deterministic
+vs gpt-5 judge, template-matched evaluation), which is exactly why the
+headline framing moved to the OOD tier above. What IS defensible from
+this tier: $0 LLM spend, 100K tokens/s ingest, and sublinear memory
+growth at 10M tokens.
 
 ## Seed variance (5 seeds: 42 / 44 / 45 / 46 / 47)
 
