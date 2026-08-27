@@ -20,7 +20,8 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" || pip install -e . pytest
+          # NB: pip exits 0 on unknown extras — must use extras that exist
+          pip install -e ".[test,crypto,blake3]"
       - name: Unit + integration tests (pure-Python paths)
         run: python -m pytest tests/ -q
 
@@ -34,12 +35,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install maturin + build wheels
         run: |
-          python -m pip install --upgrade pip maturin pytest
+          python -m pip install --upgrade pip maturin
           (cd rust/cortexm-core && maturin build --release)
           (cd rust/quadrant && maturin build --release)
           pip install rust/target/wheels/cortexm_core-*.whl rust/target/wheels/quadrant-*.whl
       - name: Install package
-        run: pip install -e . || true
+        run: pip install -e ".[test,crypto,blake3]"
       - name: Parity + full suite with Rust acceleration active
         env:
           CONTEXTM_RUST: "1"
