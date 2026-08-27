@@ -215,6 +215,62 @@ Conversational replay: hit rate **70%**, hit latency 6.7 µs vs miss 6.3 µs (64
 
 A 100× structural cost advantage that cannot be copied without rewriting the ingest path.
 
+## Rust acceleration scorecard
+
+`benchmarks/rust_vs_numpy.py` → `benchmarks/results/rust_accel.json`
+(Xeon, AVX2+FMA runtime dispatch, release/lto):
+
+| Hot path | Python/NumPy | Rust wheel | Speedup |
+|---|---:|---:|---:|
+| h64 feature hash (×200) | 180.5 µs | 83.9 µs | **2.2×** |
+| VSA bind (permutation) | 4.59 µs | 1.34 µs | **3.4×** |
+| encode_fact (fused) | 31.23 µs | 6.47 µs | **4.8×** |
+| SLB hit (64×768) | 4.89 µs | 4.78 µs | 1.0× (tie) |
+
+The SLB tie is a finding, not a failure: BLAS-backed NumPy is already
+optimal at this size, and we publish it as such. h64 parity is
+byte-exact (hash keys must never diverge). Float kernels use explicit
+AVX2 intrinsics with runtime detection — LLVM does not auto-vectorize
+float reductions (FP addition is not associative), and the scalar
+fallback keeps the wheels portable.
+
+### Quadrant — page-clustered log-depth index
+
+20,000 vectors × 768d, page capacity 64 → 529 pages, tree depth 13.
+Clustered corpus = realistic hologram geometry (shared bound components):
+
+| Config | Recall@10 | Node visits | Latency |
+|---|---:|---:|---:|
+| max_leaves=1 (pure descent) | 0.39 | 12 | 34 µs |
+| max_leaves=4 | 0.64 | 17 | 82 µs |
+| max_leaves=16 | **0.97** | 32 | 238 µs |
+| exact NumPy brute force | 1.00 | — | 1679 µs |
+
+97% recall at 7.0× brute-force speed, touching 32 of 529 pages — the
+O(log N) descent is instrumented (visit counts per query), not asserted.
+**Adversarial row**: on structure-free random corpora the same index
+collapses to 0.12–0.19 recall — without cluster structure a pruned index
+cannot beat brute force. Published, not hidden; quadrant is opt-in for
+the L2 palace, the default path remains exact.
+
+## CRDT federation
+
+`benchmarks/federation_bench.py` → `benchmarks/results/federation.json`:
+3 nodes × 5,000 disjoint facts (64-bucket digests, HMAC envelopes):
+
+- initial full-mesh sync: **byte-exact convergence** in 1 gossip round
+  (1.8 s, 10,491 keys/node after SINGLE_VALUED version collapse);
+- partition ({A,B} | C) with 500 divergent writes/side + 50 retractions:
+  heals to **byte-exact convergence**, all retractions honored on every
+  node;
+- new-node join: one digest + one delta (3.6 MB — all buckets diverge
+  for a fresh node);
+- honest caveat: 550 writes scattered uniformly across the keyspace
+  touch most of the 64 buckets, so that heal shipped 17.7 MB (~full
+  state). Bucket count is the granularity dial (256/1024 buckets shrink
+  deltas at digest cost); write-local deployments get proportional
+  deltas by construction.
+
 ---
 
 Reproduce: `python -m context_m.bench.run --buckets 128k,500k,1m,10m` and `python -m context_m.bench.run --micro`. Runs are deterministic for a given seed and process-independent (score ties break on fact content, not random ids). Full JSON: `benchmarks/results/`.

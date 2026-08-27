@@ -216,6 +216,57 @@ if (micro) {
   }
 }
 
+
+// ---------------------------------------------------------------- rust accel
+const rust = D.sources.rust_accel;
+if (rust) {
+  app.appendChild($(`<h2>6 · Rust acceleration scorecard <span class="pill honest">measured on this repo</span></h2>`));
+  const row = (name, r) => r ? `<tr><td>${name}</td><td class="num">${r.python_us} µs</td><td class="num">${r.rust_us} µs</td><td class="num"><b>${r.speedup}×</b></td></tr>` : '';
+  app.appendChild($(`
+    <div class="panel">
+      <table>
+        <tr><th>Hot path</th><th class="num">Python/NumPy</th><th class="num">Rust wheel</th><th class="num">Speedup</th></tr>
+        ${row('h64 feature hash (×200)', rust.h64)}
+        ${row('VSA bind (permutation)', rust.bind)}
+        ${row('encode_fact (fused)', rust.encode_fact)}
+        ${row('SLB hit (64×768)', rust.slb)}
+      </table>
+      <div class="disc">${rust.disclaimer}</div>
+    </div>`));
+
+  const qc = rust.quadrant_clustered, qr = rust.quadrant_random;
+  if (qc) {
+    const pts = Object.entries(qc.points || {}).map(([cfg, p]) =>
+      `<tr><td>${cfg}</td><td class="num">${p.recall_at_10}</td><td class="num">${p.node_visits}</td><td class="num">${p.latency_us} µs</td></tr>`).join('');
+    app.appendChild($(`
+      <div class="panel">
+        <h3>Quadrant — page-clustered log-depth index (${qc.n.toLocaleString()} vectors × 768d, ${qc.pages} pages, depth ${qc.depth})</h3>
+        <table>
+          <tr><th>Config</th><th class="num">Recall@10</th><th class="num">Node visits</th><th class="num">Latency</th></tr>
+          ${pts}
+        </table>
+        <div class="disc">Exact NumPy brute force on the same corpus: <b>${qc.numpy_brute_force_us} µs</b>/query. Clustered = realistic hologram geometry; the adversarial random-corpus row (recall ${(qr && qr.points && Object.values(qr.points).pop().recall_at_10)}) is published too — without cluster structure a pruned index cannot beat brute force, and we say so.</div>
+      </div>`));
+  }
+}
+
+// ---------------------------------------------------------------- federation
+const fed = D.sources.federation;
+if (fed) {
+  app.appendChild($(`<h2>7 · CRDT federation <span class="pill honest">partition-tolerant replication</span></h2>`));
+  const is = fed.initial_sync, ph = fed.partition_heal, nj = fed.new_node_join;
+  app.appendChild($(`
+    <div class="kpi">
+      <div class="card"><div class="v mono">${is ? is.rounds : '—'}</div><div class="l">sync rounds to converge</div></div>
+      <div class="card"><div class="v mono">${is && is.converged_byte_exact ? 'byte-exact' : '—'}</div><div class="l">convergence oracle</div></div>
+      <div class="card"><div class="v mono">${ph && ph.retractions_honored_everywhere ? 'yes' : '—'}</div><div class="l">retractions honored after heal</div></div>
+      <div class="card"><div class="v mono">${nj ? (nj.bytes_shipped / 1e6).toFixed(1) + ' MB' : '—'}</div><div class="l">new-node join delta</div></div>
+    </div>
+    <div class="panel">
+      <div class="disc">${fed.scenario}. ${fed.interpretation}</div>
+    </div>`));
+}
+
 if (!Object.keys(D.sources).length) {
   app.appendChild($(`<div class="panel">No results found — run the benchmark pipelines first, then <span class="mono">python leaderboard/build.py</span>.</div>`));
 }

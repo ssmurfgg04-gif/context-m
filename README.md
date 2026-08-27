@@ -248,6 +248,39 @@ survives power loss), WAL checkpoint-on-close, and a test that
 SIGKILLs a writer mid-stream and verifies every acknowledged commit
 survives (`tests/test_wal_recovery.py`).
 
+## Federation (CRDT replication)
+
+Multi-node memory replication without a coordinator: bi-temporal facts as
+HLC-stamped CRDT versions (SINGLE_VALUED relations collapse into one
+versioned register per key — the version set IS the temporal history),
+union merge that is commutative/associative/idempotent, OR-set
+retraction semantics (write-after-retract wins, retract-after-write
+wins), purge poison-pills for GDPR, and digest/delta anti-entropy that
+ships only divergent buckets over HMAC-signed envelopes. Convergence is
+proven **byte-exact** (canonical serialization compared, not just query
+equivalence); a partition with divergent writes + retractions heals with
+no lost retraction semantics. Transports: in-memory mesh for tests, file
+spool (outbox/inbox) for offline mule sync — rsync/git/USB completes the
+physical channel, the CRDT guarantees convergence regardless of delivery
+order. See `context_m/federation/` and `benchmarks/federation_bench.py`.
+
+## Rust acceleration (optional wheels)
+
+`rust/cortexm-core` and `rust/quadrant` compile the hot paths with
+PyO3; the Python/NumPy implementation stays the reference and everything
+works without them (`CONTEXTM_RUST=0` forces the pure-Python path).
+Measured on the bundled scorecard (`benchmarks/rust_vs_numpy.py`):
+**encode_fact 4.8×, bind 3.4×, h64 2.2×** — h64 is byte-exact with the
+Python hash (tested), and permutations/role vectors are *injected* from
+Python's deterministic VSA state, so mixed deployments produce
+bit-identical holograms. The SLB is a **tie** (1.0× — BLAS is already
+optimal at 64×768; published as such). `quadrant` is the page-clustered
+log-depth vector index for the L2 palace: 97% recall@10 at 7× NumPy
+brute-force speed, visiting ~32 of 529 pages for 20k vectors — visit
+counts are instrumented, the O(log N) claim is measured, and the
+adversarial random-corpus recall collapse is published alongside the
+win. Build: `pip install ./rust/cortexm-core ./rust/quadrant`.
+
 ## More
 
 - `docs/ARCHITECTURE.md` — every layer in detail
@@ -266,8 +299,9 @@ survives (`tests/test_wal_recovery.py`).
 - `leaderboard/` — self-hosted benchmark site (rebuild: `python
   leaderboard/build.py`; open `leaderboard/index.html`)
 - `examples/` — runnable scripts, offline, no API keys
-- `tests/` — 80+ tests: fabric + enterprise + PPR + concurrency +
-  sandbox + enrichment + WAL crash-recovery + migration
+- `tests/` — 116 tests: fabric + enterprise + PPR + concurrency +
+  sandbox + enrichment + WAL crash-recovery + migration + CRDT
+  federation convergence/partition-heal + Rust parity
 
 ## License
 

@@ -93,6 +93,38 @@ def build() -> dict:
     if xchk:
         data["sources"]["llm_judge_crosscheck"] = xchk
 
+    # ---- rust acceleration scorecard ---------------------------------------
+    rust = load(RESULTS / "rust_accel.json")
+    if rust:
+        data["sources"]["rust_accel"] = {
+            "label": "Rust wheels vs NumPy reference — hot-path scorecard",
+            "host": rust.get("host"),
+            "h64": rust.get("h64_x200"),
+            "bind": rust.get("bind_perm"),
+            "encode_fact": rust.get("encode_fact"),
+            "slb": rust.get("slb_hit"),
+            "quadrant_clustered": rust.get("quadrant_clustered"),
+            "quadrant_random": rust.get("quadrant_random"),
+            "disclaimer": "Same machine, same process, median-of-N. SLB "
+                          "is a tie (BLAS is already optimal at 64x768 — "
+                          "published as such). Quadrant recall on "
+                          "structure-free random corpora collapses — the "
+                          "adversarial row is shown, not hidden.",
+        }
+
+    # ---- CRDT federation ----------------------------------------------------
+    fed = load(RESULTS / "federation.json")
+    if fed:
+        data["sources"]["federation"] = {
+            "label": "CRDT federation — convergence, partition heal, "
+                     "anti-entropy cost",
+            "scenario": fed.get("scenario"),
+            "initial_sync": fed.get("initial_sync"),
+            "partition_heal": fed.get("partition_heal"),
+            "new_node_join": fed.get("new_node_join"),
+            "interpretation": fed.get("interpretation"),
+        }
+
     # ---- micro ---------------------------------------------------------------
     micro = load(RESULTS / "micro.json")
     if micro:
