@@ -211,6 +211,81 @@ class MemoryWriter:
                           "llm_calls": 0}}
 
     # ------------------------------------------------------------------
+    def ingest_candidates(self, candidates, *, user_id: str = "default",
+                          agent_id: str | None = None,
+                          chunk_id: str | None = None,
+                          ts: datetime | None = None,
+                          source: str = "", extractor_model: str | None = None,
+                          ) -> int:
+        """Commit pre-built Candidates through the standard fact pipeline.
+
+        Used by the async LLM enrichment fallback (bridge/enrich.py): the
+        μ=0 path stays untouched, but enriched candidates still pass the
+        SAME quarantine, contradiction, lifecycle, edge-wiring and palace
+        indexing logic as pattern-extracted facts. Provenance records the
+        enrichment origin so audits can always distinguish the two paths.
+        """
+        ts = ts or _now()
+        text = ""
+        chunk = self.store.get_chunk(chunk_id) if chunk_id else None
+        if chunk:
+            text = chunk["text"]
+        self.store.begin_batch()
+        commit = self.store.create_commit(
+            f"enrich {len(candidates)} candidate(s) from {source or 'external'}",
+            n_facts=0)
+        inserted = 0
+        for cand in candidates:
+            if cand.confidence < self.cfg.min_confidence:
+                continue
+            verdict = injection_scan(text, self.cfg.quarantine_injection) \
+                if text else None
+            fact = make_fact(
+                cand.subject, cand.relation, cand.value, now=ts,
+                valid_from=cand.valid_from or iso(ts)[:10],
+                valid_to=cand.valid_to,
+                user_id=user_id, agent_id=agent_id, run_id=None,
+                confidence=cand.confidence,
+                source_id=chunk_id,
+                source_hash=(self.store.hasher.hash_text(text)
+                             if text else self.store.hasher.hash_text(
+                                 cand.subject + cand.relation + cand.value)),
+                memory_type="short_term",
+                provenance={"pattern": cand.pattern,
+                            "enriched_by": source or "external",
+                            **({"extractor_model": extractor_model}
+                               if extractor_model else {}),
+                            **({"injection_risk": verdict.risk}
+                               if verdict else {})})
+            fact.birth_commit = commit
+            if verdict is not None and verdict.quarantined:
+                fact.quarantined = True
+                fact.is_active = False
+                self.store.insert_fact(fact, commit)
+                if chunk_id:
+                    self.store.add_edge(fact.id, chunk_id, "EXTRACTED_FROM")
+                continue
+            if self.cfg.enable_lifecycle:
+                decision = lifecycle.assess(self.store, fact)
+            else:
+                from context_m.trace.contradictions import Action as _A
+                decision = lifecycle.LifecycleDecision(_A.COMMIT, True)
+            results: list = []
+            inserted += self._apply_decision(fact, decision, commit,
+                                             chunk_id, results)
+        if self.cfg.enable_rules:
+            self.rules.invalidate()
+            derived = self.rules.apply(ts)
+            for f in derived:
+                f.user_id = user_id
+                self.palace.add(f.id, self.palace.encode_fact(f))
+            inserted += len(derived)
+        self._wire_temporal_edges(user_id)
+        self.store.end_batch()
+        self.palace.close()
+        return inserted
+
+    # ------------------------------------------------------------------
     def apply_rules(self, ts=None):
         """Deferred Datalog materialization (bulk-ingest mode)."""
         ts = ts or _now()

@@ -1,0 +1,1 @@
+{"content":"```json\n{\"facts\":[{\"subject\":\"user\",\"relation\":\"speaks\",\"value\":\"Spanish\",\"confidence\":1.0},{\"subject\":\"user\",\"relation\":\"name\",\"value\":\"Priya Johnson\",\"confidence\":1.0}]}\n```","model":"glm-4-plus","usage":{"completion_tokens":48,"prompt_tokens":301,"total_tokens":349},"cached":false}

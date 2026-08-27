@@ -1,0 +1,1 @@
+{"content":"```json\n{\"facts\":[{\"subject\":\"user\",\"relation\":\"lives_in\",\"value\":\"Berlin\",\"confidence\":1.0},{\"subject\":\"user\",\"relation\":\"birthday\",\"value\":\"18 de abril\",\"confidence\":1.0}]}\n```","model":"glm-4-plus","usage":{"completion_tokens":49,"prompt_tokens":308,"total_tokens":357},"cached":false}

@@ -1,0 +1,1 @@
+{"content":"```json\n{\"facts\":[{\"subject\":\"user\",\"relation\":\"works_at\",\"value\":\"Databricks\",\"confidence\":1.0},{\"subject\":\"user\",\"relation\":\"joined\",\"value\":\"Databricks in April 2024\",\"confidence\":1.0}]}\n```","model":"glm-4-plus","usage":{"completion_tokens":55,"prompt_tokens":308,"total_tokens":363},"cached":false}
