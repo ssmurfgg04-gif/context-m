@@ -1,1 +1,0 @@
-{"content":"```json\n{\"facts\":[{\"subject\":\"user\",\"relation\":\"prefers\",\"value\":\"short and concise answers\",\"confidence\":1.0}]}\n```","model":"glm-4-plus","usage":{"completion_tokens":31,"prompt_tokens":306,"total_tokens":337},"cached":false}

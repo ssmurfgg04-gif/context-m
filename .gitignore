@@ -40,3 +40,8 @@ plugins/*/dist/
 deploy/.env
 deploy/backups/
 *.manifest.json.bak
+
+# LLM response cache (reproducible via the pipeline, not committed)
+benchmarks/llm/.cache/
+logs/
+*.log
