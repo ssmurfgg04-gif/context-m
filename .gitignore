@@ -33,3 +33,10 @@ venv/
 # Node (Claude plugin build)
 node_modules/
 plugins/*/dist/
+
+# Secrets & keys — NEVER commit
+*.key
+*.pem
+deploy/.env
+deploy/backups/
+*.manifest.json.bak

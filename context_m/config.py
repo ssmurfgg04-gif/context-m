@@ -75,8 +75,25 @@ class Config:
     slb_entries: int = 64
     slb_threshold: float = 0.97
 
+    # --- Personalized PageRank (HippoRAG 2 lineage) --------------------------
+    ppr_enabled: bool = True          # graph diffusion read mode
+    ppr_damping: float = 0.85
+    ppr_iters: int = 12
+    ppr_weight: float = 0.5           # fusion boost multiplier
+    ppr_graph_size: int = 96          # local subgraph node budget
+    ppr_seeds: int = 6                # teleport set size
+
     # --- scopes -----------------------------------------------------------
     default_user_id: str = "default"
+
+    # --- enterprise ---------------------------------------------------------
+    pii_mode: str = "off"              # off | redact | block | tag
+    encryption_at_rest: bool = False    # AES-256-GCM field encryption
+    master_key_path: str | None = None  # explicit key file (else env/sidecar)
+    audit_enabled: bool = True          # hash-chained audit log
+    audit_actions: str = "security"    # "security" | "all" | "none"
+    rate_limit_rps: float = 50.0        # REST server, requests/second/key
+    rate_limit_burst: int = 100
 
     def __post_init__(self) -> None:
         if self.codec not in CODECS:
@@ -100,6 +117,15 @@ class Config:
             cfg.dims = int(d)
         if _env_bool("CONTEXT_M_TMR", cfg.tmr):
             cfg.tmr = True
+        if pm := os.environ.get("CONTEXT_M_PII_MODE"):
+            cfg.pii_mode = pm
+        if mk := os.environ.get("CONTEXT_M_MASTER_KEY_PATH"):
+            cfg.master_key_path = mk
+        if os.environ.get("CONTEXT_M_ENCRYPT"):
+            cfg.encryption_at_rest = _env_bool("CONTEXT_M_ENCRYPT",
+                                               cfg.encryption_at_rest)
+        if aa := os.environ.get("CONTEXT_M_AUDIT"):
+            cfg.audit_actions = aa
         return cfg
 
     def to_dict(self) -> dict:

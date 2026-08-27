@@ -176,6 +176,34 @@ class MemoryPalace:
         for fid, v in pairs:
             self.add(fid, v)
 
+    def remove_ids(self, fact_ids: list[str]) -> int:
+        """Hard-remove vectors (GDPR erasure). Rebuilds packed state from
+        the surviving rows. Returns the number of vectors removed."""
+        if not fact_ids:
+            return 0
+        gone = set(fact_ids)
+        cur = self.store.conn.execute(
+            "SELECT fact_id FROM vectors").fetchall()
+        existing = {r["fact_id"] for r in cur}
+        removed = len(gone & existing)
+        if removed:
+            qmarks = ",".join("?" * len(gone))
+            self.store.conn.execute(
+                f"DELETE FROM vectors WHERE fact_id IN ({qmarks})",
+                list(gone))
+            self.store.conn.commit()
+        # rebuild in-memory state from disk (source of truth)
+        self._ids = []
+        self._id2row = {}
+        self._n = 0
+        self._cap = 0
+        self._packed = None
+        self._aux = None
+        self._index = None
+        self._index_valid = False
+        self._load()
+        return removed
+
     def _flush_pq(self) -> None:
         if not self._pq_buffer or not isinstance(self.codec, PQCodec):
             return

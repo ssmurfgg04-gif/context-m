@@ -24,6 +24,10 @@ ABS_PATTERNS = [
     # March 2024 (month granularity)
     (re.compile(rf"\bin\s+({MONTH_RE})\.?,?\s+(\d{{4}})\b", re.I), "month"),
     (re.compile(rf"\b({MONTH_RE})\s+(\d{{4}})\b"), "month"),
+    # 2025-08-15 (ISO day)
+    (re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b"), "iso_day"),
+    # 2025-08 / 2025/08 / "2025 08" (numeric year-month; before bare year)
+    (re.compile(r"\b(\d{4})[-/ ](\d{1,2})\b"), "ym_num"),
     (re.compile(r"\bin\s+(\d{4})\b"), "year"),
 ]
 
@@ -127,6 +131,13 @@ def find_dates(text: str, ts: datetime) -> list[dict]:
                 elif label == "year":
                     y = int(m.group(1))
                     mo, d = 1, 1
+                elif label == "iso_day":
+                    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                elif label == "ym_num":
+                    y, mo = int(m.group(1)), int(m.group(2))
+                    if not 1 <= mo <= 12:  # not a month — e.g. "2025 30"
+                        continue
+                    d = 1
                 else:  # month
                     mo, y = _month_num(m.group(1)), int(m.group(2))
                     d = 1

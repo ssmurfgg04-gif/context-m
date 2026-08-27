@@ -1,0 +1,115 @@
+{
+  "latency_recall": {
+    "n=10000": {
+      "flat_ms": 18.55,
+      "tree_p50_ms": 0.768,
+      "tree_p99_ms": 1.822,
+      "any_hit@10": 0.5,
+      "overlap@10": 0.491,
+      "quality_ratio": 0.8526,
+      "index_build_s": 0.55,
+      "rows_scanned_avg": 777.0
+    },
+    "n=50000": {
+      "flat_ms": 94.2,
+      "tree_p50_ms": 1.509,
+      "tree_p99_ms": 3.118,
+      "any_hit@10": 0.65,
+      "overlap@10": 0.234,
+      "quality_ratio": 0.8065,
+      "index_build_s": 2.62,
+      "rows_scanned_avg": 1287.0
+    },
+    "n=100000": {
+      "flat_ms": 170.3,
+      "tree_p50_ms": 1.427,
+      "tree_p99_ms": 2.993,
+      "any_hit@10": 0.46,
+      "overlap@10": 0.098,
+      "quality_ratio": 0.7753,
+      "index_build_s": 5.07,
+      "rows_scanned_avg": 1116.0
+    }
+  },
+  "codec_ablation": {
+    "int8": {
+      "bytes_per_vector": 770,
+      "mb_per_million": 770,
+      "self_hit@10": 1.0,
+      "overlap@10_vs_fp32": 0.9025,
+      "recall@10_in_top50": 1.0,
+      "encode_ms_per_1k": 11.24,
+      "query_ms_flat_20k": 44.159
+    },
+    "binary": {
+      "bytes_per_vector": 96,
+      "mb_per_million": 96,
+      "self_hit@10": 1.0,
+      "overlap@10_vs_fp32": 0.419,
+      "recall@10_in_top50": 1.0,
+      "encode_ms_per_1k": 42.23,
+      "query_ms_flat_20k": 3.491
+    },
+    "rabitq": {
+      "bytes_per_vector": 96,
+      "mb_per_million": 96,
+      "self_hit@10": 1.0,
+      "overlap@10_vs_fp32": 0.433,
+      "recall@10_in_top50": 1.0,
+      "encode_ms_per_1k": 32.06,
+      "query_ms_flat_20k": 3.235
+    },
+    "pq": {
+      "bytes_per_vector": 8,
+      "mb_per_million": 8,
+      "self_hit@10": 0.865,
+      "overlap@10_vs_fp32": 0.2675,
+      "recall@10_in_top50": 0.9995,
+      "encode_ms_per_1k": 497.57,
+      "query_ms_flat_20k": 1.122
+    },
+    "fp32_reference": {
+      "bytes_per_vector": 3072,
+      "mb_per_million": 3072.0,
+      "recall@10": 1.0
+    }
+  },
+  "self_healing": {
+    "plain@0%": {
+      "self_identification": 1.0
+    },
+    "plain@1%": {
+      "self_identification": 1.0
+    },
+    "plain@5%": {
+      "self_identification": 1.0
+    },
+    "plain@10%": {
+      "self_identification": 1.0
+    },
+    "plain@20%": {
+      "self_identification": 0.96
+    },
+    "tmr@0%": {
+      "self_identification": 1.0
+    },
+    "tmr@1%": {
+      "self_identification": 1.0
+    },
+    "tmr@5%": {
+      "self_identification": 1.0
+    },
+    "tmr@10%": {
+      "self_identification": 1.0
+    },
+    "tmr@20%": {
+      "self_identification": 1.0
+    }
+  },
+  "slb_replay": {
+    "hit_rate": 0.705,
+    "avg_hit_latency_us": 6.5,
+    "avg_miss_latency_us": 6.1
+  },
+  "u0_llm_calls": 0
+}

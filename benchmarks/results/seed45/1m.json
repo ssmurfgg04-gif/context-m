@@ -5,7 +5,7 @@
     "AB": 1.0,
     "CR": 1.0,
     "EO": 1.0,
-    "IE": 0.9444,
+    "IE": 1.0,
     "IF": 1.0,
     "KU": 1.0,
     "MH": 1.0,
@@ -15,12 +15,12 @@
   },
   "per_system": {
     "context_m": {
-      "overall": 0.9908,
+      "overall": 1.0,
       "per_ability": {
         "AB": 1.0,
         "CR": 1.0,
         "EO": 1.0,
-        "IE": 0.9444,
+        "IE": 1.0,
         "IF": 1.0,
         "KU": 1.0,
         "MH": 1.0,
@@ -28,7 +28,7 @@
         "SZ": 1.0,
         "TR": 1.0
       },
-      "mean_latency_ms": 6.85
+      "mean_latency_ms": 8.42
     },
     "vector_only": {
       "overall": 0.7018,
@@ -44,13 +44,13 @@
         "SZ": 1.0,
         "TR": 0.2222
       },
-      "mean_latency_ms": 1.66
+      "mean_latency_ms": 1.89
     },
     "bm25": {
-      "overall": 0.6514,
+      "overall": 0.6789,
       "per_ability": {
         "AB": 0.75,
-        "CR": 0.0,
+        "CR": 0.1667,
         "EO": 1.0,
         "IE": 0.6667,
         "IF": 0.5,
@@ -58,21 +58,21 @@
         "MH": 0.3333,
         "PF": 1.0,
         "SZ": 0.0,
-        "TR": 0.8889
+        "TR": 1.0
       },
-      "mean_latency_ms": 0.65
+      "mean_latency_ms": 0.69
     }
   },
   "ingest": {
-    "wall_seconds": 9.25,
-    "messages": 18994,
-    "tokens_per_second": 108118,
-    "messages_per_second": 2053.6,
+    "wall_seconds": 9.81,
+    "messages": 18995,
+    "tokens_per_second": 101933,
+    "messages_per_second": 1936.2,
     "llm_calls": 0,
     "u0_protocol": "verified",
     "facts": 244,
     "active_facts": 233,
-    "chunks": 18994,
+    "chunks": 18995,
     "commits": 94,
     "derived_facts": 14,
     "deferred_rule_pass": true
@@ -84,8 +84,8 @@
     "generation_seconds": 0.09
   },
   "trust": {
-    "provenance_completeness": 1.0,
-    "audit_latency_ms": 6.85,
+    "provenance_completeness": 0.9725,
+    "audit_latency_ms": 8.42,
     "u0_ingest_llm_calls": 0,
     "storage": {
       "vectors": 244,
@@ -100,6 +100,6 @@
     "hash_provider": "blake3-256",
     "codec": "int8",
     "vsa_mode": "perm",
-    "wall_seconds_total": 10.84
+    "wall_seconds_total": 11.61
   }
 }

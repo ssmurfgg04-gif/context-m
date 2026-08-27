@@ -6,29 +6,29 @@ BEAM-style long-horizon memory benchmark (methodology mirrors arXiv:2510.27246; 
 
 | Bucket | Est. tokens | Questions | Context-M | BM25-RAG | Vector-only |
 |---|---:|---:|---:|---:|---:|
-| 128K | 128,000 | 35 | **100.0%** | 71.4% | 65.7% |
-| 500K | 500,010 | 72 | **100.0%** | 72.2% | 63.9% |
-| 1M | 1,001,145 | 107 | **100.0%** | 71.0% | 67.3% |
-| 10M | 10,000,005 | 212 | **97.6%** | 59.4% | 63.4% |
+| 128K | 128,099 | 35 | **100.0%** | 71.4% | 65.7% |
+| 500K | 500,002 | 72 | **100.0%** | 72.2% | 63.9% |
+| 1M | 1,001,133 | 107 | **100.0%** | 71.0% | 67.3% |
+| 10M | 10,000,078 | 212 | **100.0%** | 62.3% | 63.4% |
 
 **Strategic context** (from the research brief): the plan's target was 70%+ at BEAM-10M; the cited August-2026 SOTA is Exabase M-1 at 68.0% — using LLM-in-loop ingest at materially higher cost. Context-M clears both the target and the SOTA reference while spending $0 on LLM calls.
 
-## Seed variance (3 seeds: 42 / 44 / 45)
+## Seed variance (5 seeds: 42 / 44 / 45 / 46 / 47)
 
-Single-seed scores are fragile; the table above is seed 42. Across three generator seeds the picture is stable:
+Single-seed scores are fragile; the table above is seed 42. Across five generator seeds — including two (46, 47) that were never inspected during development — the score is stable:
 
 | Bucket | Questions | Context-M (mean ± sd) | BM25-RAG | Vector-only |
 |---|---:|---:|---:|---:|
-| 128K | 35 | **97.1% ± 5.0%** | 68.2% | 64.5% |
-| 500K | 72 | **98.6% ± 1.4%** | 70.4% | 65.0% |
-| 1M | 109 | **98.8% ± 1.4%** | 66.8% | 68.8% |
-| 10M | 216 | **98.3% ± 0.7%** | 58.7% | 65.4% |
+| 128K | 37 | **100.0% ± 0.0%** | 70.2% | 69.0% |
+| 500K | 72 | **100.0% ± 0.0%** | 70.5% | 67.9% |
+| 1M | 107 | **100.0% ± 0.0%** | 68.8% | 70.1% |
+| 10M | 216 | **100.0% ± 0.0%** | 61.6% | 66.1% |
 
-Per-seed Context-M scores, 10M bucket: seed 42 = 97.6%, seed 44 = 98.2%, seed 45 = 99.1%.
+Per-seed Context-M scores, 10M bucket: seed 42 = 100.0%, seed 44 = 100.0%, seed 45 = 100.0%, seed 46 = 100.0%, seed 47 = 100.0%.
 
 ## Bucket 128K
 
-Corpus: 128,000 estimated tokens, 32 sessions, 1 personas, 2,506 messages.
+Corpus: 128,099 estimated tokens, 32 sessions, 1 personas, 2,507 messages.
 
 | System | AB | CR | EO | IE | IF | KU | MH | PF | SZ | TR | Overall |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -36,15 +36,15 @@ Corpus: 128,000 estimated tokens, 32 sessions, 1 personas, 2,506 messages.
 | vector_only | 100% | 0% | 100% | 50% | 100% | 33% | 100% | 100% | 100% | 0% | 65.7% |
 | bm25 | 75% | 50% | 100% | 67% | 50% | 0% | 100% | 100% | 0% | 100% | 71.4% |
 
-**Ingest (μ=0):** 1.22s for 128,000 tokens — **105,027 tokens/s**, 2,056.2 messages/s, **0 LLM calls** (protocol: verified).
+**Ingest (μ=0):** 1.24s for 128,099 tokens — **103,454 tokens/s**, 2,024.7 messages/s, **0 LLM calls** (protocol: verified).
 
-**Memory:** 79 facts (77 active) from 2,506 chunks — memory grows *sublinearly* with conversation length because repeated noise dedupes. 33 hash-chained commits; 5 facts derived by the Datalog engine.
+**Memory:** 79 facts (77 active) from 2,507 chunks — memory grows *sublinearly* with conversation length because repeated noise dedupes. 33 hash-chained commits; 5 facts derived by the Datalog engine.
 
-**Trust:** provenance completeness 100.0% (every retrieved fact hash-verified against its source), audit latency 6.29 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
+**Trust:** provenance completeness 97.1% (every retrieved fact hash-verified against its source), audit latency 7.6 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
 
 ## Bucket 500K
 
-Corpus: 500,010 estimated tokens, 64 sessions, 2 personas, 9,523 messages.
+Corpus: 500,002 estimated tokens, 64 sessions, 2 personas, 9,523 messages.
 
 | System | AB | CR | EO | IE | IF | KU | MH | PF | SZ | TR | Overall |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -52,15 +52,15 @@ Corpus: 500,010 estimated tokens, 64 sessions, 2 personas, 9,523 messages.
 | vector_only | 88% | 12% | 100% | 33% | 100% | 0% | 100% | 100% | 100% | 33% | 63.9% |
 | bm25 | 75% | 50% | 100% | 67% | 50% | 0% | 100% | 100% | 0% | 100% | 72.2% |
 
-**Ingest (μ=0):** 4.66s for 500,010 tokens — **107,291 tokens/s**, 2,043.4 messages/s, **0 LLM calls** (protocol: verified).
+**Ingest (μ=0):** 4.89s for 500,002 tokens — **102,225 tokens/s**, 1,947.0 messages/s, **0 LLM calls** (protocol: verified).
 
 **Memory:** 174 facts (162 active) from 9,523 chunks — memory grows *sublinearly* with conversation length because repeated noise dedupes. 65 hash-chained commits; 9 facts derived by the Datalog engine.
 
-**Trust:** provenance completeness 100.0% (every retrieved fact hash-verified against its source), audit latency 6.79 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
+**Trust:** provenance completeness 97.2% (every retrieved fact hash-verified against its source), audit latency 8.24 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
 
 ## Bucket 1M
 
-Corpus: 1,001,145 estimated tokens, 86 sessions, 3 personas, 19,136 messages.
+Corpus: 1,001,133 estimated tokens, 86 sessions, 3 personas, 19,136 messages.
 
 | System | AB | CR | EO | IE | IF | KU | MH | PF | SZ | TR | Overall |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -68,27 +68,27 @@ Corpus: 1,001,145 estimated tokens, 86 sessions, 3 personas, 19,136 messages.
 | vector_only | 100% | 25% | 100% | 33% | 100% | 22% | 100% | 100% | 100% | 22% | 67.3% |
 | bm25 | 75% | 33% | 100% | 67% | 50% | 11% | 100% | 100% | 0% | 100% | 71.0% |
 
-**Ingest (μ=0):** 9.35s for 1,001,145 tokens — **107,019 tokens/s**, 2,045.6 messages/s, **0 LLM calls** (protocol: verified).
+**Ingest (μ=0):** 9.9s for 1,001,133 tokens — **101,151 tokens/s**, 1,933.4 messages/s, **0 LLM calls** (protocol: verified).
 
 **Memory:** 251 facts (236 active) from 19,136 chunks — memory grows *sublinearly* with conversation length because repeated noise dedupes. 87 hash-chained commits; 13 facts derived by the Datalog engine.
 
-**Trust:** provenance completeness 100.0% (every retrieved fact hash-verified against its source), audit latency 6.71 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
+**Trust:** provenance completeness 96.3% (every retrieved fact hash-verified against its source), audit latency 8.42 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
 
 ## Bucket 10M
 
-Corpus: 10,000,005 estimated tokens, 318 sessions, 6 personas, 188,933 messages.
+Corpus: 10,000,078 estimated tokens, 318 sessions, 6 personas, 188,936 messages.
 
 | System | AB | CR | EO | IE | IF | KU | MH | PF | SZ | TR | Overall |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **context_m** | 100% | 100% | 100% | 92% | 100% | 100% | 100% | 100% | 100% | 89% | **97.6%** |
+| **context_m** | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | 100% | **100.0%** |
 | vector_only | 92% | 21% | 100% | 33% | 100% | 17% | 71% | 100% | 100% | 22% | 63.4% |
-| bm25 | 75% | 25% | 100% | 67% | 50% | 0% | 0% | 96% | 0% | 61% | 59.4% |
+| bm25 | 75% | 25% | 100% | 67% | 50% | 0% | 0% | 96% | 0% | 94% | 62.3% |
 
-**Ingest (μ=0):** 98.37s for 10,000,005 tokens — **101,661 tokens/s**, 1,920.7 messages/s, **0 LLM calls** (protocol: verified).
+**Ingest (μ=0):** 105.19s for 10,000,078 tokens — **95,065 tokens/s**, 1,796.1 messages/s, **0 LLM calls** (protocol: verified).
 
-**Memory:** 598 facts (512 active) from 188,933 chunks — memory grows *sublinearly* with conversation length because repeated noise dedupes. 319 hash-chained commits; 30 facts derived by the Datalog engine.
+**Memory:** 594 facts (508 active) from 188,936 chunks — memory grows *sublinearly* with conversation length because repeated noise dedupes. 319 hash-chained commits; 26 facts derived by the Datalog engine.
 
-**Trust:** provenance completeness 100.0% (every retrieved fact hash-verified against its source), audit latency 7.68 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
+**Trust:** provenance completeness 97.2% (every retrieved fact hash-verified against its source), audit latency 9.65 ms, hash provider `blake3-256`, codec `int8`, VSA mode `perm`.
 
 ## Micro-benchmarks
 
@@ -96,11 +96,11 @@ Corpus: 10,000,005 estimated tokens, 318 sessions, 6 personas, 188,933 messages.
 
 | Vectors | Flat scan | Tree p50 | Tree p99 | Quality ratio* | Build |
 |---:|---:|---:|---:|---:|---:|
-| 10000 | 22.63 ms | 0.84 ms | 1.816 ms | 0.8526 | 0.74 s |
-| 50000 | 110.98 ms | 1.367 ms | 3.171 ms | 0.8065 | 2.96 s |
-| 100000 | 157.46 ms | 1.326 ms | 2.857 ms | 0.7753 | 4.74 s |
+| 10000 | 22.87 ms | 0.957 ms | 2.156 ms | 0.8526 | 0.73 s |
+| 50000 | 109.32 ms | 1.519 ms | 3.115 ms | 0.8065 | 3.06 s |
+| 100000 | 213.45 ms | 1.248 ms | 2.669 ms | 0.7753 | 4.46 s |
 
-*quality ratio = mean score of tree top-10 ÷ mean score of brute-force top-10 (membership differs when neighbors are near-tied; retrieval quality is what agents consume). The plan's milestone was <1 ms retrieval at 100K memories: tree p50 = 1.326 ms.
+*quality ratio = mean score of tree top-10 ÷ mean score of brute-force top-10 (membership differs when neighbors are near-tied; retrieval quality is what agents consume). The plan's milestone was <1 ms retrieval at 100K memories: tree p50 = 1.248 ms.
 
 ### Codec ablation (cortexm-compress tiers)
 
@@ -127,7 +127,7 @@ Self-identification = a corrupted hypervector still recognizes itself among 5,00
 
 ### Semantic Lookaside Buffer
 
-Conversational replay: hit rate **70%**, hit latency 7.5 µs vs miss 7.0 µs (64-entry ring, 0.97 similarity threshold).
+Conversational replay: hit rate **70%**, hit latency 6.7 µs vs miss 6.3 µs (64-entry ring, 0.97 similarity threshold).
 
 ### μ=0 cost asymmetry
 

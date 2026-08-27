@@ -35,12 +35,52 @@ def main(argv=None) -> int:
     p = sub.add_parser("serve", help="run the MCP server on stdio")
     p.add_argument("--db", default=None)
 
+    p = sub.add_parser("serve-rest", help="run the REST API server (HTTP)")
+    p.add_argument("--db", default=":memory:")
+    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--port", type=int, default=8900)
+    p.add_argument("--pii", default=None, choices=[None, "off", "redact",
+                                                    "block", "tag"])
+    p.add_argument("--admin-key", default=None,
+                   help="mint an admin API key at boot (printed once)")
+
     for name, help_ in (("stats", "memory statistics"),
                         ("verify", "integrity audit"),
                         ("consolidate", "lifecycle consolidation"),
                         ("export-schema", "federation schema report")):
         p = sub.add_parser(name, help=help_)
         p.add_argument("--db", default=None)
+
+    p = sub.add_parser("keys", help="API key management (RBAC)")
+    p.add_argument("op", choices=["create", "list", "revoke"])
+    p.add_argument("--db", default=None)
+    p.add_argument("--role", default="reader",
+                   choices=["admin", "operator", "reader", "auditor"])
+    p.add_argument("--label", default="")
+    p.add_argument("--id", default=None, help="key id to revoke")
+
+    p = sub.add_parser("audit", help="audit log tail / verify / export")
+    p.add_argument("op", choices=["tail", "verify", "export"])
+    p.add_argument("--db", default=None)
+    p.add_argument("-n", type=int, default=30)
+    p.add_argument("--out", default="audit.jsonl",
+                   help="export path (op=export)")
+
+    p = sub.add_parser("snapshot", help="atomic backup with manifest")
+    p.add_argument("--db", default=None)
+    p.add_argument("--path", required=True)
+
+    p = sub.add_parser("erase", help="GDPR right-to-erasure")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", required=True)
+
+    p = sub.add_parser("governance", help="governance ops")
+    p.add_argument("op", choices=["retention", "state-at"])
+    p.add_argument("--db", default=None)
+    p.add_argument("--days", type=int, default=365)
+    p.add_argument("--when", default=None,
+                   help="ISO datetime for state-at")
+    p.add_argument("--user-id", default=None)
 
     p = sub.add_parser("migrate", help="import from mem0/zep/chroma")
     p.add_argument("--from", dest="source", required=True,
@@ -71,6 +111,78 @@ def main(argv=None) -> int:
     if args.cmd == "serve":
         from context_m.mcp.server import serve
         serve(args.db)
+        return 0
+
+    if args.cmd == "serve-rest":
+        from context_m.server.rest import main as rest_main
+        # argparse passthrough for the REST server
+        rest_argv = ["--db", args.db, "--host", args.host,
+                     "--port", str(args.port)]
+        if args.pii:
+            rest_argv += ["--pii", args.pii]
+        if args.admin_key:
+            rest_argv += ["--admin-key", args.admin_key]
+        import sys as _sys
+        _sys.argv = ["contextm-serve"] + rest_argv
+        rest_main()
+        return 0
+
+    if args.cmd == "keys":
+        m = _memory(args)
+        try:
+            if args.op == "create":
+                out = m.keys.create(args.role, label=args.label)
+                print(json.dumps(out, indent=2))
+            elif args.op == "list":
+                print(json.dumps({"keys": m.keys.list_keys()}, indent=2))
+            elif args.op == "revoke":
+                print(json.dumps({"revoked": m.keys.revoke(args.id or "")}))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "audit":
+        m = _memory(args)
+        try:
+            if args.op == "verify":
+                print(json.dumps(m.audit_log.verify(), indent=2))
+            elif args.op == "export":
+                n = m.audit_log.export_jsonl(args.out)
+                print(json.dumps({"exported": n, "path": args.out}))
+            else:
+                print(json.dumps({"events": m.audit_log.tail(args.n)}, indent=2))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "snapshot":
+        m = _memory(args)
+        try:
+            print(json.dumps(m.governance.snapshot(args.path), indent=2))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "erase":
+        m = _memory(args)
+        try:
+            print(json.dumps(m.governance.erase_user(args.user_id), indent=2))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "governance":
+        m = _memory(args)
+        try:
+            if args.op == "retention":
+                out = m.governance.apply_retention(args.days,
+                                                    user_id=args.user_id)
+            else:
+                out = {"facts": m.governance.state_at(args.when or "",
+                                                       user_id=args.user_id)}
+            print(json.dumps(out, indent=2, default=str))
+        finally:
+            m.close()
         return 0
 
     if args.cmd == "cost":

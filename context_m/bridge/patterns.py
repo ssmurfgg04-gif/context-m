@@ -465,14 +465,27 @@ def _possessive(m, ctx, sp, ts, sent):
 
 
 
-@pattern("role_at_org", rf"\bi'?m\s+(?:a|an)\s+[a-z][a-z /-]{{2,40}}?\s+at\s+(?P<val>{ORG})")
+@pattern("role_at_org",
+         rf"\bi'?m\s+(?:a|an)\s+(?P<role>[a-z][a-z /-]{{2,40}}?)\s+at\s+(?P<val>{ORG})")
 def _role_at_org(m, ctx, sp, ts, sent):
-    return [Candidate("SELF", "works_at", clean_value(m.group("val")), 0.9, "role_at_org")]
+    out = [Candidate("SELF", "works_at", clean_value(m.group("val")), 0.9,
+                     "role_at_org")]
+    # "I'm a software engineer at Netflix" carries BOTH the org and the
+    # occupation — the role must not be silently dropped, or "what does
+    # X do for a living?" becomes unanswerable.
+    rv = clean_value(m.group("role"))
+    if rv.lower() not in ROLE_BLOCK:
+        out.append(Candidate("SELF", "role", rv, 0.85, "role_at_org"))
+    return out
 
 
 @pattern("been_working", rf"\bi'?ve\s+been\s+(?:working\s+)?at\s+(?P<val>{ORG})")
 def _been_working(m, ctx, sp, ts, sent):
-    return [Candidate("SELF", "works_at", clean_value(m.group("val")), 0.9, "been_working")]
+    # "I've been working at X since March 2024" — the since-clause dates
+    # the START of the employment interval (not the session date).
+    vf = date_in(sent, ts) if re.search(r"\bsince\b", sent, re.I) else None
+    return [Candidate("SELF", "works_at", clean_value(m.group("val")), 0.9,
+                      "been_working", valid_from=vf)]
 
 
 @pattern("instruction", rf"\b(?:please\s+)?(?:always|never)\s+(?P<val>[a-z][a-z ]{{3,60}}?)(?=[.!?]|$)")

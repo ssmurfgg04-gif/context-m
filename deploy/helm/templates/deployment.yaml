@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "context-m.fullname" . }}
+  labels:
+    app: {{ include "context-m.fullname" . }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ include "context-m.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "context-m.fullname" . }}
+      {{- if .Values.metrics.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "{{ .Values.service.port }}"
+      {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: context-m
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              name: http
+          env:
+            - name: CONTEXT_M_DB
+              value: /data/memory.db
+            - name: CONTEXT_M_ENCRYPT
+              value: {{ quote .Values.security.encryptionAtRest }}
+            - name: CONTEXT_M_PII_MODE
+              value: {{ .Values.security.piiMode }}
+            - name: CONTEXT_M_AUDIT
+              value: {{ .Values.security.auditMode }}
+            {{- if .Values.security.existingSecret }}
+            - name: CONTEXT_M_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.security.existingSecret }}
+                  key: master-key
+            {{- else if .Values.security.masterKey }}
+            - name: CONTEXT_M_MASTER_KEY
+              value: {{ .Values.security.masterKey | quote }}
+            {{- end }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probe.readiness }}
+              port: http
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probe.liveness }}
+              port: http
+            initialDelaySeconds: 5
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "context-m.fullname" . }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "context-m.fullname" . }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ include "context-m.fullname" . }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+{{- if .Values.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "context-m.fullname" . }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}
+{{- if .Values.snapshot.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "context-m.fullname" . }}-snapshot
+spec:
+  schedule: {{ .Values.snapshot.schedule | quote }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: snapshot
+              image: curlimages/curl:latest
+              command:
+                - sh
+                - -c
+                - >
+                  curl -s -X POST http://{{ include "context-m.fullname" . }}:{{ .Values.service.port }}/v1/snapshot
+                  -H "Authorization: Bearer $CTXM_ADMIN_KEY"
+                  -H "Content-Type: application/json"
+                  -d '{"path": "/data/backups/snap.db"}'
+              env:
+                - name: CTXM_ADMIN_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.security.existingSecret | default "context-m-secrets" }}
+                      key: admin-key
+{{- end }}

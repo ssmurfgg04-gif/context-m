@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import datetime, timezone
 
 from context_m.errors import BranchError, StoreError
@@ -73,12 +74,118 @@ FACT_COLUMNS = ("id, subject, relation, value, valid_from, valid_to, tx_from, tx
                 "quarantined, birth_commit, retired_commit, provenance")
 
 
+class _SafeCursor:
+    """Cursor-like object over eagerly-materialized rows (thread-safe)."""
+
+    def __init__(self, rows, rowcount, lastrowid, description) -> None:
+        self._rows = rows
+        self._iter = iter(rows)
+        self.rowcount = rowcount
+        self.lastrowid = lastrowid
+        self.description = description
+        self.arraysize = 1
+
+    def fetchone(self):
+        try:
+            return next(self._iter)
+        except StopIteration:
+            return None
+
+    def fetchall(self):
+        rest = list(self._iter)
+        self._iter = iter([])
+        return rest
+
+    def fetchmany(self, size=None):
+        out = []
+        for _ in range(size or 1):
+            try:
+                out.append(next(self._iter))
+            except StopIteration:
+                break
+        return out
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._iter)
+
+    def close(self) -> None:
+        pass
+
+
+class SafeConnection:
+    """Serializes every statement on one SQLite connection.
+
+    SQLite connections are not safe for concurrent cursor use even with
+    ``check_same_thread=False`` — interleaved commit/iterate produces
+    InterfaceError('bad parameter or other API misuse'). This wrapper
+    holds an RLock across execute+materialize and across commit, making
+    the whole TraceStore safe under multi-threaded load (REST server,
+    concurrent writers). Eager materialization keeps semantics: callers
+    only use fetchone/fetchall/iteration/rowcount/lastrowid.
+    """
+
+    def __init__(self, conn) -> None:
+        self._conn = conn
+        self._lock = threading.RLock()
+
+    def execute(self, sql, params=()):
+        with self._lock:
+            cur = self._conn.execute(sql, params)
+            try:
+                rows = cur.fetchall()
+            except Exception:
+                rows = []
+            rc, lrid, desc = cur.rowcount, cur.lastrowid, cur.description
+            cur.close()
+            return _SafeCursor(rows, rc, lrid, desc)
+
+    def executemany(self, sql, seq):
+        with self._lock:
+            cur = self._conn.executemany(sql, seq)
+            rc = cur.rowcount
+            cur.close()
+            return _SafeCursor([], rc, None, None)
+
+    def executescript(self, script):
+        with self._lock:
+            return self._conn.executescript(script)
+
+    def commit(self):
+        with self._lock:
+            self._conn.commit()
+
+    def rollback(self):
+        with self._lock:
+            self._conn.rollback()
+
+    def close(self):
+        with self._lock:
+            self._conn.close()
+
+    @property
+    def row_factory(self):
+        return self._conn.row_factory
+
+    @row_factory.setter
+    def row_factory(self, v):
+        with self._lock:
+            self._conn.row_factory = v
+
+    @property
+    def in_transaction(self):
+        return self._conn.in_transaction
+
+
 class TraceStore:
     def __init__(self, db_path: str = ":memory:", provider: HashProvider | None = None) -> None:
         self.db_path = db_path
         self.hasher = provider or HashProvider()
         mem = db_path in (":memory:", None, "")
-        self.conn = sqlite3.connect(db_path or ":memory:", check_same_thread=False)
+        self.conn = SafeConnection(
+            sqlite3.connect(db_path or ":memory:", check_same_thread=False))
         if not mem:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA synchronous=NORMAL")
@@ -113,6 +220,18 @@ class TraceStore:
         self.conn.execute(
             "INSERT INTO kv(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
             (key, value))
+        self.conn.commit()
+
+    def iter_kv(self, prefix: str = ""):
+        """Yield (key, value) pairs whose key starts with ``prefix``."""
+        cur = self.conn.execute(
+            "SELECT k, v FROM kv WHERE k LIKE ? ORDER BY k",
+            (prefix + "%",))
+        for row in cur:
+            yield row["k"], row["v"]
+
+    def kv_delete(self, key: str) -> None:
+        self.conn.execute("DELETE FROM kv WHERE k=?", (key,))
         self.conn.commit()
 
     # -------------------------------------------------------------- genesis
@@ -472,6 +591,21 @@ class TraceStore:
             rows = self.conn.execute(q, (fact_id, kind) if kind else (fact_id,)).fetchall()
             ins = [dict(r, dir="in") for r in rows]
         return outs + ins
+
+    def edges_of_many(self, fact_ids: list[str], kind: str | None = None) -> list[dict]:
+        """Edges among a set of fact ids (both directions), batched."""
+        if not fact_ids:
+            return []
+        out: list[dict] = []
+        B = 200
+        for i in range(0, len(fact_ids), B):
+            chunk = fact_ids[i:i + B]
+            qm = ",".join("?" * len(chunk))
+            q = (f"SELECT * FROM edges WHERE src IN ({qm}) AND dst IN ({qm})"
+                 + (f" AND kind=?" if kind else ""))
+            rows = self.conn.execute(q, chunk + chunk + ([kind] if kind else []))
+            out.extend(dict(r) for r in rows)
+        return out
 
     # ------------------------------------------------------------ integrity
     def active_fact_hashes(self, user_id: str | None = None) -> list[tuple[str, str]]:

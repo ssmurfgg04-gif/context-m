@@ -228,12 +228,22 @@ class MemoryWriter:
         if action is Action.SKIP:
             for f in self.store.get_facts(decision.target_ids or []):
                 self.store.update_fact(f.id, access_count=f.access_count + 1)
+                # exact restatement with an EXPLICIT date refines the
+                # interval: "I've been at Microsoft since March 2024"
+                # backdates an employment first learned without a date.
+                if (fact.valid_from and f.valid_from
+                        and fact.valid_from < f.valid_from):
+                    self.store.update_fact(f.id, valid_from=fact.valid_from)
             return 0
         if action is Action.MERGE:
             for f in self.store.get_facts(decision.target_ids or []):
                 self.store.update_fact(
                     f.id, reinforcement=f.reinforcement + 1,
                     access_count=f.access_count + 1,
+                    valid_from=(min(fact.valid_from, f.valid_from)
+                                if fact.valid_from and f.valid_from
+                                and fact.valid_from < f.valid_from
+                                else f.valid_from),
                     provenance={**f.provenance,
                                 "merged_with": fact.text(),
                                 "last_pattern": fact.provenance.get("pattern")})
@@ -241,9 +251,15 @@ class MemoryWriter:
             return 0
         if action is Action.SUPERSEDE:
             for old in self.store.get_facts(decision.target_ids or []):
+                # interval sanity: valid_to must never precede valid_from —
+                # a stale retraction date can otherwise invert the interval
+                # and make the fact invisible to every temporal window.
+                vt = (min(old.valid_to, fact.valid_from)
+                      if old.valid_to else fact.valid_from)
+                if old.valid_from and vt and vt < old.valid_from:
+                    vt = old.valid_from
                 self.store.update_fact(
-                    old.id, valid_to=min(old.valid_to, fact.valid_from)
-                    if old.valid_to else fact.valid_from,
+                    old.id, valid_to=vt,
                     is_active=0, tx_to=iso(_now()), retired_commit=commit,
                     provenance={**old.provenance,
                                 "superseded_by": fact.id})
@@ -270,8 +286,14 @@ class MemoryWriter:
                                         relation="works_at",
                                         user_id=fact.user_id, active=True):
             if similarity(f.value, fact.value) >= 0.6:
+                vt = fact.valid_from or iso(msg_time)[:10]
+                # clamp: a "left in Feb" retraction learned after a fact whose
+                # valid_from is later (re-stated employment) must not invert
+                # the interval — cap at the fact's own valid_from boundary.
+                if f.valid_from and vt < f.valid_from:
+                    vt = f.valid_from
                 self.store.update_fact(
-                    f.id, valid_to=fact.valid_from or iso(msg_time)[:10],
+                    f.id, valid_to=vt,
                     is_active=0, tx_to=iso(_now()), retired_commit=commit,
                     provenance={**f.provenance, "retracted_by": fact.id})
                 self.store.add_edge(fact.id, f.id, "CONTRADICTS",

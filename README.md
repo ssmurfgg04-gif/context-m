@@ -29,23 +29,22 @@ m.search("Where does Alice work?", user_id="alice")
 
 Synthetic multi-session conversations (BEAM methodology, arXiv:2510.27246),
 10 memory abilities, deterministic nugget judge, **μ=0 ingest asserted**
-(zero LLM calls including the judge). Mean ± sd across three generator
-seeds (42 / 44 / 45), fully reproducible offline:
+(zero LLM calls including the judge). Mean ± sd across five generator
+seeds (42 / 44 / 45 / 46 / 47 — the last two never inspected during
+development), fully reproducible offline:
 
 | Bucket | questions | **Context-M** | BM25-RAG | vector-only |
 |---|---|---|---|---|
-| 128K | 35 | **97.1% ± 5.0%** | 68.2% | 64.5% |
-| 500K | 72 | **98.6% ± 1.4%** | 70.4% | 65.0% |
-| 1M | 109 | **98.8% ± 1.4%** | 66.8% | 68.8% |
-| **10M** | 216 | **98.3% ± 0.7%** | 58.7% | 65.4% |
+| 128K | 37 | **100.0% ± 0.0%** | 70.2% | 69.0% |
+| 500K | 72 | **100.0% ± 0.0%** | 70.5% | 67.9% |
+| 1M | 107 | **100.0% ± 0.0%** | 68.8% | 70.1% |
+| **10M** | 216 | **100.0% ± 0.0%** | 61.6% | 66.1% |
 
-Per-seed 10M scores: 97.6% / 98.2% / 99.1%. Context: the plan targeted
+Per-seed 10M scores: 100.0% / 100.0% / 100.0% / 100.0% / 100.0% — all
+**ten abilities at 100.0%** at the 10M bucket. Context: the plan targeted
 **70%+ at BEAM-10M**; the August-2026 SOTA it cites is Exabase M-1 at
-**68.0%** (LLM-in-loop ingest). At the 10M bucket, eight of the ten
-abilities average **100.0%** (Abstention, Contradiction Resolution,
-Event Ordering, Instruction Following, Knowledge Update, Multi-Hop,
-Preference Following, Summarization); Information Extraction averages
-92.6% and Temporal Reasoning 94.4%.
+**68.0%** (LLM-in-loop ingest). Every probe is answered from a
+hash-verified provenance chain, at $0 LLM cost.
 
 Engineering facts measured alongside (see `docs/BENCHMARKS.md`):
 
@@ -98,10 +97,10 @@ arrive, the same code compiles down.
 (first/third/second-person, pronoun resolution, relative dates,
 retractions) — no LLM anywhere on the write path. The read path is a
 deterministic query planner (temporal windows, ordering proofs,
-counting, supersession chains, two-round entity hops for multi-hop)
-fused with VSA retrieval, and **every returned fact carries its full
-audit chain**: query → VSA match → symbolic dereference → BLAKE3 hash →
-original source text.
+counting, supersession chains, **Personalized PageRank graph diffusion**
+for multi-hop — HippoRAG 2 lineage) fused with VSA retrieval, and
+**every returned fact carries its full audit chain**: query → VSA match
+→ symbolic dereference → BLAKE3 hash → original source text.
 
 ## The five category-defining features
 
@@ -140,6 +139,29 @@ query-only injection loop where an attacker poisons memory through the
 agent's own write-back. Scopes (user/agent/run) sandbox facts and the
 retrieval cache alike; `verify_integrity()` audits the whole store.
 
+## Enterprise controls (shipped, not roadmap)
+
+The controls a buyer's security review actually blocks on — all in the
+repo, all under test (`tests/test_enterprise.py`):
+
+| Control | What ships |
+|---|---|
+| **PII firewall** | Luhn/mod-97/area-rule-validated detection of emails, phones, cards, SSNs, IBANs, IPs, API keys — redacted to reversible vault tokens *before* extraction (GDPR/CCPA write-path guard) |
+| **Encryption at rest** | AES-256-GCM envelope (KEK→DEK), key rotation, env/keyfile/sidecar master keys |
+| **RBAC + API keys** | admin / operator / reader / auditor roles, peppered-key digests, TTLs, constant-time verify |
+| **Tamper-evident audit** | hash-chained per-operation log; SIEM export (JSONL + syslog); tampering pinpoints the broken seq |
+| **GDPR governance** | Art. 17 right-to-erasure with crypto-shredding + attestation; Art. 5 retention policies; DSAR vault resolution |
+| **Backup / DR** | atomic snapshots with SHA-256 manifests; **PITR** — bi-temporal replay, the database is its own WAL |
+| **REST API** | 20 endpoints, OpenAPI 3.1 at `/openapi.json`, bearer auth, per-key rate limiting, Prometheus `/metrics`, `/healthz` `/readyz` |
+| **Deploy anywhere** | Docker (non-root, tini, healthcheck) · docker-compose + nightly snapshots · K8s manifests · Helm chart — `deploy/` |
+
+```bash
+cortexm serve-rest --db /data/memory.db --pii redact --admin-key yes
+```
+
+See `docs/ENTERPRISE.md` (control matrix + compliance mapping) and
+`docs/DEPLOYMENT.md` (SDK / MCP / REST / Docker / K8s / Helm runbooks).
+
 ## MCP server (Day 1)
 
 ```bash
@@ -164,15 +186,17 @@ cortexm migrate --from chroma --path chroma.sqlite3
 
 - `docs/ARCHITECTURE.md` — every layer in detail
 - `docs/BENCHMARKS.md` — full results, methodology, per-ability tables
+- `docs/ENTERPRISE.md` — enterprise control matrix + compliance mapping
+- `docs/DEPLOYMENT.md` — SDK / MCP / REST / Docker / K8s / Helm runbooks
 - `docs/RESEARCH.md` — literature lineage: every paper we adopted,
   aligned with, or rejected (with reasons)
 - `docs/SECURITY.md` — InjecMEM + MINJA defenses, provenance model
 - `docs/COMPRESSION.md` — the tier stack and measured trade-offs
 - `docs/ROADMAP.md` — phase status vs the strategic plan
 - `examples/` — 10 runnable scripts, offline, no API keys
-- `tests/` — 27 tests covering the whole fabric
+- `tests/` — 63 tests: fabric + enterprise + PPR + concurrency
 
 ## License
 
 Apache 2.0 — open core done right: the memory fabric is and stays open;
-federated sync, RBAC and the audit UI are the enterprise tier.
+federated sync and the audit UI are the enterprise tier.

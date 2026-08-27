@@ -1,0 +1,40 @@
+# Default values for the context-m Helm chart.
+
+image:
+  repository: context-m
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicas: 1        # SQLite/RWO volume — scale via sharding, not replicas
+
+service:
+  port: 8900
+  type: ClusterIP
+
+resources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {cpu: "1", memory: 1Gi}
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+
+security:
+  encryptionAtRest: true
+  piiMode: redact          # off | redact | block | tag
+  auditMode: security      # security | all | none
+  # provide via --set secrets.masterKey=... or an existing secret
+  existingSecret: ""
+  masterKey: ""            # ignored when existingSecret is set
+
+probe:
+  readiness: /readyz
+  liveness: /healthz
+
+metrics:
+  enabled: true            # Prometheus scrape annotations
+
+snapshot:
+  enabled: true
+  schedule: "17 2 * * *"

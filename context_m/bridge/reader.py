@@ -38,6 +38,12 @@ def _content_key(f: "Fact | None") -> tuple:
 
 
 RELATION_HINTS = [
+    # occupation idioms FIRST: "for a living" contains "living", which the
+    # residence hint below would otherwise capture, drowning the `role`
+    # fact under lives_in/moved_to noise.
+    (re.compile(r"\b(for a living|occupation|profession|career|job title|"
+                r"what does .{2,40}? do|works? as)\b", re.I),
+     ["role", "works_at", "studied"]),
     (re.compile(r"\b(work\w*|employer|company|job)\b", re.I),
      ["works_at", "role"]),
     (re.compile(r"\b(live|lives|living|based|city|hometown|resid\w*|mov\w*)\b", re.I),
@@ -83,6 +89,9 @@ ORDERING_MARKERS = re.compile(
 COUNT_MARKERS = re.compile(
     r"\bhow\s+many\s+(times|jobs|cities|companies|roles|moves|changes)\b"
     r"|\bhow\s+often\b", re.I)
+LIST_MARKERS = re.compile(
+    r"\b(?:list|name|enumerate|summar\w+)\b.*\ball\b|\ball\s+(?:the\s+)?\w+\s+"
+    r"(?:that|which|she|he|they|i)\b|\blist\s+all\b", re.I)
 MULTIHOP_MARKERS = re.compile(
     r"\b('s\b|of the|of my|of her|of his|of their)\b", re.I)
 
@@ -214,6 +223,8 @@ class MemoryReader:
             plan.intent = "ordering"
         elif COUNT_MARKERS.search(query):
             plan.intent = "count"
+        elif LIST_MARKERS.search(query):
+            plan.intent = "list"      # exhaustive set recall
         elif SUPERSESSION_MARKERS.search(query) or CURRENT_MARKERS.search(query):
             plan.intent = "current"
         dates = find_dates(query, ts or datetime.now(timezone.utc))
@@ -225,6 +236,17 @@ class MemoryReader:
                 y = dates[0]["iso"][:4]
                 plan.window_start = f"{y}-01-01"
                 plan.window_end = f"{y}-12-31"
+            elif dates[0].get("granularity") in ("month", "ym_num"):
+                # "in February 2025" — close the window at end-of-month;
+                # an open-ended start would drag in every later event.
+                y, mo = dates[0]["iso"][:4], int(dates[0]["iso"][5:7])
+                _last = [31, 29 if (int(y) % 4 == 0 and (int(y) % 100 != 0
+                            or int(y) % 400 == 0)) else 28,
+                         31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1]
+                plan.window_start = f"{y}-{mo:02d}-01"
+                plan.window_end = f"{y}-{mo:02d}-{_last:02d}"
+            elif dates[0].get("granularity") in ("day", "day_r", "iso_day"):
+                plan.window_end = dates[0]["iso"]
         if re.search(r"\bbetween\s+.+\s+and\s+", query, re.I) and len(dates) >= 2:
             plan.window_start = min(d["iso"] for d in dates)
             plan.window_end = max(d["iso"] for d in dates)
@@ -307,9 +329,13 @@ class MemoryReader:
             candidates[f.id] = candidates.get(f.id, 0.0) + \
                 self.cfg.fusion_symbolic_weight * b
 
-        # prefetch boost (MBTB)
+        # prefetch boost (MBTB) — cache-warming heuristic ONLY for simple
+        # recall/current intents: for precision intents (multihop,
+        # temporal, ordering, count) the co-access boost reorders the
+        # ranking away from graph-relevant evidence.
         prefetch_boosted = set()
-        if self.prefetcher is not None:
+        if (self.prefetcher is not None
+                and plan.intent in ("recall", "current")):
             for fid, w in self.prefetcher.predict().items():
                 if fid in candidates:
                     candidates[fid] += 0.05 * w
@@ -326,6 +352,23 @@ class MemoryReader:
         for fid, w in extra.items():
             candidates.setdefault(fid, 0.0)
             candidates[fid] += w
+
+        # Personalized PageRank diffusion (HippoRAG 2 lineage): graph
+        # activation from the current top set spreads to multi-hop
+        # evidence — the entity-hop expansion above is its depth-2
+        # approximation; PPR is the full diffusion.
+        if self.cfg.ppr_enabled and plan.intent in ("multihop", "recall"):
+            ppr_ids = list(candidates.keys())[: self.cfg.ppr_graph_size]
+            ppr_facts = self.store.get_facts(ppr_ids)
+            if len(ppr_facts) >= 2:
+                from context_m.bridge.ppr import ppr_boost
+                seed_ids = top_ids[: self.cfg.ppr_seeds]
+                edges = self.store.edges_of_many(ppr_ids, "CONTRADICTS")
+                boosts = ppr_boost(ppr_facts, seed_ids, edges,
+                                   damping=self.cfg.ppr_damping,
+                                   iters=self.cfg.ppr_iters)
+                for fid, b in boosts.items():
+                    candidates[fid] += self.cfg.ppr_weight * b
 
         _f1 = {f.id: f for f in self.store.get_facts(list(candidates))}
         ranked_ids = self._diversify(
@@ -417,8 +460,21 @@ class MemoryReader:
                                               for e in plan.entities) or
                                           f.relation in plan.relations):
                     hinted = f.relation in plan.relations
-                    add(f, (0.95 if hinted else 0.85) if f.is_active
-                        else (0.85 if hinted else 0.70))
+                    # tier 1: the fact BEGAN inside the window — this is what
+                    # "what happened in <window>" asks for. tier 2: still-valid
+                    # background state that merely overlaps the window.
+                    vf = f.valid_from or ""
+                    began_in = ((plan.window_start is None
+                                 or vf >= plan.window_start)
+                                and (plan.window_end is None
+                                     or vf <= plan.window_end))
+                    if began_in:
+                        b = (1.0 if hinted else 0.9) if f.is_active \
+                            else (0.9 if hinted else 0.75)
+                    else:
+                        b = (0.6 if hinted else 0.5) if f.is_active \
+                            else (0.5 if hinted else 0.4)
+                    add(f, b)
 
         return out, notes
 
@@ -498,7 +554,11 @@ class MemoryReader:
                 for f in frontier[:6]:
                     for g in self.store.facts_about(f.value, user_id=user_id)[:6]:
                         if g.id not in seen and g.is_active:
-                            extra.setdefault(g.id, 0.5 if _rd == 0 else 0.35)
+                            # value-hop = chain completion (X → value → Z):
+                            # the semantic shape of every multi-hop question.
+                            w = (0.7 if _rd == 0 and plan.intent == "multihop"
+                                 else (0.5 if _rd == 0 else 0.35))
+                            extra.setdefault(g.id, w)
                             seen.add(g.id)
                             nxt.append(g)
                     for g in self.store.facts_about(f.subject, user_id=user_id)[:8]:

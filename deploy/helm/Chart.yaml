@@ -1,0 +1,11 @@
+apiVersion: v2
+name: context-m
+description: Universal neuro-symbolic memory fabric — μ=0 ingest, bi-temporal provenance, RBAC, GDPR governance
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+keywords: [memory, rag, agents, neuro-symbolic, llm, context]
+home: https://github.com/ssmurfgg04-gif/context-m
+sources: [https://github.com/ssmurfgg04-gif/context-m]
+maintainers:
+  - name: Context-M contributors

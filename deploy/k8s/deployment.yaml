@@ -1,0 +1,120 @@
+# Context-M — Kubernetes deployment (single node, SQLite on PVC)
+# kubectl apply -f deploy/k8s/
+#
+# For HA at scale, run N independent stateful shards (one Memory per
+# user/tenant) behind a router; the fabric is per-tenant by design.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: context-m-secrets
+type: Opaque
+stringData:
+  master-key: REPLACE_WITH_43CHAR_URLSAFE_TOKEN
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: context-m-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: context-m
+  labels: {app: context-m}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # SQLite volume is RWO — no rolling double-mount
+  selector:
+    matchLabels: {app: context-m}
+  template:
+    metadata:
+      labels: {app: context-m}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8900"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: context-m
+          image: context-m:latest
+          ports: [{containerPort: 8900, name: http}]
+          env:
+            - name: CONTEXT_M_DB
+              value: /data/memory.db
+            - name: CONTEXT_M_ENCRYPT
+              value: "true"
+            - name: CONTEXT_M_PII_MODE
+              value: redact
+            - name: CONTEXT_M_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: context-m-secrets
+                  key: master-key
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8900}
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8900}
+            initialDelaySeconds: 5
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: context-m-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: context-m
+spec:
+  selector: {app: context-m}
+  ports:
+    - {port: 8900, targetPort: 8900, name: http}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: context-m-snapshot
+spec:
+  schedule: "17 2 * * *"            # nightly 02:17 — off-peak
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: snapshot
+              image: curlimages/curl:latest
+              # ADMIN_KEY comes from a secret you rotate; snapshots land
+              # in the same PVC under /data/backups (or swap for an
+              # init-container pushing to S3/GCS with your IAM role).
+              command:
+                - sh
+                - -c
+                - >
+                  curl -s -X POST http://context-m:8900/v1/snapshot
+                  -H "Authorization: Bearer $(CTXM_ADMIN_KEY)"
+                  -H "Content-Type: application/json"
+                  -d '{"path": "/data/backups/snap.db"}'
+              env:
+                - name: CTXM_ADMIN_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: context-m-secrets
+                      key: admin-key

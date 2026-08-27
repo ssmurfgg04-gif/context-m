@@ -89,11 +89,18 @@ class RuleEngine:
             nxt: list[dict[str, str]] = []
             for b in bindings:
                 for f in self._facts_of(rel):
+                    # scope isolation: a rule joins premises from ONE user
+                    # scope (None = global premise may join any scope).
+                    bu = b.get("_user")
+                    if bu is not None and f.user_id not in (None, bu):
+                        continue
                     nb = dict(b)
                     if not self._bind(nb, s_arg, f.subject):
                         continue
                     if not self._bind(nb, v_arg, f.value):
                         continue
+                    if f.user_id is not None:
+                        nb["_user"] = f.user_id
                     nxt.append(nb)
             bindings = nxt
             if not bindings:
@@ -120,24 +127,35 @@ class RuleEngine:
         return (s, rel, v)
 
     def apply(self, now: _dt.datetime | None = None, max_iterations: int = 3) -> list[Fact]:
-        """Run rules to fixpoint; return newly derived facts."""
+        """Run rules to fixpoint; return newly derived facts.
+
+        Derived facts inherit the USER SCOPE of their premises — without
+        this, ``team_uses(X, L) :- member_of(X, T), uses(T, L)`` derives a
+        fact under ``default`` that user0's reader can never see (scope
+        filter drops it), silently losing every multi-hop answer."""
         now = now or _dt.datetime.now(_dt.timezone.utc)
         derived_new: list[Fact] = []
-        seen: set[tuple[str, str, str]] = set()
+        seen: set[tuple] = set()
         for _ in range(max_iterations):
             added = 0
             for rule in self.rules:
                 for b in self._join(rule):
                     sub = self._subst(rule.head, b)
-                    if not sub or sub in seen:
+                    if not sub:
                         continue
-                    seen.add(sub)
+                    scope = b.get("_user") or "default"
                     s, rel, v = sub
-                    if self.store.query_facts(subject=s, relation=rel, value=v, active=True):
+                    key = (s, rel, v, scope)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    if self.store.query_facts(subject=s, relation=rel, value=v,
+                                              user_id=scope, active=True):
                         continue
                     f = Fact(
                         id=new_id(), subject=s, relation=rel, value=v,
                         valid_from=iso(now)[:10], tx_from=iso(now),
+                        user_id=scope,
                         confidence=0.75, memory_type="long_term",
                         is_derived=True,
                         provenance={"rule": rule.source, "bindings": b})

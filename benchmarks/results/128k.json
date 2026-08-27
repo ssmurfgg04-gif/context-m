@@ -28,7 +28,7 @@
         "SZ": 1.0,
         "TR": 1.0
       },
-      "mean_latency_ms": 6.29
+      "mean_latency_ms": 7.6
     },
     "vector_only": {
       "overall": 0.6571,
@@ -44,7 +44,7 @@
         "SZ": 1.0,
         "TR": 0.0
       },
-      "mean_latency_ms": 1.74
+      "mean_latency_ms": 1.97
     },
     "bm25": {
       "overall": 0.7143,
@@ -60,19 +60,19 @@
         "SZ": 0.0,
         "TR": 1.0
       },
-      "mean_latency_ms": 0.19
+      "mean_latency_ms": 0.2
     }
   },
   "ingest": {
-    "wall_seconds": 1.22,
-    "messages": 2506,
-    "tokens_per_second": 105027,
-    "messages_per_second": 2056.2,
+    "wall_seconds": 1.24,
+    "messages": 2507,
+    "tokens_per_second": 103454,
+    "messages_per_second": 2024.7,
     "llm_calls": 0,
     "u0_protocol": "verified",
     "facts": 79,
     "active_facts": 77,
-    "chunks": 2506,
+    "chunks": 2507,
     "commits": 33,
     "derived_facts": 5,
     "deferred_rule_pass": true
@@ -80,12 +80,12 @@
   "corpus": {
     "sessions": 32,
     "personas": 1,
-    "estimated_tokens": 128000,
+    "estimated_tokens": 128099,
     "generation_seconds": 0.01
   },
   "trust": {
-    "provenance_completeness": 1.0,
-    "audit_latency_ms": 6.29,
+    "provenance_completeness": 0.9714,
+    "audit_latency_ms": 7.6,
     "u0_ingest_llm_calls": 0,
     "storage": {
       "vectors": 79,
@@ -100,6 +100,6 @@
     "hash_provider": "blake3-256",
     "codec": "int8",
     "vsa_mode": "perm",
-    "wall_seconds_total": 1.6
+    "wall_seconds_total": 1.7
   }
 }

@@ -1,0 +1,105 @@
+{
+  "bucket": "1m",
+  "n_questions": 109,
+  "per_ability": {
+    "AB": 1.0,
+    "CR": 1.0,
+    "EO": 1.0,
+    "IE": 1.0,
+    "IF": 1.0,
+    "KU": 1.0,
+    "MH": 1.0,
+    "PF": 1.0,
+    "SZ": 1.0,
+    "TR": 1.0
+  },
+  "per_system": {
+    "context_m": {
+      "overall": 1.0,
+      "per_ability": {
+        "AB": 1.0,
+        "CR": 1.0,
+        "EO": 1.0,
+        "IE": 1.0,
+        "IF": 1.0,
+        "KU": 1.0,
+        "MH": 1.0,
+        "PF": 1.0,
+        "SZ": 1.0,
+        "TR": 1.0
+      },
+      "mean_latency_ms": 8.57
+    },
+    "vector_only": {
+      "overall": 0.7339,
+      "per_ability": {
+        "AB": 0.9167,
+        "CR": 0.3333,
+        "EO": 1.0,
+        "IE": 0.4444,
+        "IF": 1.0,
+        "KU": 0.5556,
+        "MH": 0.8333,
+        "PF": 1.0,
+        "SZ": 1.0,
+        "TR": 0.4444
+      },
+      "mean_latency_ms": 1.91
+    },
+    "bm25": {
+      "overall": 0.6881,
+      "per_ability": {
+        "AB": 0.75,
+        "CR": 0.0833,
+        "EO": 1.0,
+        "IE": 0.6667,
+        "IF": 0.5,
+        "KU": 0.1111,
+        "MH": 1.0,
+        "PF": 1.0,
+        "SZ": 0.0,
+        "TR": 1.0
+      },
+      "mean_latency_ms": 0.67
+    }
+  },
+  "ingest": {
+    "wall_seconds": 10.08,
+    "messages": 18889,
+    "tokens_per_second": 99251,
+    "messages_per_second": 1873.6,
+    "llm_calls": 0,
+    "u0_protocol": "verified",
+    "facts": 245,
+    "active_facts": 234,
+    "chunks": 18889,
+    "commits": 93,
+    "derived_facts": 13,
+    "deferred_rule_pass": true
+  },
+  "corpus": {
+    "sessions": 92,
+    "personas": 3,
+    "estimated_tokens": 1000631,
+    "generation_seconds": 0.09
+  },
+  "trust": {
+    "provenance_completeness": 0.9725,
+    "audit_latency_ms": 8.57,
+    "u0_ingest_llm_calls": 0,
+    "storage": {
+      "vectors": 245,
+      "codec": "int8",
+      "bytes_per_vector": 770,
+      "vector_bytes": 188650,
+      "per_million_memories_mb": 770.0,
+      "index": "flat",
+      "searches_flat": 215,
+      "searches_indexed": 0
+    },
+    "hash_provider": "blake3-256",
+    "codec": "int8",
+    "vsa_mode": "perm",
+    "wall_seconds_total": 11.91
+  }
+}

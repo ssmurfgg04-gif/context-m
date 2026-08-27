@@ -1,33 +1,33 @@
 {
   "latency_recall": {
     "n=10000": {
-      "flat_ms": 22.63,
-      "tree_p50_ms": 0.84,
-      "tree_p99_ms": 1.816,
+      "flat_ms": 22.87,
+      "tree_p50_ms": 0.957,
+      "tree_p99_ms": 2.156,
       "any_hit@10": 0.5,
       "overlap@10": 0.491,
       "quality_ratio": 0.8526,
-      "index_build_s": 0.74,
+      "index_build_s": 0.73,
       "rows_scanned_avg": 777.0
     },
     "n=50000": {
-      "flat_ms": 110.98,
-      "tree_p50_ms": 1.367,
-      "tree_p99_ms": 3.171,
+      "flat_ms": 109.32,
+      "tree_p50_ms": 1.519,
+      "tree_p99_ms": 3.115,
       "any_hit@10": 0.65,
       "overlap@10": 0.234,
       "quality_ratio": 0.8065,
-      "index_build_s": 2.96,
+      "index_build_s": 3.06,
       "rows_scanned_avg": 1287.0
     },
     "n=100000": {
-      "flat_ms": 157.46,
-      "tree_p50_ms": 1.326,
-      "tree_p99_ms": 2.857,
+      "flat_ms": 213.45,
+      "tree_p50_ms": 1.248,
+      "tree_p99_ms": 2.669,
       "any_hit@10": 0.46,
       "overlap@10": 0.098,
       "quality_ratio": 0.7753,
-      "index_build_s": 4.74,
+      "index_build_s": 4.46,
       "rows_scanned_avg": 1116.0
     }
   },
@@ -38,8 +38,8 @@
       "self_hit@10": 1.0,
       "overlap@10_vs_fp32": 0.9025,
       "recall@10_in_top50": 1.0,
-      "encode_ms_per_1k": 11.05,
-      "query_ms_flat_20k": 34.037
+      "encode_ms_per_1k": 11.08,
+      "query_ms_flat_20k": 38.772
     },
     "binary": {
       "bytes_per_vector": 96,
@@ -47,8 +47,8 @@
       "self_hit@10": 1.0,
       "overlap@10_vs_fp32": 0.419,
       "recall@10_in_top50": 1.0,
-      "encode_ms_per_1k": 38.14,
-      "query_ms_flat_20k": 2.801
+      "encode_ms_per_1k": 29.87,
+      "query_ms_flat_20k": 2.724
     },
     "rabitq": {
       "bytes_per_vector": 96,
@@ -56,8 +56,8 @@
       "self_hit@10": 1.0,
       "overlap@10_vs_fp32": 0.433,
       "recall@10_in_top50": 1.0,
-      "encode_ms_per_1k": 38.23,
-      "query_ms_flat_20k": 2.902
+      "encode_ms_per_1k": 34.26,
+      "query_ms_flat_20k": 2.845
     },
     "pq": {
       "bytes_per_vector": 8,
@@ -65,8 +65,8 @@
       "self_hit@10": 0.865,
       "overlap@10_vs_fp32": 0.2675,
       "recall@10_in_top50": 0.9995,
-      "encode_ms_per_1k": 501.34,
-      "query_ms_flat_20k": 1.112
+      "encode_ms_per_1k": 482.87,
+      "query_ms_flat_20k": 1.091
     },
     "fp32_reference": {
       "bytes_per_vector": 3072,
@@ -108,8 +108,8 @@
   },
   "slb_replay": {
     "hit_rate": 0.705,
-    "avg_hit_latency_us": 7.5,
-    "avg_miss_latency_us": 7.0
+    "avg_hit_latency_us": 6.7,
+    "avg_miss_latency_us": 6.3
   },
   "u0_llm_calls": 0
 }

@@ -18,6 +18,7 @@ that proves zero LLM calls.
 from __future__ import annotations
 
 import datetime as _dt
+import os
 from datetime import datetime, timezone
 
 from context_m import metrics
@@ -59,17 +60,82 @@ class Memory:
         self.git = MemoryGit(self.store, self.palace)
         self.zk = ZKProver(self.store, self.reader)
 
+        # --- enterprise layer (PII, crypto, RBAC, audit, governance) ---------
+        from context_m.security.crypto import AESGCMCipher, load_master_key
+        from context_m.security.pii import PIIGuard, PIIVault
+        from context_m.security.rbac import APIKeyStore
+        from context_m.enterprise.audit import AuditLog
+        from context_m.enterprise.governance import Governance
+        self.cipher = None
+        if config.encryption_at_rest:
+            key = load_master_key(config.master_key_path)
+            if key is None:
+                sidecar = ("" if config.db_path == ":memory:"
+                           else config.db_path + ".key")
+                if sidecar and os.path.exists(sidecar):
+                    key = load_master_key(sidecar)
+            if key is None:
+                from context_m.security.crypto import generate_master_key
+                if config.db_path != ":memory:":
+                    key = generate_master_key(config.db_path + ".key")
+            if key is not None:
+                self.cipher = AESGCMCipher(key, store=self.store)
+        self.pii_vault = PIIVault(self.store, self.cipher)
+        self.pii_guard = PIIGuard(config.pii_mode, self.pii_vault)
+        self.keys = APIKeyStore(self.store)
+        self.audit_log = AuditLog(self.store, enabled=config.audit_enabled)
+        self.governance = Governance(self)
+
     # ------------------------------------------------------------ Mem0 API
     def add(self, messages, *, user_id: str | None = None,
             agent_id: str | None = None, run_id: str | None = None,
             metadata: dict | None = None, timestamp=None, **kw) -> dict:
-        """μ=0 ingest. Accepts str | list[str] | mem0-style message dicts."""
+        """μ=0 ingest. Accepts str | list[str] | mem0-style message dicts.
+
+        When ``pii_mode`` is ``redact``/``block``, the write path passes
+        through the PII guard BEFORE extraction — raw personal data never
+        reaches facts, chunks, or vectors."""
         user_id = user_id or self.config.default_user_id
         ts = parse_ts(timestamp) if timestamp else None
+        if self.pii_guard.mode != "off":
+            messages = self._apply_pii(messages)
+            if messages is None:
+                self.audit_log.log("memory.add", resource=user_id,
+                               outcome="blocked_pii",
+                               meta={"reason": "pii_mode=block"})
+                return {"results": [], "blocked": "pii_policy"}
         out = self.writer.add(messages, user_id=user_id, agent_id=agent_id,
                               run_id=run_id, ts=ts, metadata=metadata, **kw)
         self.reader.invalidate_caches()
+        if self.config.audit_actions == "all":
+            self.audit_log.log("memory.add", resource=user_id,
+                           meta={"facts": len(out.get("results", []))})
         return out
+
+    def _apply_pii(self, messages):
+        """Run the PII guard over every message text. Returns redacted
+        messages, or None when the policy blocks the write."""
+        if isinstance(messages, str):
+            res = self.pii_guard.process(messages)
+            if res.blocked:
+                return None
+            return res.redacted_text
+        if isinstance(messages, list):
+            out = []
+            for m in messages:
+                if isinstance(m, dict) and "content" in m:
+                    res = self.pii_guard.process(str(m["content"]))
+                    if res.blocked:
+                        return None
+                    m = {**m, "content": res.redacted_text}
+                elif isinstance(m, str):
+                    res = self.pii_guard.process(m)
+                    if res.blocked:
+                        return None
+                    m = res.redacted_text
+                out.append(m)
+            return out
+        return messages
 
     def search(self, query: str, *, user_id: str | None = None,
                agent_id: str | None = None, run_id: str | None = None,
@@ -336,6 +402,32 @@ class Memory:
     def close(self) -> None:
         self.palace.close()
         self.store.close()
+
+    def _reopen(self) -> None:
+        """Rebind every component to a freshly-opened store (post-restore)."""
+        from context_m.security.pii import PIIGuard, PIIVault
+        from context_m.security.rbac import APIKeyStore
+        from context_m.enterprise.audit import AuditLog
+        from context_m.enterprise.governance import Governance
+        self.store = TraceStore(self.config.db_path,
+                                HashProvider(self.config.hash_provider))
+        self.palace = MemoryPalace(self.config, self.store)
+        self.writer = MemoryWriter(self.config, self.store, self.palace,
+                                   self.extractor)
+        self.reader = MemoryReader(self.config, self.store, self.palace,
+                                   self.prefetcher)
+        self.git = MemoryGit(self.store, self.palace)
+        self.zk = ZKProver(self.store, self.reader)
+        self.pii_vault = PIIVault(self.store, self.cipher)
+        self.pii_guard = PIIGuard(self.config.pii_mode, self.pii_vault)
+        self.keys = APIKeyStore(self.store)
+        self.audit_log = AuditLog(self.store, enabled=self.config.audit_enabled)
+        self.governance = Governance(self)
+        # the governance object captured the OLD store/palace in __init__;
+        # rebind to the fresh ones
+        self.governance.store = self.store
+        self.governance.palace = self.palace
+        self.governance.audit = self.audit_log
 
     def __enter__(self) -> "Memory":
         return self

@@ -28,7 +28,7 @@
         "SZ": 1.0,
         "TR": 1.0
       },
-      "mean_latency_ms": 6.58
+      "mean_latency_ms": 7.54
     },
     "vector_only": {
       "overall": 0.6216,
@@ -44,7 +44,7 @@
         "SZ": 1.0,
         "TR": 0.3333
       },
-      "mean_latency_ms": 1.8
+      "mean_latency_ms": 1.83
     },
     "bm25": {
       "overall": 0.6757,
@@ -60,14 +60,14 @@
         "SZ": 0.0,
         "TR": 1.0
       },
-      "mean_latency_ms": 0.22
+      "mean_latency_ms": 0.2
     }
   },
   "ingest": {
-    "wall_seconds": 1.21,
+    "wall_seconds": 1.29,
     "messages": 2447,
-    "tokens_per_second": 106294,
-    "messages_per_second": 2022.1,
+    "tokens_per_second": 99887,
+    "messages_per_second": 1900.3,
     "llm_calls": 0,
     "u0_protocol": "verified",
     "facts": 75,
@@ -80,12 +80,12 @@
   "corpus": {
     "sessions": 26,
     "personas": 1,
-    "estimated_tokens": 128629,
+    "estimated_tokens": 128627,
     "generation_seconds": 0.01
   },
   "trust": {
-    "provenance_completeness": 1.0,
-    "audit_latency_ms": 6.58,
+    "provenance_completeness": 0.973,
+    "audit_latency_ms": 7.54,
     "u0_ingest_llm_calls": 0,
     "storage": {
       "vectors": 75,
@@ -100,6 +100,6 @@
     "hash_provider": "blake3-256",
     "codec": "int8",
     "vsa_mode": "perm",
-    "wall_seconds_total": 1.62
+    "wall_seconds_total": 1.76
   }
 }

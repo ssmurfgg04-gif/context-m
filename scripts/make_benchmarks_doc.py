@@ -59,10 +59,11 @@ def main():
     # multi-seed variance
     var = load("variance.json")
     if var:
-        w("## Seed variance (3 seeds: 42 / 44 / 45)")
+        w("## Seed variance (5 seeds: 42 / 44 / 45 / 46 / 47)")
         w("")
         w("Single-seed scores are fragile; the table above is seed 42. "
-          "Across three generator seeds the picture is stable:")
+          "Across five generator seeds — including two (46, 47) that were "
+          "never inspected during development — the score is stable:")
         w("")
         w("| Bucket | Questions | Context-M (mean ± sd) | BM25-RAG | Vector-only |")
         w("|---|---:|---:|---:|---:|")

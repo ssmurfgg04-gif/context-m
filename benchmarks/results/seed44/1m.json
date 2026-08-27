@@ -5,33 +5,33 @@
     "AB": 1.0,
     "CR": 1.0,
     "EO": 1.0,
-    "IE": 0.9444,
+    "IE": 1.0,
     "IF": 1.0,
     "KU": 1.0,
     "MH": 1.0,
     "PF": 1.0,
     "SZ": 1.0,
-    "TR": 0.7778
+    "TR": 1.0
   },
   "per_system": {
     "context_m": {
-      "overall": 0.9725,
+      "overall": 1.0,
       "per_ability": {
         "AB": 1.0,
         "CR": 1.0,
         "EO": 1.0,
-        "IE": 0.9444,
+        "IE": 1.0,
         "IF": 1.0,
         "KU": 1.0,
         "MH": 1.0,
         "PF": 1.0,
         "SZ": 1.0,
-        "TR": 0.7778
+        "TR": 1.0
       },
-      "mean_latency_ms": 7.38
+      "mean_latency_ms": 8.29
     },
     "vector_only": {
-      "overall": 0.6881,
+      "overall": 0.6972,
       "per_ability": {
         "AB": 1.0,
         "CR": 0.3333,
@@ -42,12 +42,12 @@
         "MH": 1.0,
         "PF": 1.0,
         "SZ": 1.0,
-        "TR": 0.2222
+        "TR": 0.3333
       },
-      "mean_latency_ms": 1.77
+      "mean_latency_ms": 1.85
     },
     "bm25": {
-      "overall": 0.6422,
+      "overall": 0.6514,
       "per_ability": {
         "AB": 0.75,
         "CR": 0.0,
@@ -58,20 +58,20 @@
         "MH": 0.3333,
         "PF": 1.0,
         "SZ": 0.0,
-        "TR": 0.8889
+        "TR": 1.0
       },
-      "mean_latency_ms": 0.68
+      "mean_latency_ms": 0.67
     }
   },
   "ingest": {
-    "wall_seconds": 9.82,
+    "wall_seconds": 9.8,
     "messages": 19122,
-    "tokens_per_second": 101817,
-    "messages_per_second": 1946.8,
+    "tokens_per_second": 102059,
+    "messages_per_second": 1951.5,
     "llm_calls": 0,
     "u0_protocol": "verified",
-    "facts": 244,
-    "active_facts": 233,
+    "facts": 245,
+    "active_facts": 234,
     "chunks": 19122,
     "commits": 90,
     "derived_facts": 12,
@@ -80,18 +80,18 @@
   "corpus": {
     "sessions": 89,
     "personas": 3,
-    "estimated_tokens": 1000056,
+    "estimated_tokens": 1000044,
     "generation_seconds": 0.09
   },
   "trust": {
-    "provenance_completeness": 1.0,
-    "audit_latency_ms": 7.38,
+    "provenance_completeness": 0.9725,
+    "audit_latency_ms": 8.29,
     "u0_ingest_llm_calls": 0,
     "storage": {
-      "vectors": 244,
+      "vectors": 245,
       "codec": "int8",
       "bytes_per_vector": 770,
-      "vector_bytes": 187880,
+      "vector_bytes": 188650,
       "per_million_memories_mb": 770.0,
       "index": "flat",
       "searches_flat": 215,
@@ -100,6 +100,6 @@
     "hash_provider": "blake3-256",
     "codec": "int8",
     "vsa_mode": "perm",
-    "wall_seconds_total": 11.51
+    "wall_seconds_total": 11.58
   }
 }

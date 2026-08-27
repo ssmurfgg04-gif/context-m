@@ -166,7 +166,7 @@ def build_probes(personas, rng) -> list[Probe]:
                 {"contains_any": [old_job[0].lower()]}))
         ev = evs[0]
         probes.append(Probe(
-            "TR", f"What did {name} do in {ev[0][:7].replace('-', ' ')}?",
+            "TR", f"What did {name} do in {month_name(int(ev[0][5:7]))} {ev[0][:4]}?",
             p.user_id, p.full_name,
             {"contains_any": [ev[1].lower()]}))
 

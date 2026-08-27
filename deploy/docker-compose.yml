@@ -1,0 +1,61 @@
+# Context-M — local production stack
+# Usage: docker compose -f deploy/docker-compose.yml up
+# The master key is generated once and persisted in the .env file next
+# to this compose file (see env.example). NEVER commit real keys.
+
+services:
+  context-m:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: context-m:latest
+    ports:
+      - "8900:8900"
+    environment:
+      CONTEXT_M_DB: /data/memory.db
+      CONTEXT_M_ENCRYPT: "true"          # AES-256-GCM at rest
+      CONTEXT_M_PII_MODE: redact         # GDPR write-path guard
+      CONTEXT_M_AUDIT: security          # hash-chained audit log
+      CONTEXT_M_MASTER_KEY: ${CONTEXT_M_MASTER_KEY:?set in .env}
+    volumes:
+      - ctxm-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8900/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+
+  # nightly snapshot backup to the host fs (retention: keep 7)
+  snapshot:
+    image: curlimages/curl:latest
+    depends_on:
+      context-m:
+        condition: service_healthy
+    environment:
+      ADMIN_KEY: ${CTXM_ADMIN_KEY:?set in .env}
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          TS=$$(date +%Y%m%d-%H%M%S)
+          curl -s -X POST http://context-m:8900/v1/snapshot \
+            -H "Authorization: Bearer $$ADMIN_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"path\": \"/backups/snap-$$TS.db\"}"
+          ls -1t /backups/snap-*.db 2>/dev/null | tail -n +8 | xargs -r rm --
+          sleep 86400
+        done
+    restart: unless-stopped
+
+volumes:
+  ctxm-data:

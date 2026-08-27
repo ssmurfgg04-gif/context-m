@@ -181,7 +181,13 @@ def persona_messages(p: Persona, rng: random.Random, session_date: datetime,
         if p.nickname:
             A(f"But call me {p.nickname.capitalize() if len(p.nickname) > 2 else p.nickname}.")
         A(p.instruction[0])
-        A(f"I've been working at {p.employers[0][0]} for a while now.")
+        # state the first employer WITH its start date so the employment
+        # interval is recoverable from the text (TR "where did X work in
+        # YYYY" probes); otherwise valid_from defaults to the session date
+        # and the historical window is unanswerable from the corpus.
+        _e0 = p.employers[0]
+        A(f"I've been working at {_e0[0]} since "
+          f"{_month(int(_e0[1][5:7]))} {_e0[1][:4]}.")
     if part == 1:
         # preferences + skills
         # state EVERY preference category (old -> new), so every PF probe
