@@ -180,21 +180,39 @@ class SafeConnection:
 
 
 class TraceStore:
-    def __init__(self, db_path: str = ":memory:", provider: HashProvider | None = None) -> None:
+    def __init__(self, db_path: str = ":memory:", provider: HashProvider | None = None,
+                 wal_sync: str = "normal") -> None:
         self.db_path = db_path
         self.hasher = provider or HashProvider()
         mem = db_path in (":memory:", None, "")
         self.conn = SafeConnection(
             sqlite3.connect(db_path or ":memory:", check_same_thread=False))
         if not mem:
+            # Aeon-inspired crash-recoverable write path:
+            #   journal_mode=WAL — readers never block the writer, and a
+            #                       torn write rolls back cleanly on reopen.
+            #   synchronous      — NORMAL: commits survive process crash
+            #                       (SIGKILL) at full speed; FULL additionally
+            #                       survives OS/power loss at fsync cost.
             self.conn.execute("PRAGMA journal_mode=WAL")
-            self.conn.execute("PRAGMA synchronous=NORMAL")
+            self.conn.execute(
+                "PRAGMA synchronous="
+                + ("FULL" if str(wal_sync).lower() == "full" else "NORMAL"))
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self._ancestry_cache: dict[str, frozenset[str]] = {}
         self._active_cache: dict[str, frozenset[str]] = {}
         self._batching = False
         self._ensure_genesis()
+
+    def checkpoint(self, mode: str = "TRUNCATE") -> None:
+        """Fold the WAL back into the main db file (shrink + fast reopen)."""
+        if self.db_path in (":memory:", None, ""):
+            return
+        try:
+            self.conn.execute(f"PRAGMA wal_checkpoint({mode})")
+        except Exception:
+            pass
 
     def begin_batch(self) -> None:
         self._batching = True
@@ -633,6 +651,7 @@ class TraceStore:
     def close(self) -> None:
         try:
             self.conn.commit()
+            self.checkpoint("TRUNCATE")
             self.conn.close()
         except Exception:
             pass
