@@ -10,7 +10,7 @@
     "./session": "./src/session.js"
   },
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "dsh-plugin",

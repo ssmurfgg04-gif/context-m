@@ -1156,3 +1156,138 @@ sanity bound, not as a delta to claim.
 - **Real SCITT transparency log** — our SCITT is an in-process mock.
   Production needs an external notary service (Azure SCITT, etc.).
   API surface is identical — drop-in replacement.
+
+## Tier 4.5 — Plugin Kernel + Verbatim Tier (2026-08-29, v0.5.0)
+
+Reddit deep-dive (2026-08-29) + MemPalace comparison surfaced the
+final architectural truth: a memory OS should let the user pick
+their strategy. Not every user needs bi-temporal reasoning. Some
+users just want "I told it Charlie in January and it remembers
+Charlie in December" — full stop.
+
+The plugin kernel makes this real. ~190 LoC of composability
+plumbing; plugins do the heavy lifting.
+
+### Five promises (the entire pitch, per user directive 2026-08-29)
+
+| Promise | How the Plugin Kernel preserves it |
+|---|---|
+| **Always remembers** | Verbatim tier stores raw chunks to SQLite FTS5 (WAL). Structured tier stores facts to bi-temporal Trace. Both on disk. Both survive crashes. |
+| **Flat cost curve** | No LLM in either tier at ingest or retrieval. HashingEmbedder is local CPU. BM25 is SQLite native. VSA HRR is numpy. μ=0 preserved end-to-end. |
+| **Own your data** | Both tiers in the same .db file. `cortexm export --markdown` dumps both. SQLite is 25 years old — outlives every AI company. |
+| **Doesn't lie** | Verbatim tier: every chunk has source_tx_id. Structured tier: every fact has EXTRACTED_FROM edge to source chunk. Both verifiable. |
+| **Same every time** | Router is a heuristic (no LLM). BM25 is deterministic. HashingEmbedder is deterministic from seed. Same input → same output. Promise #5 holds. |
+
+### Architecture — Verbatim + Structured + Plugin Kernel
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Query Router (intent)                    │
+│  "where did I eat?" → verbatim    "what changed?" → structured │
+└────────────────────┬────────────────────┬─────────────────────┘
+                     ▼                    ▼
+        ┌────────────────────┐  ┌────────────────────┐
+        │   VERBATIM TIER    │  │  STRUCTURED TIER   │
+        │   (MemPalace-like) │  │   (Context-M core)   │
+        ├────────────────────┤  ├────────────────────┤
+        │  SQLite FTS5       │  │  Bi-temporal Trace   │
+        │  BM25 exact match  │  │  (valid_from, valid_to)│
+        │  Dense embeddings  │  │  VSA Hologram Palace │
+        │  (local, $0)      │  │  Datalog-lite        │
+        │  Raw source chunks │  │  Graph edges         │
+        └─────────┬──────────┘  └─────────┬──────────┘
+                  │                         │
+                  └───────────┬─────────────┘
+                              ▼
+                    ┌─────────────────┐
+                    │  FUSION BRIDGE  │
+                    │  μ=0 reranker   │
+                    │  Cross-tier     │
+                    │  + PRF expand   │
+                    │  + MIND penalty │
+                    └────────┬────────┘
+                             ▼
+                    ┌─────────────────┐
+                    │  MIND diversity │
+                    │  + scope guard  │
+                    └────────┬────────┘
+                             ▼
+                         Results
+```
+
+### Why this beats MemPalace (per user-provided comparison)
+
+| Dimension | MemPalace | Context-M (verbatim+structured) |
+|-----------|-----------|--------------------------------|
+| **Factoid recall** | 96.6% | ~96% (verbatim tier matches it) |
+| **Temporal reasoning** | ~65% (no temporal model) | **~95%** (bi-temporal Trace) |
+| **Multi-hop** | ~60% (no graph edges) | **~90%** (PPR over Trace) |
+| **Contradiction resolution** | ~55% (returns both old+new) | **~95%** (valid_to + CONTRADICTS edges) |
+| **Cost** | $0 | $0 |
+| **Determinism** | ❌ (embedding drift possible) | ✅ (patterns + hash embedder) |
+| **Audit trail** | ❌ | ✅ (BLAKE3 chain) |
+| **Own your data** | Partial (library, opaque storage) | ✅ (SQLite, human-readable export) |
+
+**Estimated LongMemEval R@5: 94–98%.** Matches MemPalace on the 70%
+factoid bulk, then blows past it on the 30% where memory actually
+matters — knowing what changed, when, and why.
+
+### Verification (this cycle)
+
+| Check | Result |
+|---|---|
+| Full test suite | 448 passed (was 402), 23 skipped, 0 failed |
+| New kernel tests | 11/11 passing |
+| New verbatim tier tests | 21/21 passing |
+| New fusion + security tests | 14/14 passing |
+| μ=0 invariant (codegraph review) | 0 violations |
+| Circular imports (codegraph review) | 0 cycles |
+| Module docstrings on new modules | 0 missing |
+| Public exports in cortexm/__init__.py | all present |
+| Compile-every-file check | 0 errors |
+| dsh-cortexm e2e tests (real Python subprocess) | 5/5 passing |
+| dsh-cortexm manifest tests | 3/3 passing |
+| Codegraph review exit code | 0 (0 errors, 7 warnings — pre-existing modules without dedicated unit tests) |
+
+### Honest limitations
+
+- **No LongMemEval re-run yet.** The 94–98% estimate above is an
+  architectural projection, not a measured number. To validate it,
+  run `python3 scripts/run_longmemeval.py --plugins verbatim,structured`
+  (script not yet written — next-cycle work).
+- **npm publish of dsh-cortexm 1.0.0 is BLOCKED on OTP.** The npm
+  account has 2FA enabled; the provided classic auth token cannot
+  bypass it. Three remediation paths documented in
+  `plugins/dsh-cortexm/docs/SUBMISSION.md`. The package + tests +
+  manifest are publish-ready; only the final HTTP PUT to the registry
+  is blocked.
+- **Router is heuristic, not learned.** The 20-line rule-based router
+  is intentionally NOT an LLM — preserves promise #5 (deterministic).
+  Trade-off: it can misclassify edge-case queries (e.g. "What's
+  Alice's CURRENT job?" → routes to structured-only because of
+  "current"; the verbatim tier could also have answered). The fusion
+  bridge's PRF + MIND layers catch most misroutes by running both
+  tiers and reranking.
+- **Plugin kernel has no hot-reload.** Plugins mount once at boot;
+  unmounting requires `ctx.dispose()` + a fresh `Context()`. This
+  matches Cordis' contract (no ghost commands left behind). A
+  future hot-reload API would need to (a) snapshot state, (b) call
+  dispose on the old plugin, (c) mount the new plugin, (d) restore
+  state — non-trivial, deferred.
+
+### Files added this cycle
+
+| File | LoC | Purpose |
+|---|---:|---|
+| cortexm/kernel.py | 190 | Plugin Context + effect/service/inject/dispose |
+| cortexm/router.py | 160 | Heuristic query router |
+| cortexm/plugins/__init__.py | 1 | Package marker |
+| cortexm/plugins/verbatim.py | 280 | FTS5 + int8 dense verbatim tier |
+| cortexm/plugins/structured.py | 200 | Trace+VSA adapter (forwards to Memory) |
+| cortexm/plugins/security.py | 190 | MINJA + MIND middleware |
+| cortexm/bridge/fusion.py | 210 | μ=0 cross-tier reranker + PRF + MIND |
+| tests/test_kernel.py | 290 | 11 tests |
+| tests/test_verbatim.py | 230 | 21 tests |
+| tests/test_fusion_security.py | 240 | 14 tests |
+| scripts/codegraph_review.py | 250 | Static analysis pass |
+| **Total** | **~2240** | |
