@@ -56,8 +56,12 @@ jobs:
       - name: Quick smoke — import the built wheel
         run: |
           python -m venv /tmp/smoke
-          /tmp/smoke/bin/pip install --no-index --find-links dist/ cortexm
-          /tmp/smoke/bin/python -c "import cortexm; print('cortexm', cortexm.__version__); print('LLM_CALLS=', cortexm.LLM_CALLS)"
+          # --no-deps: only install the cortexm wheel from dist/, fetch its
+          # runtime deps (numpy>=1.24) from PyPI. The previous --no-index
+          # flag forbade numpy fetch and broke the smoke test.
+          /tmp/smoke/bin/pip install --find-links dist/ --no-deps cortexm
+          /tmp/smoke/bin/pip install numpy>=1.24
+          /tmp/smoke/bin/python -c "import cortexm; print('cortexm', cortexm.__version__); assert cortexm.LLM_CALLS == 0; print('LLM_CALLS =', cortexm.LLM_CALLS, '(μ=0 verified)')"
       - uses: actions/upload-artifact@v5
         with:
           name: dist

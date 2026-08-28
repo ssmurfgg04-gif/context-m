@@ -2059,3 +2059,44 @@ Stage Summary:
   publish via trusted publishing (pending user's one-time
   trusted-publisher registration on pypi.org).
 - awesome-deepseek-harness PR submission next.
+
+---
+Task ID: 2026-08-29-awesome-dsh-pr-submission
+Agent: main (Super Z)
+Task: Submit the dsh-cortexm entry to awesome-deepseek-harness via PR using the user's GitHub token.
+
+Work Log:
+- Verified the actual upstream is 0xsline/awesome-deepseek-harness
+  (HTTP 200), not deepseek-ai/awesome-deepseek-harness (HTTP 404).
+  The previous SUBMISSION.md assumed deepseek-ai/; updated by the
+  previous AI session's note (0xsline is the correct owner).
+- Wrote scripts/awesome_dsh_pr.py — pure-stdlib Python script that:
+    1. extracts the GitHub token from the local git remote URL
+       (avoids storing it anywhere else)
+    2. verifies upstream 0xsline/awesome-deepseek-harness exists +
+       gets its default branch
+    3. checks if user ssmurfgg04-gif already has a fork; if not,
+       forks it (waits up to 120s for the fork to become ready)
+    4. syncs the fork with upstream via merge-upstream endpoint
+    5. fetches the upstream README (153,336 bytes, sha 8636e52)
+    6. locates the ## Memory & Knowledge section + inserts the
+       dsh-cortexm entry at the end of that section (alphabetical
+       preservation respected)
+    7. PUTs the modified README to the fork (commit sha 173f3f0)
+    8. opens a PR from ssmurfgg04-gif:main → 0xsline:main with
+       maintainer_can_modify: True so the upstream owner can
+       re-push tweaks if needed
+- Submitted PR #524:
+    URL:   https://github.com/0xsline/awesome-deepseek-harness/pull/524
+    Title: Add dsh-cortexm — bi-temporal VSA memory + HMS cognition +
+           BLAKE3 provenance for DSH
+    Body:  full checklist (npm live, 8/8 e2e tests, LongMemEval 0.800,
+           fresh-install verified) + repo + docs + submission-doc
+           links.
+
+Stage Summary:
+- scripts/awesome_dsh_pr.py saved as a re-runnable artifact (idiomatic
+  if the entry needs to be updated for future dsh-cortexm versions).
+- PR #524 is open and visible to the upstream maintainer.
+- The fork ssmurfgg04-gif/awesome-deepseek-harness is now a clean
+  place to keep future dsh-cortexm update PRs.
