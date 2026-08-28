@@ -20,6 +20,9 @@ from context_m.security.injection import scan as injection_scan
 from context_m.security.injection import contagion_scan
 from context_m.trace import lifecycle
 from context_m.trace.contradictions import Action
+from context_m.trace.edges import (
+    wire_causal_edge, wire_refers_to, REFERS_TO,
+)
 from context_m.trace.fact import Fact, make_fact
 from context_m.trace.rules import RuleEngine
 from context_m.trace.store import TraceStore
@@ -340,6 +343,13 @@ class MemoryWriter:
                                 "superseded_by": fact.id})
                 self.store.add_edge(fact.id, old.id, "CONTRADICTS",
                                     {"reason": decision.note})
+                # Aeon-style CAUSAL edge: the new fact causally
+                # displaced the old one (the retraction / supersedence
+                # is the narrative cause; reader can walk CAUSAL to
+                # answer "why did X change?")
+                wire_causal_edge(
+                    self.store, fact.id, old.id,
+                    reason=f"superseded: {decision.note}")
             self.store.insert_fact(fact, commit)
             self.store.add_edge(fact.id, chunk_id, "EXTRACTED_FROM")
             self.palace.add(fact.id, self.palace.encode_fact(fact))
@@ -373,6 +383,12 @@ class MemoryWriter:
                     provenance={**f.provenance, "retracted_by": fact.id})
                 self.store.add_edge(fact.id, f.id, "CONTRADICTS",
                                     {"reason": "retraction (left org)"})
+                # Aeon CAUSAL: the retraction fact CAUSED the prior
+                # works_at fact to be retired — walking CAUSAL from the
+                # retired fact yields the retraction (and vice versa).
+                wire_causal_edge(
+                    self.store, fact.id, f.id,
+                    reason="retraction (left org)")
                 retired += 1
         self.store.insert_fact(fact, commit)
         self.store.add_edge(fact.id, chunk_id, "EXTRACTED_FROM")

@@ -209,7 +209,15 @@ def bench_with_arxiv(personas: list[dict], cfg: Config,
     idiolect = (PerUserIdiolectNormalizer(embedder)
                 if enable.get("unmess") else None)
     extractor = (QueryTimeExtractor(
-        palace, store, embedder, dissim=dissim, idiolect=idiolect,
+        palace, store, embedder,
+        writer=mem.writer,  # route through MemoryWriter — query-time facts
+                           # now go through the same quarantine / lifecycle
+                           # / palace / edges pipeline as ingest-time facts
+        reader=getattr(mem, "reader", None),  # primary retrieval via the
+                                              # structured reader so query-
+                                              # time path has parity with
+                                              # ingest-time mem.search()
+        dissim=dissim, idiolect=idiolect,
         pattern_extractor=getattr(mem, "extractor", None))
         if enable.get("query") else None)
 
@@ -300,6 +308,11 @@ def main():
                         help="number of personas to benchmark")
     parser.add_argument("--no-hf", action="store_true",
                         help="skip HuggingFace download, use synthetic")
+    parser.add_argument("--messy", action="store_true",
+                        help="messify synthetic personas — slang / compound / "
+                             "misspellings / text-speak so the unmess+dissim "
+                             "improvements have actual work to do (clean "
+                             "corpus floors everyone at ~1.0 recall)")
     parser.add_argument("--output", type=str,
                         default=str(REPO / "benchmarks" / "results" / "beam_10m.json"),
                         help="output JSON path")
@@ -316,6 +329,18 @@ def main():
         source = "synthetic_fallback"
     else:
         source = "huggingface"
+    # --messy: run the messifier over the synthetic corpus so unmess /
+    # dissim / fuzzy / idiolect actually have something to fix. Without
+    # this flag the clean corpus floors every config at ~1.0 recall and
+    # the arxiv improvements look pointless.
+    if args.messy and source == "synthetic_fallback":
+        from context_m.bench.messy import messify_persona_dict
+        messy_rng = random.Random(1337)
+        n_before = len(personas)
+        personas = [messify_persona_dict(p, messy_rng) for p in personas]
+        print(f"[beam-bench] --messy applied: messified {n_before} personas "
+              f"(sample: {personas[0]['text'][:80]}...)")
+        source = "synthetic_messy"
     print(f"[beam-bench] corpus: {len(personas)} personas from {source}")
 
     # 2. Run benchmarks

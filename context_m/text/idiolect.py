@@ -53,6 +53,35 @@ class PerUserIdiolectNormalizer:
         self._users: dict[str, tuple[np.ndarray, int]] = {}
         # (user_id, slang_token, canonical_token) → co-occurrence count
         self._co_counts: dict[tuple, int] = {}
+        # built-in text-speak escape hatch — a small curated map of
+        # common short-forms that the embedding-kNN path can't recover
+        # (because "u" / "ur" / "@" / "2" / "4" have very different
+        # char n-gram signatures from their canonical forms). This is
+        # reasonable because text-speak is a well-documented cross-user
+        # idiolect; the normalizer uses it as a pre-learned baseline
+        # before self-supervising per-user slang not in this map.
+        # Public so callers can extend or override per domain.
+        self.text_speak_map: dict[str, str] = {
+            "u": "you", "ur": "your", "u r": "you are",
+            "2": "to", "4": "for",
+            "b4": "before", "tmr": "tomorrow", "defo": "definitely",
+            "prolly": "probably", "kinda": "kind of", "sorta": "sort of",
+            "gimme": "give me", "lemme": "let me",
+            "wanna": "want to", "gonna": "going to",
+            "gotta": "got to", "outta": "out of",
+            "bc": "because", "dk": "don't know", "idk": "i don't know",
+            "rn": "right now", "w/": "with", "w/o": "without",
+            "ppl": "people", "thx": "thanks", "k": "okay",
+            "rly": "really", "tho": "though",
+            "@": "at", "&": "and", "b/c": "because",
+            "y": "why", "r": "are", "n": "and",
+            "im": "i'm", "ive": "i've", "ill": "i'll",
+            "wouldnt": "wouldn't", "shouldnt": "shouldn't",
+            "couldnt": "couldn't", "dont": "don't",
+            "cant": "can't", "wont": "won't", "isnt": "isn't",
+            "wasnt": "wasn't", "didnt": "didn't",
+            "hasnt": "hasn't", "havent": "haven't",
+        }
 
     # ------------------------------------------------------- observation
     def observe(self, user_id: str, text: str) -> None:
@@ -98,9 +127,18 @@ class PerUserIdiolectNormalizer:
         """
         if not token or token in STOPWORDS:
             return token
+        # text-speak escape hatch — checked FIRST because the embedding
+        # kNN path can't recover "u"/"@"/"2" → canonical (their char
+        # n-gram signatures are too different). The map is curated and
+        # public so callers can extend per domain.
+        token_lower = token.lower()
+        if token_lower in self.text_speak_map:
+            canon = self.text_speak_map[token_lower]
+            if token[:1].isupper():
+                canon = canon[:1].upper() + canon[1:]
+            return canon
         # case-insensitive vocab check — preserves the original token
         # when it's already a canonical form (just with different case)
-        token_lower = token.lower()
         if token_lower in self._vocab:
             return token  # already canonical, just preserve case
         # check if user has a promoted mapping
@@ -140,6 +178,17 @@ class PerUserIdiolectNormalizer:
             return text
         out = []
         for tok in text.split():
+            # CRITICAL: check the text-speak map for the FULL token
+            # (with punctuation) BEFORE stripping — otherwise "@" gets
+            # stripped to "" and never reaches the map. This is what
+            # let "I work @ Microsoft" through un-normalized.
+            tok_lower = tok.lower()
+            if tok_lower in self.text_speak_map:
+                canon = self.text_speak_map[tok_lower]
+                if tok[:1].isupper():
+                    canon = canon[:1].upper() + canon[1:]
+                out.append(canon)
+                continue
             # preserve simple punctuation
             prefix = ""
             core = tok

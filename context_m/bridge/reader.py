@@ -144,6 +144,21 @@ class MemoryReader:
             config.slb_entries, config.slb_threshold, config.dims)
         self._scope_cache: dict[tuple, frozenset] = {}
         self._queries = 0
+        # NSR-inspired swappable decoder (default = LLM prompt block,
+        # preserving the original reader._context_block behavior).
+        # Override via reader.with_decoder("rdf" | "datalog" | "json").
+        from context_m.bridge.decoders import get_decoder
+        self._decoder = get_decoder("llm_prompt")
+
+    def with_decoder(self, name: str) -> "MemoryReader":
+        """Swap the output decoder (NSR insight: same palace + Trace,
+        different decoder). Returns self for chaining.
+
+        Known decoders: 'llm_prompt' (default), 'rdf', 'datalog', 'json'.
+        """
+        from context_m.bridge.decoders import get_decoder
+        self._decoder = get_decoder(name)
+        return self
 
     # ------------------------------------------------------------- helpers
     def _scope_ids(self, user_id, agent_id, run_id, branch) -> frozenset:
@@ -602,23 +617,13 @@ class MemoryReader:
     # ------------------------------------------------------------- format
     def _context_block(self, query: str, intent: str, facts: list[Fact],
                        scores: dict, notes: list[str] | None = None) -> str:
-        lines = ["[Memory — Known facts]"]
-        if not facts and not notes:
-            lines.append("(no verified facts found for this query)")
-        for f in facts:
-            chunk = self.store.get_chunk(f.source_id) if f.source_id else None
-            snippet = ""
-            if chunk:
-                snippet = chunk["text"].replace("\n", " ")[:80]
-                if len(chunk["text"]) > 80:
-                    snippet += "..."
-            lines.append(
-                f"- {f.display()} [valid {f.valid_window()}; "
-                f"learned {f.tx_from[:10]}; conf {f.confidence:.2f}; "
-                f"id {f.id[:8]}; src #{f.source_hash[:8]}; \"{snippet}\"]")
-        for n in (notes or []):
-            lines.append(f"- {n}")
-        return "\n".join(lines)
+        # Route through the swappable decoder (default = LLMPromptDecoder
+        # preserves the original "[Memory — Known facts]" block format).
+        # Callers can swap via reader.with_decoder("rdf" | "datalog" | "json")
+        # to serve non-LLM workloads from the SAME retrieval pipeline.
+        return self._decoder.render(
+            query=query, intent=intent, facts=facts,
+            scores=scores or {}, notes=notes, store=self.store)
 
     def _provenance(self, query: str, facts: list[Fact],
                     vsa_scores: dict | None = None) -> dict:
