@@ -1,0 +1,15 @@
+{
+  "lifecycle": {
+    "promoted": 0,
+    "demoted": 0,
+    "deactivated": 0
+  },
+  "dreaming": {
+    "merged_pairs": 0,
+    "retired_facts": 0,
+    "palace_defragged": true,
+    "prefetcher_retrained": true,
+    "commit_id": "5b9869537e0942648e4df08247b16846",
+    "dry_run": false
+  }
+}
