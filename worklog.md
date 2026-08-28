@@ -2100,3 +2100,36 @@ Stage Summary:
 - PR #524 is open and visible to the upstream maintainer.
 - The fork ssmurfgg04-gif/awesome-deepseek-harness is now a clean
   place to keep future dsh-cortexm update PRs.
+
+---
+Task ID: 2026-08-29-release-smoke-fix
+Agent: main (Super Z)
+Task: Debug why the v0.5.0 release.yml workflow failed, fix, re-tag and re-push.
+
+Work Log:
+- release.yml failed at the "Quick smoke — import the built wheel"
+  step. Build succeeded (cortexm-0.5.0.tar.gz + cortexm-0.5.0-
+  py3-none-any.whl both built), version verification passed (tag
+  0.5.0 == pyproject 0.5.0), but the smoke-test install failed:
+      ERROR: Could not find a version that satisfies the requirement
+      numpy>=1.24 (from cortexm) (from versions: none)
+      ERROR: No matching distribution found for numpy>=1.24
+- Root cause: smoke step used `pip install --no-index --find-links
+  dist/ cortexm` — the --no-index flag forbade pip from fetching
+  numpy from PyPI, so pip could not satisfy the numpy>=1.24 dep
+  from dist/ alone.
+- Fix: switched to `pip install --find-links dist/ --no-deps cortexm`
+  (install only the cortexm wheel from dist/, skip dep resolution)
+  + separate `pip install numpy>=1.24` step (fetches numpy from PyPI).
+  Also tightened the assertion to `assert cortexm.LLM_CALLS == 0`
+  so the μ=0 invariant is verified at the build stage.
+- Re-tagged v0.5.0 (deleted + recreated) pointing to the fix commit
+  + force-pushed. The previous v0.5.0 tag had never published to
+  PyPI (build failed before publish), so no PyPI conflict.
+- Pushed main + new v0.5.0 tag. New release workflow run started
+  immediately (run_id=33211141132). Waiting for completion.
+
+Stage Summary:
+- release.yml smoke-test bug fixed in commit 6d3d9fb.
+- v0.5.0 tag re-pointed at 6d3d9fb (was 4e12df1).
+- New release workflow running.
