@@ -45,3 +45,4 @@ deploy/backups/
 benchmarks/llm/.cache/
 logs/
 *.log
+tool-results/
