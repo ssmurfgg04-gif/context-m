@@ -1,0 +1,100 @@
+# Run the REAL BEAM-10M benchmark on a GitHub Actions runner where
+# the HuggingFace CDN is reachable. Restores the BEAM-10M cache
+# produced by beam-cache.yml (or downloads on demand if cache miss).
+#
+# Triggers:
+#   - workflow_dispatch (manual "run BEAM bench" button)
+#   - workflow_run on beam-cache completion (auto-run after fresh data)
+#
+# Reports are committed to the bench/beam10m branch.
+
+name: beam-bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      n_personas:
+        description: "Number of BEAM-10M personas to bench"
+        required: false
+        default: "10"
+      max_turns:
+        description: "Max user turns per persona"
+        required: false
+        default: "100"
+      config:
+        description: "Feature stack: baseline | +unmess | +unmess+dissim | +unmess+dissim+query | all"
+        required: false
+        default: "all"
+  workflow_run:
+    workflows: ["beam-cache"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: beam-bench
+  cancel-in-progress: false
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Context-M
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[test]
+
+      - name: Restore BEAM-10M cache
+        id: cache-restore
+        uses: actions/cache@v4
+        with:
+          path: ./beam_cache
+          key: beam-10m-v1-
+          # find any prior cache; we'll download missing rows below
+
+      - name: Ensure BEAM-10M rows present
+        env:
+          BEAM_CACHE_DIR: ./beam_cache
+        run: |
+          mkdir -p "$BEAM_CACHE_DIR"
+          bash scripts/download_beam_full.sh
+
+      - name: Run BEAM-10M benchmark
+        env:
+          N_PERSONAS: ${{ github.event.inputs.n_personas || '10' }}
+          MAX_TURNS: ${{ github.event.inputs.max_turns || '100' }}
+          CONFIG: ${{ github.event.inputs.config || 'all' }}
+        run: |
+          python scripts/run_beam10m_benchmark.py \
+            --n-personas "$N_PERSONAS" \
+            --max-turns "$MAX_TURNS" \
+            --config "$CONFIG" \
+            --cache-dir ./beam_cache \
+            --out benchmarks/results/beam10m_real_gha.json
+
+      - name: Commit report to bench/beam10m branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b bench/beam10m 2>/dev/null || git checkout bench/beam10m
+          git add benchmarks/results/beam10m_real_gha.json
+          git commit -m "bench(beam10m): real GH-runner run $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]" || echo "nothing to commit"
+          git push origin bench/beam10m
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beam-bench-results
+          path: benchmarks/results/beam10m_real_gha.json
+          retention-days: 90

@@ -14,9 +14,19 @@ The HuggingFace datasets API is rate-limited from many sandboxes
 (hosted separately) IS reachable. This loader pulls via datasets-server
 so the bench works even when direct HF datasets API is blocked.
 
+BULK DOWNLOAD PATHS (added for full-dataset benchmarks):
+  - Local cache directory of per-row JSON files (preferred — produced
+    by scripts/download_beam_full.sh OR by the .github/workflows/
+    beam-cache.yml workflow that runs on a GitHub Actions runner)
+  - Local parquet file (if you have downloaded the full parquet via
+    `huggingface-cli download Mohammadta/BEAM-10M` on a runner whose
+    IP is not rate-limited; the file is ~342MB). Pass the path via
+    the BEAM_PARQUET env var or the parquet_path argument.
+  - datasets-server /rows endpoint as fallback (works in sandboxes)
+
 Usage:
     from context_m.bench.beam_loader import load_beam_rows
-    rows = load_beam_rows(n=2)  # fetch first 2 conversations
+    rows = load_beam_rows(n=10)  # fetch all 10 conversations
     for r in rows:
         print(r['conversation_id'])
         print(r['user_profile']['user_info'])
@@ -24,6 +34,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import urllib.request
 from pathlib import Path
 from typing import Iterator
@@ -33,6 +44,7 @@ DATASETS_SERVER = "https://datasets-server.huggingface.co"
 DATASET_NAME = "Mohammadta/BEAM-10M"
 CONFIG = "default"
 SPLIT = "10M"
+TOTAL_ROWS = 10  # the 10M split has 10 conversations, each ~10M tokens
 
 
 def _fetch_rows(offset: int = 0, length: int = 1) -> dict:
@@ -42,37 +54,90 @@ def _fetch_rows(offset: int = 0, length: int = 1) -> dict:
            f"&offset={offset}&length={length}")
     req = urllib.request.Request(
         url, headers={"User-Agent": "context-m-bench/1.0"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=600) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def load_beam_rows(n: int = 2, *, cache_dir: str | None = None) -> list[dict]:
+def _load_parquet(parquet_path: str | Path, n: int = TOTAL_ROWS) -> list[dict]:
+    """Load rows from a local parquet file (requires pyarrow or pandas).
+
+    Each parquet row has the same shape as the datasets-server /rows
+    endpoint's `row` field. We return just the row dicts (no envelope).
+    """
+    try:
+        import pyarrow.parquet as pq
+    except ImportError:
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "loading BEAM-10M from parquet requires pyarrow or "
+                "pandas — install with `pip install pyarrow` or "
+                "`pip install pandas`")
+        df = pd.read_parquet(parquet_path)
+        rows = []
+        for _, r in df.head(n).iterrows():
+            rows.append(r.to_dict() if hasattr(r, "to_dict") else dict(r))
+        return rows
+    table = pq.read_table(parquet_path)
+    n = min(n, table.num_rows)
+    rows = []
+    # batch-convert to Python dicts (column-at-a-time is faster than row)
+    cols = {name: table.column(name).to_pylist() for name in table.column_names}
+    for i in range(n):
+        rows.append({name: cols[name][i] for name in cols})
+    return rows
+
+
+def load_beam_rows(n: int = 2, *, cache_dir: str | None = None,
+                   parquet_path: str | None = None) -> list[dict]:
     """Load N BEAM-10M conversations.
+
+    Resolution order (first available wins):
+      1. parquet_path argument (or BEAM_PARQUET env var) — a single
+         parquet file containing all 10 rows
+      2. cache_dir/beam_row_<i>.json — per-row JSON files (the format
+         produced by download_beam_full.sh and beam-cache.yml)
+      3. datasets-server /rows endpoint — streamed on demand
 
     Each row is a dict with keys: conversation_id, conversation_seed,
     narratives, user_profile, conversation_plan, user_questions, chat,
     probing_questions, plans.
 
-    The dataset has 10 rows total. We fetch via the datasets-server
-    endpoint in batches of 1 (each row is ~100MB so single-row fetches
-    are safer than bulk).
-
-    Optionally caches to `cache_dir` to avoid re-downloading.
+    The full 10M dataset has 10 conversations totaling ~975MB in
+    memory. We fetch one row at a time (each is ~50-110MB).
     """
+    # 1. parquet path?
+    pq_path = parquet_path or os.environ.get("BEAM_PARQUET")
+    if pq_path and Path(pq_path).exists():
+        return _load_parquet(pq_path, n=min(n, TOTAL_ROWS))
+
     cache = Path(cache_dir) if cache_dir else None
     if cache:
         cache.mkdir(parents=True, exist_ok=True)
 
     rows: list[dict] = []
+    n = min(n, TOTAL_ROWS)
     for i in range(n):
-        # check cache first
+        # 2. cached row?
         cached_path = cache / f"beam_row_{i}.json" if cache else None
         if cached_path and cached_path.exists():
-            data = json.loads(cached_path.read_text())
-        else:
-            data = _fetch_rows(offset=i, length=1)
-            if cached_path:
-                cached_path.write_text(json.dumps(data))
+            try:
+                data = json.loads(cached_path.read_text())
+                if "rows" in data and data["rows"]:
+                    rows.append(data["rows"][0]["row"])
+                    continue
+                # some manifests store the row directly without envelope
+                if "conversation_id" in data:
+                    rows.append(data)
+                    continue
+            except (json.JSONDecodeError, KeyError):
+                # corrupt cache — re-fetch
+                cached_path.unlink(missing_ok=True)
+        # 3. fetch from datasets-server
+        data = _fetch_rows(offset=i, length=1)
+        if cached_path:
+            cached_path.write_text(json.dumps(data))
         if "rows" in data and data["rows"]:
             rows.append(data["rows"][0]["row"])
     return rows

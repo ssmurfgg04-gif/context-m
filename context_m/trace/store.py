@@ -42,6 +42,10 @@ CREATE INDEX IF NOT EXISTS idx_facts_active ON facts(is_active);
 CREATE INDEX IF NOT EXISTS idx_facts_rel ON facts(relation);
 CREATE INDEX IF NOT EXISTS idx_facts_valid ON facts(valid_from);
 CREATE INDEX IF NOT EXISTS idx_facts_birth ON facts(birth_commit);
+-- composite indexes added for the v2 SPARQL + REST query paths
+CREATE INDEX IF NOT EXISTS idx_facts_user_active ON facts(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_facts_value ON facts(value);
+CREATE INDEX IF NOT EXISTS idx_facts_subject_value ON facts(subject, value);
 
 CREATE TABLE IF NOT EXISTS edges (
   src TEXT NOT NULL, dst TEXT NOT NULL, kind TEXT NOT NULL,
@@ -50,6 +54,9 @@ CREATE TABLE IF NOT EXISTS edges (
 );
 CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
 CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
+-- kind index — critical for SPARQL `?a edge:CAUSAL ?b` queries that
+-- post-filter on the kind column
+CREATE INDEX IF NOT EXISTS idx_edges_kind ON edges(kind);
 
 CREATE TABLE IF NOT EXISTS chunks (
   id TEXT PRIMARY KEY, text TEXT NOT NULL,

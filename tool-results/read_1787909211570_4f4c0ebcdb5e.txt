@@ -1,0 +1,714 @@
+     1→"""Context-M REST API server — dependency-free, OpenAPI-documented.
+     2→
+     3→Enterprises integrate over HTTP, not Python. This server exposes the
+     4→full Memory fabric over a Mem0-compatible REST surface with:
+     5→
+     6→  * Bearer API-key auth (RBAC: admin / operator / reader / auditor)
+     7→  * token-bucket rate limiting per key
+     8→  * hash-chained audit logging of every request
+     9→  * Prometheus metrics at /metrics, liveness at /healthz, readiness
+    10→    with a real probe at /readyz
+    11→  * OpenAPI 3.1 spec served live at /openapi.json
+    12→  * governance endpoints: snapshot, restore, erase (GDPR), PITR
+    13→  * NSR-inspired swappable decoder surface: /v1/export?format=rdf|
+    14→    json|datalog|llm_prompt — same palace + Trace, different output
+    15→  * Aeon-inspired typed-edge + consolidate + chaos-ingest surface:
+    16→    /v1/consolidate (POST, admin) — triggers dreaming + lifecycle
+    17→    /v1/chaos       (POST, admin/operator) — zero-config auto-ingest
+    18→    /v1/sparql      (GET/POST, reader+) — inline SPARQL endpoint
+    19→  * Optional co-hosted SPARQL endpoint via `--sparql-port N`: shares
+    20→    one Memory instance with the REST API so external graph tools
+    21→    (Apache Jena, BlazeGraph, rdflib) can query Context-M directly.
+    22→  * SIGTERM/SIGINT graceful shutdown — in-flight requests drain.
+    23→
+    24→Zero third-party dependencies — stdlib ``http.server`` with a thread
+    25→pool, exactly like the MCP server (edge-deployable, μ=0 intact).
+    26→
+    27→Run:
+    28→    python -m context_m.server.rest --db /data/mem.db --port 8900
+    29→    python -m context_m.server.rest --sparql-port 8910   # co-hosted SPARQL
+    30→    CONTEXT_M_MASTER_KEY=$(cat /data/mem.db.key) python -m context_m.server.rest
+    31→"""
+    32→
+    33→from __future__ import annotations
+    34→
+    35→import argparse
+    36→import json
+    37→import signal
+    38→import threading
+    39→import time
+    40→from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    41→
+    42→from context_m import metrics as core_metrics
+    43→from context_m.api.memory import Memory
+    44→from context_m.config import Config
+    45→from context_m.security.rbac import (APIKeyStore, RBACError, authorize,
+    46→                                     ROLES)
+    47→from context_m.server.metrics import REGISTRY
+    48→
+    49→MAX_BODY = 8 * 1024 * 1024  # 8 MiB
+    50→
+    51→
+    52→# ------------------------------------------------------------------ ratelimit
+    53→class TokenBucket:
+    54→    def __init__(self, rate: float, burst: int) -> None:
+    55→        self.rate = rate
+    56→        self.burst = burst
+    57→        self._tokens: dict[str, list[float]] = {}
+    58→        self._lock = threading.Lock()
+    59→
+    60→    def allow(self, key: str) -> bool:
+    61→        now = time.monotonic()
+    62→        with self._lock:
+    63→            tokens, ts = self._tokens.get(key, [float(self.burst), now])
+    64→            refill = (now - ts) * self.rate
+    65→            tokens = min(float(self.burst), tokens + refill)
+    66→            if tokens < 1.0:
+    67→                self._tokens[key] = [tokens, now]
+    68→                return False
+    69→            self._tokens[key] = [tokens - 1.0, now]
+    70→            return True
+    71→
+    72→
+    73→# ------------------------------------------------------------------ openapi
+    74→def openapi_spec() -> dict:
+    75→    def op(summary: str, params: list | None = None, body: bool = False,
+    76→           roles: list[str] | None = None, responses=None) -> dict:
+    77→        d: dict = {"summary": summary, "responses": responses or
+    78→                   {"200": {"description": "OK"},
+    79→                    "401": {"description": "invalid or missing API key"},
+    80→                    "403": {"description": "role not permitted"},
+    81→                    "429": {"description": "rate limited"}}}
+    82→        tag = {"$ref": "#/components/securitySchemes/bearer"}
+    83→        if roles:
+    84→            d["description"] = f"roles: {', '.join(roles)}"
+    85→        d["security"] = [tag]
+    86→        if body:
+    87→            d["requestBody"] = {"required": True, "content": {
+    88→                "application/json": {"schema": {"type": "object"}}}}
+    89→        return d
+    90→
+    91→    paths = {
+    92→        "/healthz": {"get": {"summary": "Liveness probe (no auth)",
+    93→                              "security": [], "responses": {
+    94→                                  "200": {"description": "alive"}}}},
+    95→        "/readyz": {"get": {"summary": "Readiness probe (real store ping)",
+    96→                             "security": [],
+    97→                             "responses": {"200": {"description": "ready"},
+    98→                                           "503": {"description": "not ready"}}}},
+    99→        "/metrics": {"get": {"summary": "Prometheus metrics (no auth)",
+   100→                              "security": []}},
+   101→        "/openapi.json": {"get": {"summary": "This document", "security": []}},
+   102→        "/v1/add": {"post": op("Ingest messages (mu=0, Mem0-compatible)",
+   103→                                body=True, roles=["admin", "operator"])},
+   104→        "/v1/search": {"post": op("Neuro-symbolic retrieval with provenance",
+   105→                                   body=True,
+   106→                                   roles=["admin", "operator", "reader"])},
+   107→        "/v1/memories": {"get": op("List memories (Mem0 get_all)",
+   108→                                    roles=["admin", "operator", "reader"])},
+   109→        "/v1/memories/{id}": {"get": op("Get one memory with source"),
+   110→                              "delete": op("Delete one memory",
+   111→                                           roles=["admin", "operator"])},
+   112→        "/v1/memories/{id}/history": {"get": op("Bi-temporal history chain")},
+   113→        "/v1/users": {"get": op("Known user scopes",
+   114→                                 roles=["admin", "operator", "reader"])},
+   115→        "/v1/stats": {"get": op("Fabric statistics")},
+   116→        "/v1/verify": {"get": op("Integrity + audit chain verification",
+   117→                                  roles=["admin", "operator", "reader",
+   118→                                         "auditor"])},
+   119→        "/v1/audit": {"get": op("Audit log tail (admin/auditor)",
+   120→                                 roles=["admin", "auditor"])},
+   121→        "/v1/keys": {"post": op("Create API key", body=True, roles=["admin"]),
+   122→                      "get": op("List API keys", roles=["admin"])},
+   123→        "/v1/keys/{id}": {"delete": op("Revoke API key", roles=["admin"])},
+   124→        "/v1/snapshot": {"post": op("Atomic snapshot backup",
+   125→                                     body=True,
+   126→                                     roles=["admin", "operator"])},
+   127→        "/v1/restore": {"post": op("Restore from snapshot", body=True,
+   128→                                    roles=["admin"])},
+   129→        "/v1/erase": {"post": op("GDPR right-to-erasure", body=True,
+   130→                                  roles=["admin"])},
+   131→        "/v1/retention": {"post": op("Apply retention policy", body=True,
+   132→                                      roles=["admin"])},
+   133→        "/v1/state_at": {"post": op("Point-in-time recovery read", body=True,
+   134→                                     roles=["admin", "operator", "reader"])},
+   135→        "/v1/sparql": {"get": op("SPARQL SELECT (inline endpoint)",
+   136→                                  roles=["admin", "operator", "reader"]),
+   137→                       "post": op("SPARQL SELECT via POST body",
+   138→                                   body=True,
+   139→                                   roles=["admin", "operator", "reader"])},
+   140→        "/v1/export": {"get": op("Export facts via swappable decoder "
+   141→                                     "(?format=rdf|json|datalog|llm_prompt)",
+   142→                                     roles=["admin", "operator", "reader"])},
+   143→        "/v1/consolidate": {"post": op("Trigger lifecycle + dreaming pass",
+   144→                                           body=True, roles=["admin"])},
+   145→        "/v1/chaos": {"post": op("Zero-config auto-ingest (EAM chaos mode)",
+   146→                                    body=True,
+   147→                                    roles=["admin", "operator"])},
+   148→    }
+   149→    return {
+   150→        "openapi": "3.1.0",
+   151→        "info": {"title": "Context-M Memory Fabric API",
+   152→                 "version": "1.0.0",
+   153→                 "description": "Universal neuro-symbolic memory with "
+   154→                                "bi-temporal provenance, RBAC, audit chain, "
+   155→                                "GDPR governance. mu=0 ingest: zero LLM calls."},
+   156→        "servers": [{"url": "/"}],
+   157→        "components": {"securitySchemes": {
+   158→            "bearer": {"type": "http", "scheme": "bearer",
+   159→                       "description": "API key: ctxm_<role>_<hex>"}}},
+   160→        "security": [{"bearer": []}],
+   161→        "paths": paths,
+   162→        "tags": [{"name": "memory"}, {"name": "governance"},
+   163→                 {"name": "ops"}],
+   164→    }
+   165→
+   166→
+   167→# ------------------------------------------------------------------ handler
+   168→class FabricState:
+   169→    """Shared state: one Memory instance behind a re-entrant lock."""
+   170→
+   171→    def __init__(self, memory: Memory) -> None:
+   172→        self.memory = memory
+   173→        self.lock = threading.RLock()
+   174→        self.bucket = TokenBucket(memory.config.rate_limit_rps,
+   175→                                  memory.config.rate_limit_burst)
+   176→
+   177→    # expose key store helpers
+   178→    @property
+   179→    def keys(self) -> APIKeyStore:
+   180→        return self.memory.keys
+   181→
+   182→
+   183→def build_handler(state: FabricState):
+   184→
+   185→    class Handler(BaseHTTPRequestHandler):
+   186→        server_version = "context-m/1.0"
+   187→        protocol_version = "HTTP/1.1"
+   188→
+   189→        # -------------------------------------------------------- plumbing
+   190→        def log_message(self, fmt, *args):  # quiet access log
+   191→            pass
+   192→
+   193→        def _send(self, code: int, payload, content_type="application/json"):
+   194→            body = (payload if isinstance(payload, (bytes, bytearray))
+   195→                    else json.dumps(payload, default=str).encode())
+   196→            self.send_response(code)
+   197→            self.send_header("Content-Type", content_type)
+   198→            self.send_header("Content-Length", str(len(body)))
+   199→            self.end_headers()
+   200→            try:
+   201→                self.wfile.write(body)
+   202→            except (BrokenPipeError, ConnectionResetError):
+   203→                pass
+   204→
+   205→        def _body(self) -> dict:
+   206→            length = int(self.headers.get("Content-Length") or 0)
+   207→            if length > MAX_BODY:
+   208→                raise ValueError("body too large")
+   209→            if not length:
+   210→                return {}
+   211→            raw = self.rfile.read(length)
+   212→            try:
+   213→                return json.loads(raw or b"{}")
+   214→            except json.JSONDecodeError:
+   215→                raise ValueError("invalid JSON body")
+   216→
+   217→        def _auth(self, action: str) -> dict:
+   218→            hdr = self.headers.get("Authorization") or ""
+   219→            if not hdr.startswith("Bearer "):
+   220→                REGISTRY.inc("contextm_http_requests_total",
+   221→                             {"code": "401"})
+   222→                self._send(401, {"error": "missing bearer token"})
+   223→                return {}
+   224→            key = hdr[7:].strip()
+   225→            meta = state.keys.verify(key)
+   226→            if meta is None:
+   227→                state.memory.audit_log.log("auth.failure",
+   228→                                       actor=key[:16] + "…",
+   229→                                       outcome="invalid_key")
+   230→                REGISTRY.inc("contextm_http_requests_total",
+   231→                             {"code": "401"})
+   232→                self._send(401, {"error": "invalid or revoked key"})
+   233→                return {}
+   234→            if not state.bucket.allow(key):
+   235→                REGISTRY.inc("contextm_http_requests_total",
+   236→                             {"code": "429"})
+   237→                self._send(429, {"error": "rate limit exceeded"})
+   238→                return {}
+   239→            try:
+   240→                authorize(meta, action)
+   241→            except RBACError as e:
+   242→                state.memory.audit_log.log(action, actor=meta.get("label")
+   243→                                       or meta.get("id", "key"),
+   244→                                       role=meta.get("role"),
+   245→                                       outcome="denied")
+   246→                REGISTRY.inc("contextm_http_requests_total",
+   247→                             {"code": "403"})
+   248→                self._send(403, {"error": str(e)})
+   249→                return {}
+   250→            REGISTRY.inc("contextm_http_requests_total", {"code": "200"})
+   251→            return meta
+   252→
+   253→        # -------------------------------------------------------- routing
+   254→        def do_GET(self):
+   255→            path = self.path.split("?")[0].rstrip("/") or "/"
+   256→            if path == "/healthz":
+   257→                return self._send(200, {"status": "alive"})
+   258→            if path == "/readyz":
+   259→                try:
+   260→                    with state.lock:
+   261→                        state.memory.store.conn.execute("SELECT 1")
+   262→                    return self._send(200, {"status": "ready"})
+   263→                except Exception:
+   264→                    return self._send(503, {"status": "not ready"})
+   265→            if path == "/metrics":
+   266→                REGISTRY.gauge("contextm_uptime_seconds",
+   267→                               time.monotonic())
+   268→                return self._send(200, REGISTRY.render(),
+   269→                                  content_type="text/plain; version=0.0.4")
+   270→            if path == "/openapi.json":
+   271→                return self._send(200, openapi_spec())
+   272→            if path == "/v1/memories":
+   273→                meta = self._auth("memory.get_all")
+   274→                if not meta:
+   275→                    return
+   276→                from urllib.parse import parse_qs, urlparse
+   277→                q = parse_qs(urlparse(self.path).query)
+   278→                with state.lock:
+   279→                    out = state.memory.get_all(
+   280→                        user_id=(q.get("user_id") or [None])[0],
+   281→                        limit=int((q.get("limit") or [200])[0]))
+   282→                return self._send(200, out)
+   283→            if path.startswith("/v1/memories/"):
+   284→                parts = path.split("/")
+   285→                mid = parts[3]
+   286→                if len(parts) >= 5 and parts[4] == "history":
+   287→                    meta = self._auth("memory.history")
+   288→                    if not meta:
+   289→                        return
+   290→                    with state.lock:
+   291→                        return self._send(200, state.memory.history(mid))
+   292→                meta = self._auth("memory.get")
+   293→                if not meta:
+   294→                    return
+   295→                with state.lock:
+   296→                    got = state.memory.get(mid)
+   297→                return self._send(200, got or {"error": "not found"},
+   298→                                  ) if got else self._send(404, {"error": "not found"})
+   299→            if path == "/v1/users":
+   300→                meta = self._auth("memory.get_all")
+   301→                if not meta:
+   302→                    return
+   303→                with state.lock:
+   304→                    return self._send(200, {"users":
+   305→                                            state.memory.users()})
+   306→            if path == "/v1/stats":
+   307→                meta = self._auth("memory.stats")
+   308→                if not meta:
+   309→                    return
+   310→                with state.lock:
+   311→                    return self._send(200, state.memory.stats())
+   312→            if path == "/v1/verify":
+   313→                meta = self._auth("memory.verify")
+   314→                if not meta:
+   315→                    return
+   316→                with state.lock:
+   317→                    out = state.memory.verify_integrity()
+   318→                    out["audit_chain"] = state.memory.audit_log.verify()
+   319→                return self._send(200, out)
+   320→            if path == "/v1/audit":
+   321→                meta = self._auth("audit.read")
+   322→                if not meta:
+   323→                    return
+   324→                from urllib.parse import parse_qs, urlparse
+   325→                q = parse_qs(urlparse(self.path).query)
+   326→                with state.lock:
+   327→                    rows = state.memory.audit_log.tail(
+   328→                        n=int((q.get("n") or [50])[0]),
+   329→                        actor=(q.get("actor") or [None])[0],
+   330→                        action=(q.get("action") or [None])[0])
+   331→                return self._send(200, {"events": rows})
+   332→            if path == "/v1/keys":
+   333→                meta = self._auth("keys.list")
+   334→                if not meta:
+   335→                    return
+   336→                with state.lock:
+   337→                    return self._send(200, {"keys": state.keys.list_keys()})
+   338→            # GET /v1/sparql?query=SELECT... — inline SPARQL endpoint
+   339→            if path == "/v1/sparql":
+   340→                meta = self._auth("sparql.query")
+   341→                if not meta:
+   342→                    return
+   343→                actor = meta.get("label") or meta.get("id", "key")
+   344→                out = self._h_sparql({}, actor, meta)
+   345→                return self._send(200, out)
+   346→            # GET /v1/export?format=rdf|json|datalog|llm_prompt
+   347→            if path == "/v1/export":
+   348→                meta = self._auth("memory.export")
+   349→                if not meta:
+   350→                    return
+   351→                actor = meta.get("label") or meta.get("id", "key")
+   352→                out = self._h_export({}, actor, meta)
+   353→                return self._send(200, out)
+   354→            return self._send(404, {"error": f"no route {path}"})
+   355→
+   356→        def do_POST(self):
+   357→            path = self.path.split("?")[0].rstrip("/")
+   358→            t0 = time.monotonic()
+   359→            try:
+   360→                body = self._body()
+   361→            except ValueError as e:
+   362→                return self._send(400, {"error": str(e)})
+   363→
+   364→            routes = {
+   365→                "/v1/add": ("memory.add", self._h_add),
+   366→                "/v1/search": ("memory.search", self._h_search),
+   367→                "/v1/keys": ("keys.create", self._h_key_create),
+   368→                "/v1/snapshot": ("governance.snapshot", self._h_snapshot),
+   369→                "/v1/restore": ("governance.restore", self._h_restore),
+   370→                "/v1/erase": ("governance.erase", self._h_erase),
+   371→                "/v1/retention": ("governance.retention", self._h_retention),
+   372→                "/v1/state_at": ("governance.pitr", self._h_state_at),
+   373→                "/v1/sparql": ("sparql.query", self._h_sparql),
+   374→                "/v1/export": ("memory.export", self._h_export),
+   375→                "/v1/consolidate": ("governance.consolidate",
+   376→                                       self._h_consolidate),
+   377→                "/v1/chaos": ("memory.chaos_ingest", self._h_chaos),
+   378→            }
+   379→            if path not in routes:
+   380→                return self._send(404, {"error": f"no route {path}"})
+   381→            action, fn = routes[path]
+   382→            meta = self._auth(action)
+   383→            if not meta:
+   384→                return
+   385→            actor = meta.get("label") or meta.get("id", "key")
+   386→            try:
+   387→                out = fn(body, actor, meta)
+   388→                REGISTRY.observe("contextm_http_request_seconds",
+   389→                                 time.monotonic() - t0)
+   390→                return self._send(200, out)
+   391→            except RBACError as e:
+   392→                return self._send(403, {"error": str(e)})
+   393→            except Exception as e:  # noqa: BLE001
+   394→                REGISTRY.inc("contextm_http_requests_total",
+   395→                             {"code": "500"})
+   396→                state.memory.audit_log.log(action, actor=actor,
+   397→                                       role=meta.get("role"),
+   398→                                       outcome="error",
+   399→                                       meta={"error": str(e)[:200]})
+   400→                return self._send(500, {"error": str(e)[:500]})
+   401→
+   402→        def do_DELETE(self):
+   403→            path = self.path.split("?")[0].rstrip("/")
+   404→            parts = path.split("/")
+   405→            if path.startswith("/v1/memories/") and len(parts) == 4:
+   406→                meta = self._auth("memory.delete")
+   407→                if not meta:
+   408→                    return
+   409→                with state.lock:
+   410→                    out = state.memory.delete(parts[3])
+   411→                return self._send(200, out)
+   412→            if path.startswith("/v1/keys/") and len(parts) == 4:
+   413→                meta = self._auth("keys.revoke")
+   414→                if not meta:
+   415→                    return
+   416→                with state.lock:
+   417→                    ok = state.keys.revoke(parts[3])
+   418→                state.memory.audit_log.log("keys.revoke",
+   419→                                       actor=meta.get("label") or "admin",
+   420→                                       resource=parts[3],
+   421→                                       outcome="revoked" if ok else "missing")
+   422→                return self._send(200, {"revoked": ok})
+   423→            return self._send(404, {"error": f"no route {path}"})
+   424→
+   425→        # -------------------------------------------------------- handlers
+   426→        def _h_add(self, body, actor, meta):
+   427→            with state.lock:
+   428→                out = state.memory.add(
+   429→                    body.get("messages", body.get("text", "")),
+   430→                    user_id=body.get("user_id"),
+   431→                    agent_id=body.get("agent_id"),
+   432→                    run_id=body.get("run_id"),
+   433→                    metadata=body.get("metadata"),
+   434→                    timestamp=body.get("timestamp"))
+   435→            state.memory.audit_log.log(
+   436→                "memory.add", actor=actor, role=meta.get("role"),
+   437→                resource=body.get("user_id") or "default",
+   438→                meta={"facts": len(out.get("results", []))})
+   439→            return out
+   440→
+   441→        def _h_search(self, body, actor, meta):
+   442→            with state.lock:
+   443→                out = state.memory.search(
+   444→                    body.get("query", ""),
+   445→                    user_id=body.get("user_id"),
+   446→                    limit=body.get("limit") or body.get("k"))
+   447→            state.memory.audit_log.log(
+   448→                "memory.search", actor=actor, role=meta.get("role"),
+   449→                resource=body.get("user_id") or "default",
+   450→                meta={"intent": out.get("intent")})
+   451→            return out
+   452→
+   453→        def _h_key_create(self, body, actor, meta):
+   454→            role = body.get("role", "reader")
+   455→            if role not in ROLES:
+   456→                return {"error": f"role must be one of {ROLES}"}
+   457→            with state.lock:
+   458→                out = state.keys.create(role, label=body.get("label", ""),
+   459→                                        actor=actor,
+   460→                                        ttl_seconds=body.get("ttl_seconds"))
+   461→            state.memory.audit_log.log("keys.create", actor=actor,
+   462→                                   resource=out["id"],
+   463→                                   meta={"role": role})
+   464→            return out
+   465→
+   466→        def _h_snapshot(self, body, actor, meta):
+   467→            path = body.get("path")
+   468→            if not path:
+   469→                return {"error": "path required"}
+   470→            with state.lock:
+   471→                return state.memory.governance.snapshot(path)
+   472→
+   473→        def _h_restore(self, body, actor, meta):
+   474→            path = body.get("path")
+   475→            if not path:
+   476→                return {"error": "path required"}
+   477→            with state.lock:
+   478→                return state.memory.governance.restore(path)
+   479→
+   480→        def _h_erase(self, body, actor, meta):
+   481→            uid = body.get("user_id")
+   482→            if not uid:
+   483→                return {"error": "user_id required"}
+   484→            with state.lock:
+   485→                return state.memory.governance.erase_user(
+   486→                    uid, crypto_shred=bool(body.get("crypto_shred", True)))
+   487→
+   488→        def _h_retention(self, body, actor, meta):
+   489→            days = int(body.get("days", 0))
+   490→            with state.lock:
+   491→                return state.memory.governance.apply_retention(
+   492→                    days, user_id=body.get("user_id"),
+   493→                    dry_run=bool(body.get("dry_run", False)))
+   494→
+   495→        def _h_state_at(self, body, actor, meta):
+   496→            when = body.get("when")
+   497→            if not when:
+   498→                return {"error": "when required (ISO datetime)"}
+   499→            with state.lock:
+   500→                rows = state.memory.governance.state_at(
+   501→                    when, user_id=body.get("user_id"))
+   502→            return {"facts": rows}
+   503→
+   504→        # ---------------------------------------- NSR / Aeon / EAM surface
+   505→        def _h_sparql(self, body, actor, meta):
+   506→            """Inline SPARQL endpoint — auth'd, shares one Memory.
+   507→
+   508→            GET  /v1/sparql?query=SELECT...
+   509→            POST /v1/sparql  {"query": "SELECT ..."}
+   510→            """
+   511→            # body is {} for GET — parse query string instead
+   512→            query = (body.get("query") if body else None) or ""
+   513→            if not query:
+   514→                from urllib.parse import parse_qs, urlparse
+   515→                q = parse_qs(urlparse(self.path).query)
+   516→                query = q.get("query", [""])[0]
+   517→            if not query:
+   518→                return {"error": "missing 'query' parameter"}
+   519→            try:
+   520→                from context_m.server.sparql import (
+   521→                    execute_sparql, edge_triples)
+   522→                with state.lock:
+   523→                    fact_objs = state.memory.store.query_facts(
+   524→                        active=True,
+   525→                        user_id=body.get("user_id") if body else None)
+   526→                    facts = [(f.subject, f.relation, f.value)
+   527→                             for f in fact_objs]
+   528→                    edges = edge_triples(state.memory,
+   529→                                          user_id=body.get("user_id")
+   530→                                          if body else None)
+   531→                    arena = getattr(state.memory, "blob_arena", None)
+   532→                    blob_resolver = None
+   533→                    if arena is not None:
+   534→                        def _resolve(_s, _r, val):
+   535→                            from context_m.trace.blob_arena import \
+   536→                                get_chunk_text
+   537→                            return get_chunk_text(state.memory.store,
+   538→                                                   arena, val)
+   539→                        blob_resolver = _resolve
+   540→                out = execute_sparql(query, facts,
+   541→                                       user_id=body.get("user_id")
+   542→                                       if body else None,
+   543→                                       edge_triples=edges,
+   544→                                       blob_resolver=blob_resolver)
+   545→                state.memory.audit_log.log(
+   546→                    "sparql.query", actor=actor, role=meta.get("role"),
+   547→                    meta={"n_results": out.get("n_results", 0),
+   548→                           "query_head": query[:80]})
+   549→                return out
+   550→            except ValueError as e:
+   551→                return {"error": str(e)}
+   552→            except Exception as e:  # noqa: BLE001
+   553→                return {"error": f"server: {e}"}
+   554→
+   555→        def _h_export(self, body, actor, meta):
+   556→            """Export facts via the swappable decoder.
+   557→
+   558→            GET /v1/export?format=rdf|json|datalog|llm_prompt&user_id=X
+   559→            """
+   560→            from urllib.parse import parse_qs, urlparse
+   561→            q = parse_qs(urlparse(self.path).query)
+   562→            fmt = (q.get("format") or ["llm_prompt"])[0]
+   563→            user_id = (q.get("user_id") or [None])[0]
+   564→            from context_m.bridge.decoders import get_decoder
+   565→            try:
+   566→                decoder = get_decoder(fmt)
+   567→            except ValueError as e:
+   568→                return {"error": str(e)}
+   569→            with state.lock:
+   570→                facts = state.memory.store.query_facts(
+   571→                    active=True, user_id=user_id)
+   572→                # score by recency for export ordering
+   573→                scores = {f.id: 1.0 for f in facts}
+   574→                out = decoder.render(
+   575→                    query="", intent="export", facts=list(facts),
+   576→                    scores=scores, notes=None,
+   577→                    store=state.memory.store)
+   578→            state.memory.audit_log.log(
+   579→                "memory.export", actor=actor, role=meta.get("role"),
+   580→                resource=user_id or "default",
+   581→                meta={"format": fmt, "n_facts": len(facts)})
+   582→            # for json decoder, return parsed; otherwise return text
+   583→            if fmt == "json":
+   584→                try:
+   585→                    return json.loads(out)
+   586→                except json.JSONDecodeError:
+   587→                    pass
+   588→            return {"format": fmt, "n_facts": len(facts),
+   589→                    "content": out}
+   590→
+   591→        def _h_consolidate(self, body, actor, meta):
+   592→            """Trigger the consolidate() dreaming + lifecycle pass.
+   593→
+   594→            POST /v1/consolidate {"dry_run": false, "lifecycle": true,
+   595→                                  "dreaming": true, "user_id": null}
+   596→            """
+   597→            with state.lock:
+   598→                out = state.memory.consolidate(
+   599→                    dry_run=bool(body.get("dry_run", False)),
+   600→                    lifecycle=bool(body.get("lifecycle", True)),
+   601→                    dreaming=bool(body.get("dreaming", True)),
+   602→                    user_id=body.get("user_id"))
+   603→            state.memory.audit_log.log(
+   604→                "governance.consolidate", actor=actor,
+   605→                role=meta.get("role"),
+   606→                meta={"dry_run": bool(body.get("dry_run", False)),
+   607→                       "lifecycle": out.get("lifecycle", {}),
+   608→                       "dreaming": out.get("dreaming", {})})
+   609→            return out
+   610→
+   611→        def _h_chaos(self, body, actor, meta):
+   612→            """Zero-config auto-ingest (EAM chaos mode).
+   613→
+   614→            POST /v1/chaos {"texts": ["...", ...], "user_id": "default"}
+   615→            POST /v1/chaos {"text": "...", "user_id": "default"}
+   616→            """
+   617→            from context_m.api.chaos import chaos_ingest
+   618→            texts = body.get("texts")
+   619→            if texts is None:
+   620→                texts = [body.get("text", "")] if body.get("text") else []
+   621→            if not texts:
+   622→                return {"error": "missing 'text' or 'texts' field"}
+   623→            user_id = body.get("user_id", "default")
+   624→            with state.lock:
+   625→                out = chaos_ingest(state.memory, texts, user_id=user_id,
+   626→                                   agent_id=body.get("agent_id"),
+   627→                                   run_id=body.get("run_id"))
+   628→            state.memory.audit_log.log(
+   629→                "memory.chaos_ingest", actor=actor, role=meta.get("role"),
+   630→                resource=user_id,
+   631→                meta={"n_facts": out.get("stats", {}).get(
+   632→                    "facts_inserted", 0)})
+   633→            return out
+   634→
+   635→    return Handler
+   636→
+   637→
+   638→# ------------------------------------------------------------------ launch
+   639→def serve(memory: Memory | None = None, host: str = "0.0.0.0",
+   640→          port: int = 8900, *, sparql_port: int | None = None,
+   641→          sparql_host: str = "0.0.0.0",
+   642→          sparql_user_id: str | None = None) -> ThreadingHTTPServer:
+   643→    if memory is None:
+   644→        memory = Memory(Config.from_env())
+   645→    state = FabricState(memory)
+   646→    httpd = ThreadingHTTPServer((host, port), build_handler(state))
+   647→    httpd.daemon_threads = True
+   648→    # optionally co-host a SPARQL endpoint sharing the same Memory instance
+   649→    if sparql_port:
+   650→        from context_m.server.sparql import SparqlServer
+   651→        sparql = SparqlServer(memory, host=sparql_host, port=sparql_port,
+   652→                               user_id=sparql_user_id)
+   653→        sparql.start_background()
+   654→        httpd.sparql = sparql  # type: ignore[attr-defined]
+   655→    return httpd
+   656→
+   657→
+   658→def main() -> None:
+   659→    ap = argparse.ArgumentParser(prog="contextm-serve",
+   660→                                 description="Context-M REST API server")
+   661→    ap.add_argument("--db", default=":memory:", help="SQLite path")
+   662→    ap.add_argument("--host", default="0.0.0.0")
+   663→    ap.add_argument("--port", type=int, default=8900)
+   664→    ap.add_argument("--pii", default=None,
+   665→                    help="off|redact|block|tag (default: config/env)")
+   666→    ap.add_argument("--admin-key", default=None,
+   667→                    help="create this admin API key at boot (dev convenience)")
+   668→    ap.add_argument("--sparql-port", type=int, default=None,
+   669→                    help="co-host a SPARQL endpoint on this port "
+   670→                         "(shares one Memory instance with the REST API)")
+   671→    ap.add_argument("--sparql-host", default="0.0.0.0",
+   672→                    help="bind SPARQL endpoint to this host")
+   673→    ap.add_argument("--sparql-user-id", default=None,
+   674→                    help="scope SPARQL queries to a single user")
+   675→    args = ap.parse_args()
+   676→
+   677→    cfg = Config.from_env(db_path=args.db)
+   678→    if args.pii:
+   679→        cfg.pii_mode = args.pii
+   680→    memory = Memory(cfg)
+   681→    if args.admin_key:
+   682→        meta = memory.keys.create("admin", label="boot-admin")
+   683→        print(f"[context-m] admin API key (save now, shown once): {meta['key']}")
+   684→    httpd = serve(memory, args.host, args.port,
+   685→                  sparql_port=args.sparql_port,
+   686→                  sparql_host=args.sparql_host,
+   687→                  sparql_user_id=args.sparql_user_id)
+   688→    print(f"[context-m] REST API on http://{args.host}:{args.port}"
+   689→          f"  (db={args.db}, pii={cfg.pii_mode}, "
+   690→          f"encrypt={cfg.encryption_at_rest})")
+   691→    if args.sparql_port:
+   692→        print(f"[context-m] SPARQL endpoint on http://{args.sparql_host}:"
+   693→              f"{args.sparql_port}/  (co-hosted, shares Memory)")
+   694→
+   695→    # graceful shutdown on SIGTERM/SIGINT — drain in-flight requests
+   696→    def _shutdown(signum, frame):
+   697→        print(f"\n[context-m] received signal {signum} — shutting down...")
+   698→        sparql = getattr(httpd, "sparql", None)
+   699→        if sparql is not None:
+   700→            sparql.stop()
+   701→        httpd.shutdown()  # unblocks serve_forever()
+   702→    signal.signal(signal.SIGTERM, _shutdown)
+   703→    signal.signal(signal.SIGINT, _shutdown)
+   704→    try:
+   705→        httpd.serve_forever()
+   706→    except KeyboardInterrupt:
+   707→        pass
+   708→    finally:
+   709→        memory.close()
+   710→
+   711→
+   712→if __name__ == "__main__":
+   713→    main()
+   714→

@@ -1,0 +1,545 @@
+{
+  "benchmark": "beam10m_real",
+  "source": "Mohammadta/BEAM-10M",
+  "n_personas": 10,
+  "max_turns_per_persona": 50,
+  "total_chars": 183812,
+  "total_ground_truth_facts": 81,
+  "configs": {
+    "baseline": {
+      "config": "baseline",
+      "n_facts_stored": 238,
+      "extraction_recall": 0.8889,
+      "retrieval_precision_at_5": 0.3827,
+      "ingest_time_s": 0.39,
+      "query_time_s": 0.28,
+      "ms_per_ingest_persona": 38.6,
+      "ms_per_query": 3.5,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess": {
+      "config": "+unmess",
+      "n_facts_stored": 243,
+      "extraction_recall": 0.8889,
+      "retrieval_precision_at_5": 0.3827,
+      "ingest_time_s": 14.83,
+      "query_time_s": 0.31,
+      "ms_per_ingest_persona": 1483.3,
+      "ms_per_query": 3.8,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess+dissim": {
+      "config": "+unmess+dissim",
+      "n_facts_stored": 273,
+      "extraction_recall": 1.0,
+      "retrieval_precision_at_5": 0.4938,
+      "ingest_time_s": 17.91,
+      "query_time_s": 0.33,
+      "ms_per_ingest_persona": 1791.0,
+      "ms_per_query": 4.0,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess+dissim+query": {
+      "config": "+unmess+dissim+query",
+      "n_facts_stored": 273,
+      "extraction_recall": 1.0,
+      "retrieval_precision_at_5": 0.4444,
+      "ingest_time_s": 18.3,
+      "query_time_s": 0.33,
+      "ms_per_ingest_persona": 1829.8,
+      "ms_per_query": 4.0,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    }
+  },
+  "personas": [
+    {
+      "user_id": "beam_1",
+      "n_turns": 50,
+      "n_facts": 9,
+      "text_chars": 42418,
+      "facts": [
+        {
+          "subject": "beam_1",
+          "relation": "name",
+          "value": "Jennifer Mccall"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "age",
+          "value": "59"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "parent",
+          "value": "Alicia"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "partner",
+          "value": "James"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "child",
+          "value": "Mary"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "child",
+          "value": "Nancy"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_2",
+      "n_turns": 50,
+      "n_facts": 10,
+      "text_chars": 29096,
+      "facts": [
+        {
+          "subject": "beam_2",
+          "relation": "name",
+          "value": "Jason Mccall"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "age",
+          "value": "37"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "parent",
+          "value": "Heather"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "parent",
+          "value": "Kevin"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Mary"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Nicholas"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Timothy"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_3",
+      "n_turns": 50,
+      "n_facts": 6,
+      "text_chars": 32261,
+      "facts": [
+        {
+          "subject": "beam_3",
+          "relation": "name",
+          "value": "Jason Mccall"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "age",
+          "value": "29"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "partner",
+          "value": "Catherine"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_4",
+      "n_turns": 50,
+      "n_facts": 10,
+      "text_chars": 15090,
+      "facts": [
+        {
+          "subject": "beam_4",
+          "relation": "name",
+          "value": "Crystal Prince"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "age",
+          "value": "37"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "location",
+          "value": "New Joshua, Central African Republic"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "profession",
+          "value": "Communications Engineer"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "parent",
+          "value": "Judith"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "partner",
+          "value": "David"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "child",
+          "value": "Michael"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "child",
+          "value": "Kirsten"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "child",
+          "value": "Juan"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_5",
+      "n_turns": 50,
+      "n_facts": 7,
+      "text_chars": 15647,
+      "facts": [
+        {
+          "subject": "beam_5",
+          "relation": "name",
+          "value": "Elizabeth Lane"
+        },
+        {
+          "subject": "beam_5",
+          "relation": "age",
+          "value": "51"
+        },
+        {
+          "subject": "beam_5",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_5",
+          "relation": "location",
+          "value": "Stephenview, Dominican Republic"
+        },
+        {
+          "subject": "beam_5",
+          "relation": "profession",
+          "value": "Insurance Claims Handler"
+        },
+        {
+          "subject": "beam_5",
+          "relation": "partner",
+          "value": "Devin"
+        },
+        {
+          "subject": "beam_5",
+          "relation": "child",
+          "value": "Dillon"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_6",
+      "n_turns": 50,
+      "n_facts": 10,
+      "text_chars": 8457,
+      "facts": [
+        {
+          "subject": "beam_6",
+          "relation": "name",
+          "value": "Rachel Barnett"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "age",
+          "value": "48"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "location",
+          "value": "New Jeffreytown, Christmas Island"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "profession",
+          "value": "Lecturer, Higher Education"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "parent",
+          "value": "Amanda"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "partner",
+          "value": "Brian"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "child",
+          "value": "Barbara"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "child",
+          "value": "Christian"
+        },
+        {
+          "subject": "beam_6",
+          "relation": "child",
+          "value": "Marvin"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_7",
+      "n_turns": 50,
+      "n_facts": 7,
+      "text_chars": 11547,
+      "facts": [
+        {
+          "subject": "beam_7",
+          "relation": "name",
+          "value": "Richard Barnett"
+        },
+        {
+          "subject": "beam_7",
+          "relation": "age",
+          "value": "34"
+        },
+        {
+          "subject": "beam_7",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_7",
+          "relation": "location",
+          "value": "New Jeffreytown, Christmas Island"
+        },
+        {
+          "subject": "beam_7",
+          "relation": "profession",
+          "value": "Lecturer, Higher Education"
+        },
+        {
+          "subject": "beam_7",
+          "relation": "parent",
+          "value": "Tracey"
+        },
+        {
+          "subject": "beam_7",
+          "relation": "partner",
+          "value": "Jenna"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_8",
+      "n_turns": 50,
+      "n_facts": 7,
+      "text_chars": 7779,
+      "facts": [
+        {
+          "subject": "beam_8",
+          "relation": "name",
+          "value": "Rachel Barnett"
+        },
+        {
+          "subject": "beam_8",
+          "relation": "age",
+          "value": "37"
+        },
+        {
+          "subject": "beam_8",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_8",
+          "relation": "location",
+          "value": "New Jeffreytown, Christmas Island"
+        },
+        {
+          "subject": "beam_8",
+          "relation": "profession",
+          "value": "Lecturer, Higher Education"
+        },
+        {
+          "subject": "beam_8",
+          "relation": "parent",
+          "value": "Cynthia"
+        },
+        {
+          "subject": "beam_8",
+          "relation": "partner",
+          "value": "Chris"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_9",
+      "n_turns": 50,
+      "n_facts": 8,
+      "text_chars": 9868,
+      "facts": [
+        {
+          "subject": "beam_9",
+          "relation": "name",
+          "value": "Rachel Barnett"
+        },
+        {
+          "subject": "beam_9",
+          "relation": "age",
+          "value": "35"
+        },
+        {
+          "subject": "beam_9",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_9",
+          "relation": "location",
+          "value": "New Jeffreytown, Christmas Island"
+        },
+        {
+          "subject": "beam_9",
+          "relation": "profession",
+          "value": "Lecturer, Higher Education"
+        },
+        {
+          "subject": "beam_9",
+          "relation": "child",
+          "value": "Barbara"
+        },
+        {
+          "subject": "beam_9",
+          "relation": "child",
+          "value": "Brittany"
+        },
+        {
+          "subject": "beam_9",
+          "relation": "child",
+          "value": "Maria"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_10",
+      "n_turns": 50,
+      "n_facts": 7,
+      "text_chars": 11649,
+      "facts": [
+        {
+          "subject": "beam_10",
+          "relation": "name",
+          "value": "Richard Barnett"
+        },
+        {
+          "subject": "beam_10",
+          "relation": "age",
+          "value": "42"
+        },
+        {
+          "subject": "beam_10",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_10",
+          "relation": "location",
+          "value": "New Jeffreytown, Christmas Island"
+        },
+        {
+          "subject": "beam_10",
+          "relation": "profession",
+          "value": "Lecturer, Higher Education"
+        },
+        {
+          "subject": "beam_10",
+          "relation": "parent",
+          "value": "Laura"
+        },
+        {
+          "subject": "beam_10",
+          "relation": "partner",
+          "value": "Tracy"
+        }
+      ]
+    }
+  ]
+}

@@ -43,6 +43,13 @@ def main(argv=None) -> int:
                                                     "block", "tag"])
     p.add_argument("--admin-key", default=None,
                    help="mint an admin API key at boot (printed once)")
+    p.add_argument("--sparql-port", type=int, default=None,
+                   help="co-host a SPARQL endpoint on this port "
+                        "(shares one Memory instance with the REST API)")
+    p.add_argument("--sparql-host", default="0.0.0.0",
+                   help="bind SPARQL endpoint to this host")
+    p.add_argument("--sparql-user-id", default=None,
+                   help="scope SPARQL queries to a single user")
 
     for name, help_ in (("stats", "memory statistics"),
                         ("verify", "integrity audit"),
@@ -136,6 +143,11 @@ def main(argv=None) -> int:
             rest_argv += ["--pii", args.pii]
         if args.admin_key:
             rest_argv += ["--admin-key", args.admin_key]
+        if getattr(args, "sparql_port", None):
+            rest_argv += ["--sparql-port", str(args.sparql_port),
+                          "--sparql-host", args.sparql_host]
+            if args.sparql_user_id:
+                rest_argv += ["--sparql-user-id", args.sparql_user_id]
         import sys as _sys
         _sys.argv = ["contextm-serve"] + rest_argv
         rest_main()

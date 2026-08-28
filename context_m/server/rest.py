@@ -10,12 +10,23 @@ full Memory fabric over a Mem0-compatible REST surface with:
     with a real probe at /readyz
   * OpenAPI 3.1 spec served live at /openapi.json
   * governance endpoints: snapshot, restore, erase (GDPR), PITR
+  * NSR-inspired swappable decoder surface: /v1/export?format=rdf|
+    json|datalog|llm_prompt — same palace + Trace, different output
+  * Aeon-inspired typed-edge + consolidate + chaos-ingest surface:
+    /v1/consolidate (POST, admin) — triggers dreaming + lifecycle
+    /v1/chaos       (POST, admin/operator) — zero-config auto-ingest
+    /v1/sparql      (GET/POST, reader+) — inline SPARQL endpoint
+  * Optional co-hosted SPARQL endpoint via `--sparql-port N`: shares
+    one Memory instance with the REST API so external graph tools
+    (Apache Jena, BlazeGraph, rdflib) can query Context-M directly.
+  * SIGTERM/SIGINT graceful shutdown — in-flight requests drain.
 
 Zero third-party dependencies — stdlib ``http.server`` with a thread
 pool, exactly like the MCP server (edge-deployable, μ=0 intact).
 
 Run:
     python -m context_m.server.rest --db /data/mem.db --port 8900
+    python -m context_m.server.rest --sparql-port 8910   # co-hosted SPARQL
     CONTEXT_M_MASTER_KEY=$(cat /data/mem.db.key) python -m context_m.server.rest
 """
 
@@ -23,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -120,6 +132,27 @@ def openapi_spec() -> dict:
                                       roles=["admin"])},
         "/v1/state_at": {"post": op("Point-in-time recovery read", body=True,
                                      roles=["admin", "operator", "reader"])},
+        "/v1/sparql": {"get": op("SPARQL SELECT (inline endpoint)",
+                                  roles=["admin", "operator", "reader"]),
+                       "post": op("SPARQL SELECT via POST body",
+                                   body=True,
+                                   roles=["admin", "operator", "reader"])},
+        "/v1/export": {"get": op("Export facts via swappable decoder "
+                                     "(?format=rdf|json|datalog|llm_prompt)",
+                                     roles=["admin", "operator", "reader"])},
+        "/v1/consolidate": {"post": op("Trigger lifecycle + dreaming pass",
+                                           body=True, roles=["admin"])},
+        "/v1/chaos": {"post": op("Zero-config auto-ingest (EAM chaos mode)",
+                                    body=True,
+                                    roles=["admin", "operator"])},
+        "/v1/federation/digest": {"get": op("Local-node CRDT digest "
+                                                 "(for federation sync)",
+                                                 roles=["admin", "operator",
+                                                        "reader", "auditor"])},
+        "/v1/federation/sync": {"post": op("Accept peer digest, "
+                                                "return our delta envelope",
+                                                body=True,
+                                                roles=["admin", "operator"])},
     }
     return {
         "openapi": "3.1.0",
@@ -171,11 +204,30 @@ def build_handler(state: FabricState):
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods",
+                              "GET, POST, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers",
+                              "Content-Type, Authorization")
             self.end_headers()
             try:
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError):
                 pass
+
+        def do_OPTIONS(self):
+            # CORS preflight — return 204 with permissive headers so
+            # browser-based SPARQL clients (Apache Jena fetch, rdflib,
+            # custom JS dashboards) can call /v1/sparql cross-origin
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods",
+                              "GET, POST, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers",
+                              "Content-Type, Authorization")
+            self.send_header("Access-Control-Max-Age", "600")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
 
         def _body(self) -> dict:
             length = int(self.headers.get("Content-Length") or 0)
@@ -310,6 +362,31 @@ def build_handler(state: FabricState):
                     return
                 with state.lock:
                     return self._send(200, {"keys": state.keys.list_keys()})
+            # GET /v1/sparql?query=SELECT... — inline SPARQL endpoint
+            if path == "/v1/sparql":
+                meta = self._auth("sparql.query")
+                if not meta:
+                    return
+                actor = meta.get("label") or meta.get("id", "key")
+                out = self._h_sparql({}, actor, meta)
+                return self._send(200, out)
+            # GET /v1/export?format=rdf|json|datalog|llm_prompt
+            if path == "/v1/export":
+                meta = self._auth("memory.export")
+                if not meta:
+                    return
+                actor = meta.get("label") or meta.get("id", "key")
+                out = self._h_export({}, actor, meta)
+                return self._send(200, out)
+            # GET /v1/federation/digest — local-node CRDT digest
+            if path == "/v1/federation/digest":
+                meta = self._auth("federation.digest")
+                if not meta:
+                    return
+                actor = meta.get("label") or meta.get("id", "key")
+                with state.lock:
+                    out = self._h_federation_digest({}, actor, meta)
+                return self._send(200, out)
             return self._send(404, {"error": f"no route {path}"})
 
         def do_POST(self):
@@ -329,6 +406,13 @@ def build_handler(state: FabricState):
                 "/v1/erase": ("governance.erase", self._h_erase),
                 "/v1/retention": ("governance.retention", self._h_retention),
                 "/v1/state_at": ("governance.pitr", self._h_state_at),
+                "/v1/sparql": ("sparql.query", self._h_sparql),
+                "/v1/export": ("memory.export", self._h_export),
+                "/v1/consolidate": ("governance.consolidate",
+                                       self._h_consolidate),
+                "/v1/chaos": ("memory.chaos_ingest", self._h_chaos),
+                "/v1/federation/sync": ("federation.sync",
+                                          self._h_federation_sync),
             }
             if path not in routes:
                 return self._send(404, {"error": f"no route {path}"})
@@ -455,17 +539,232 @@ def build_handler(state: FabricState):
                     when, user_id=body.get("user_id"))
             return {"facts": rows}
 
+        # ---------------------------------------- NSR / Aeon / EAM surface
+        def _h_sparql(self, body, actor, meta):
+            """Inline SPARQL endpoint — auth'd, shares one Memory.
+
+            GET  /v1/sparql?query=SELECT...
+            POST /v1/sparql  {"query": "SELECT ..."}
+            """
+            # body is {} for GET — parse query string instead
+            query = (body.get("query") if body else None) or ""
+            if not query:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                query = q.get("query", [""])[0]
+            if not query:
+                return {"error": "missing 'query' parameter"}
+            # guard against giant queries (DoS protection)
+            from context_m.server.sparql import MAX_QUERY_BYTES
+            if len(query) > MAX_QUERY_BYTES:
+                return {"error": f"query exceeds {MAX_QUERY_BYTES} bytes"}
+            try:
+                from context_m.server.sparql import (
+                    execute_sparql, edge_triples)
+                with state.lock:
+                    fact_objs = state.memory.store.query_facts(
+                        active=True,
+                        user_id=body.get("user_id") if body else None)
+                    # 4-tuple form so the blob resolver can dereference
+                    # arena-stored source text via fact.source_id
+                    facts = [(f.subject, f.relation, f.value,
+                              f.source_id)
+                             for f in fact_objs]
+                    edges = edge_triples(state.memory,
+                                          user_id=body.get("user_id")
+                                          if body else None)
+                    arena = getattr(state.memory, "blob_arena", None)
+                    blob_resolver = None
+                    if arena is not None:
+                        def _resolve(_s, _r, source_id):
+                            from context_m.trace.blob_arena import \
+                                get_chunk_text
+                            if not source_id:
+                                return ""
+                            return get_chunk_text(state.memory.store,
+                                                   arena, source_id)
+                        blob_resolver = _resolve
+                out = execute_sparql(query, facts,
+                                       user_id=body.get("user_id")
+                                       if body else None,
+                                       edge_triples=edges,
+                                       blob_resolver=blob_resolver)
+                state.memory.audit_log.log(
+                    "sparql.query", actor=actor, role=meta.get("role"),
+                    meta={"n_results": out.get("n_results", 0),
+                           "query_head": query[:80]})
+                return out
+            except ValueError as e:
+                return {"error": str(e)}
+            except Exception as e:  # noqa: BLE001
+                return {"error": f"server: {e}"}
+
+        def _h_export(self, body, actor, meta):
+            """Export facts via the swappable decoder.
+
+            GET /v1/export?format=rdf|json|datalog|llm_prompt&user_id=X
+            """
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            fmt = (q.get("format") or ["llm_prompt"])[0]
+            user_id = (q.get("user_id") or [None])[0]
+            from context_m.bridge.decoders import get_decoder
+            try:
+                decoder = get_decoder(fmt)
+            except ValueError as e:
+                return {"error": str(e)}
+            with state.lock:
+                facts = state.memory.store.query_facts(
+                    active=True, user_id=user_id)
+                # score by recency for export ordering
+                scores = {f.id: 1.0 for f in facts}
+                out = decoder.render(
+                    query="", intent="export", facts=list(facts),
+                    scores=scores, notes=None,
+                    store=state.memory.store)
+            state.memory.audit_log.log(
+                "memory.export", actor=actor, role=meta.get("role"),
+                resource=user_id or "default",
+                meta={"format": fmt, "n_facts": len(facts)})
+            # for json decoder, return parsed; otherwise return text
+            if fmt == "json":
+                try:
+                    return json.loads(out)
+                except json.JSONDecodeError:
+                    pass
+            return {"format": fmt, "n_facts": len(facts),
+                    "content": out}
+
+        def _h_consolidate(self, body, actor, meta):
+            """Trigger the consolidate() dreaming + lifecycle pass.
+
+            POST /v1/consolidate {"dry_run": false, "lifecycle": true,
+                                  "dreaming": true, "user_id": null}
+            """
+            with state.lock:
+                out = state.memory.consolidate(
+                    dry_run=bool(body.get("dry_run", False)),
+                    lifecycle=bool(body.get("lifecycle", True)),
+                    dreaming=bool(body.get("dreaming", True)),
+                    user_id=body.get("user_id"))
+            state.memory.audit_log.log(
+                "governance.consolidate", actor=actor,
+                role=meta.get("role"),
+                meta={"dry_run": bool(body.get("dry_run", False)),
+                       "lifecycle": out.get("lifecycle", {}),
+                       "dreaming": out.get("dreaming", {})})
+            return out
+
+        def _h_chaos(self, body, actor, meta):
+            """Zero-config auto-ingest (EAM chaos mode).
+
+            POST /v1/chaos {"texts": ["...", ...], "user_id": "default"}
+            POST /v1/chaos {"text": "...", "user_id": "default"}
+            """
+            from context_m.api.chaos import chaos_ingest
+            texts = body.get("texts")
+            if texts is None:
+                texts = [body.get("text", "")] if body.get("text") else []
+            if not texts:
+                return {"error": "missing 'text' or 'texts' field"}
+            user_id = body.get("user_id", "default")
+            with state.lock:
+                out = chaos_ingest(state.memory, texts, user_id=user_id,
+                                   agent_id=body.get("agent_id"),
+                                   run_id=body.get("run_id"))
+            state.memory.audit_log.log(
+                "memory.chaos_ingest", actor=actor, role=meta.get("role"),
+                resource=user_id,
+                meta={"n_facts": out.get("stats", {}).get(
+                    "facts_inserted", 0)})
+            return out
+
+        # ---------------------------------------- federation surface
+        def _h_federation_digest(self, body, actor, meta):
+            """Build a local-node digest envelope for federation sync.
+
+            The caller (a peer FederationNode) sends our digest to
+            their node, which compares against their own state and
+            returns a delta envelope. We then POST that delta to
+            /v1/federation/sync (below) to apply it.
+
+            Requires a `node_id` (default: hostname) and a federation
+            `key` (HMAC-SHA256 signing key — read from
+            CONTEXT_M_FEDERATION_KEY env var).
+            """
+            import os
+            import socket
+            from context_m.federation.node import FederationNode
+            from context_m.federation.fabric import node_from_store
+            node_id = body.get("node_id") or "ctxm-" + socket.gethostname()
+            fed_key = body.get("key") or os.environ.get(
+                "CONTEXT_M_FEDERATION_KEY", "default-federation-key")
+            with state.lock:
+                node = node_from_store(node_id, state.memory.store,
+                                        members=[node_id],
+                                        federation_key=fed_key)
+                from context_m.federation.fabric import export_to_crdt
+                export_to_crdt(state.memory.store, node,
+                               user_id=body.get("user_id"))
+                env = node.digest_envelope()
+            state.memory.audit_log.log(
+                "federation.digest", actor=actor, role=meta.get("role"),
+                meta={"node_id": node_id})
+            return env
+
+        def _h_federation_sync(self, body, actor, meta):
+            """Accept a peer's digest envelope, return our delta.
+
+            POST /v1/federation/sync {<peer digest envelope>}
+            -> {<our delta envelope>}
+
+            The delta contains the facts the peer is missing. The peer
+            then POSTs that delta to its own /v1/federation/apply (TODO)
+            or to a future /v1/federation/apply endpoint here, which calls
+            node.apply_delta_envelope + apply_to_store.
+            """
+            import os
+            import socket
+            from context_m.federation.node import FederationNode
+            from context_m.federation.fabric import (node_from_store,
+                                                       export_to_crdt)
+            node_id = body.get("node_id") or "ctxm-" + socket.gethostname()
+            fed_key = body.get("key") or os.environ.get(
+                "CONTEXT_M_FEDERATION_KEY", "default-federation-key")
+            peer_env = body.get("peer_envelope") or body
+            with state.lock:
+                node = node_from_store(node_id, state.memory.store,
+                                        members=[node_id],
+                                        federation_key=fed_key)
+                export_to_crdt(state.memory.store, node,
+                               user_id=body.get("user_id"))
+                delta_env = node.delta_envelope_for(peer_env)
+            state.memory.audit_log.log(
+                "federation.sync", actor=actor, role=meta.get("role"),
+                meta={"node_id": node_id,
+                       "peer": peer_env.get("from", "?")})
+            return delta_env
+
     return Handler
 
 
 # ------------------------------------------------------------------ launch
 def serve(memory: Memory | None = None, host: str = "0.0.0.0",
-          port: int = 8900) -> ThreadingHTTPServer:
+          port: int = 8900, *, sparql_port: int | None = None,
+          sparql_host: str = "0.0.0.0",
+          sparql_user_id: str | None = None) -> ThreadingHTTPServer:
     if memory is None:
         memory = Memory(Config.from_env())
     state = FabricState(memory)
     httpd = ThreadingHTTPServer((host, port), build_handler(state))
     httpd.daemon_threads = True
+    # optionally co-host a SPARQL endpoint sharing the same Memory instance
+    if sparql_port:
+        from context_m.server.sparql import SparqlServer
+        sparql = SparqlServer(memory, host=sparql_host, port=sparql_port,
+                               user_id=sparql_user_id)
+        sparql.start_background()
+        httpd.sparql = sparql  # type: ignore[attr-defined]
     return httpd
 
 
@@ -479,6 +778,13 @@ def main() -> None:
                     help="off|redact|block|tag (default: config/env)")
     ap.add_argument("--admin-key", default=None,
                     help="create this admin API key at boot (dev convenience)")
+    ap.add_argument("--sparql-port", type=int, default=None,
+                    help="co-host a SPARQL endpoint on this port "
+                         "(shares one Memory instance with the REST API)")
+    ap.add_argument("--sparql-host", default="0.0.0.0",
+                    help="bind SPARQL endpoint to this host")
+    ap.add_argument("--sparql-user-id", default=None,
+                    help="scope SPARQL queries to a single user")
     args = ap.parse_args()
 
     cfg = Config.from_env(db_path=args.db)
@@ -486,19 +792,59 @@ def main() -> None:
         cfg.pii_mode = args.pii
     memory = Memory(cfg)
     if args.admin_key:
-        import secrets
-        role = "admin"
-        meta = memory.keys.create(role, label="boot-admin")
+        meta = memory.keys.create("admin", label="boot-admin")
         print(f"[context-m] admin API key (save now, shown once): {meta['key']}")
-    httpd = serve(memory, args.host, args.port)
+    httpd = serve(memory, args.host, args.port,
+                  sparql_port=args.sparql_port,
+                  sparql_host=args.sparql_host,
+                  sparql_user_id=args.sparql_user_id)
     print(f"[context-m] REST API on http://{args.host}:{args.port}"
           f"  (db={args.db}, pii={cfg.pii_mode}, "
           f"encrypt={cfg.encryption_at_rest})")
+    if args.sparql_port:
+        print(f"[context-m] SPARQL endpoint on http://{args.sparql_host}:"
+              f"{args.sparql_port}/  (co-hosted, shares Memory)")
+
+    # graceful shutdown on SIGTERM/SIGINT — drain in-flight requests.
+    # IMPORTANT: signal handlers run on the MAIN thread, but
+    # `httpd.shutdown()` blocks on `__is_shut_down` which is only
+    # set when serve_forever() exits its loop. So we MUST run
+    # serve_forever() in a daemon thread and let the main thread
+    # block on a sentinel Event instead. SIGTERM sets the event,
+    # main thread wakes up, calls shutdown() on the daemon-thread
+    # serve loop, then exits cleanly. This avoids the classic
+    # self-deadlock where signal→shutdown() blocks on the same
+    # thread that's supposed to exit serve_forever().
+    stop_event = threading.Event()
+
+    def _shutdown(signum, frame):
+        print(f"\n[context-m] received signal {signum} — shutting down...")
+        stop_event.set()
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
+    # run serve_forever() in a daemon thread; main thread waits on
+    # the event so signal handlers can fire cleanly.
+    server_thread = threading.Thread(
+        target=httpd.serve_forever, daemon=True,
+        name="contextm-rest")
+    server_thread.start()
+    print(f"[context-m] ready — press Ctrl+C to shut down")
     try:
-        httpd.serve_forever()
+        # block until shutdown signal sets the event
+        while not stop_event.is_set():
+            stop_event.wait(timeout=1.0)
     except KeyboardInterrupt:
         pass
     finally:
+        sparql = getattr(httpd, "sparql", None)
+        if sparql is not None:
+            sparql.stop()
+        # shutdown() is now safe — runs in main thread, server loop
+        # is in a different daemon thread
+        httpd.shutdown()
+        httpd.server_close()
         memory.close()
 
 

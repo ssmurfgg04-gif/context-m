@@ -61,6 +61,12 @@ class AuditLog:
                 prev_hash TEXT NOT NULL,
                 hash TEXT NOT NULL
             )""")
+        # indexes for the common tail() filters (actor, action, ts)
+        self.store.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_actor_action "
+            "ON audit_log(actor, action)")
+        self.store.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)")
         self.store.conn.commit()
 
     # ------------------------------------------------------------- append

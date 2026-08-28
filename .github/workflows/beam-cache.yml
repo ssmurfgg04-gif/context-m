@@ -1,0 +1,107 @@
+# Download the full Mohammadta/BEAM-10M dataset via the HuggingFace CLI
+# on a GitHub Actions runner (whose IP is NOT CloudFront-rate-limited,
+# unlike many sandboxes). The result is cached and re-used by the
+# bench / llm-eval workflows via actions/cache.
+#
+# Triggers:
+#   - workflow_dispatch (manual "download BEAM" button)
+#   - schedule: nightly at 03:30 UTC (refresh cache ~weekly is enough,
+#     the dataset is static; we keep daily for now since it's cheap)
+#
+# What this produces:
+#   - actions/cache key "beam-10m-v1-<sha>" holding 10 JSON rows
+#     (~1GB total — under GitHub's 10GB cache limit)
+#   - a short report artifact listing the rows downloaded
+#
+# Downstream jobs (e.g. bench, llm-eval) restore this cache and run
+# against the REAL BEAM-10M dataset — no rate-limiting, no truncation.
+
+name: beam-cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: "Number of BEAM-10M rows to download (max 10)"
+        required: false
+        default: "10"
+  schedule:
+    # nightly at 03:30 UTC
+    - cron: "30 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beam-cache
+  cancel-in-progress: false
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore BEAM-10M cache
+        id: cache-restore
+        uses: actions/cache@v4
+        with:
+          path: ./beam_cache
+          key: beam-10m-v1-${{ github.run_id }}
+          restore-keys: |
+            beam-10m-v1-
+
+      - name: Download BEAM-10M rows
+        env:
+          BEAM_CACHE_DIR: ./beam_cache
+          N_ROWS: ${{ github.event.inputs.rows || '10' }}
+        run: |
+          mkdir -p "$BEAM_CACHE_DIR"
+          # use the bundled download script — it streams rows via
+          # datasets-server.huggingface.co/rows (works from GH runners)
+          bash scripts/download_beam_full.sh
+          # report
+          ls -la "$BEAM_CACHE_DIR"
+          du -sh "$BEAM_CACHE_DIR"
+          n=$(ls "$BEAM_CACHE_DIR"/beam_row_*.json 2>/dev/null | wc -l)
+          echo "Downloaded $n BEAM-10M rows"
+          # save a tiny manifest for downstream jobs
+          python -c "
+          import json, os, glob
+          rows = sorted(glob.glob(os.path.join('$BEAM_CACHE_DIR', 'beam_row_*.json')))
+          manifest = {'n_rows': len(rows), 'rows': []}
+          for r in rows:
+              try:
+                  d = json.load(open(r))
+                  row0 = d['rows'][0]['row']
+                  manifest['rows'].append({
+                      'file': r,
+                      'conversation_id': row0.get('conversation_id'),
+                      'chat_chars': len(str(row0.get('chat',''))),
+                  })
+              except Exception as e:
+                  manifest['rows'].append({'file': r, 'error': str(e)})
+          json.dump(manifest, open('$BEAM_CACHE_DIR/manifest.json','w'), indent=2)
+          print(json.dumps(manifest, indent=2))
+          "
+
+      - name: Save BEAM-10M cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ./beam_cache
+          key: beam-10m-v1-${{ github.run_id }}
+
+      - name: Upload manifest artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beam-10m-manifest
+          path: ./beam_cache/manifest.json
+          retention-days: 30

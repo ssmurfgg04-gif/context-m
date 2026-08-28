@@ -37,16 +37,22 @@ PERMISSIONS: dict[str, set[str]] = {
     "memory.history":     {"admin", "operator", "reader"},
     "memory.stats":       {"admin", "operator", "reader"},
     "memory.verify":      {"admin", "operator", "reader", "auditor"},
+    "memory.export":      {"admin", "operator", "reader"},  # swappable decoder
+    "memory.chaos_ingest": {"admin", "operator"},  # EAM chaos mode
     "audit.read":         {"admin", "auditor"},
     "audit.verify":       {"admin", "auditor"},
     "keys.create":        {"admin"},
     "keys.list":          {"admin"},
     "keys.revoke":        {"admin"},
+    "sparql.query":       {"admin", "operator", "reader"},
     "governance.erase":   {"admin"},           # GDPR right-to-erasure
     "governance.retention": {"admin"},
     "governance.snapshot":  {"admin", "operator"},
     "governance.restore":   {"admin"},
     "governance.pitr":      {"admin", "operator", "reader"},
+    "governance.consolidate": {"admin"},  # dreaming pass trigger
+    "federation.digest":  {"admin", "operator", "reader", "auditor"},
+    "federation.sync":    {"admin", "operator"},  # CRDT envelope exchange
 }
 
 _KEY_PREFIX = "ctxm"
