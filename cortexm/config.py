@@ -308,67 +308,86 @@ class Config:
     @classmethod
     def from_env(cls, **overrides) -> "Config":
         cfg = cls(**overrides) if overrides else cls()
-        if p := os.environ.get("CONTEXT_M_DB"):
+
+        # Helper: env var lookup that prefers the post-rename CORTEXM_
+        # prefix and falls back to the legacy CONTEXT_M_ prefix (so
+        # existing deployments / helm charts / cronjobs don't break on
+        # upgrade). Documented in README under "Environment Variables".
+        def _env(suffix: str):
+            v = os.environ.get("CORTEXM_" + suffix)
+            if v is not None:
+                return v
+            return os.environ.get("CONTEXT_M_" + suffix)
+
+        def _env_bool_dual(suffix: str, default: bool) -> bool:
+            v = _env(suffix)
+            if v is None:
+                return default
+            return _env_bool("CORTEXM_" + suffix, default) if os.environ.get("CORTEXM_" + suffix) is not None else _env_bool("CONTEXT_M_" + suffix, default)
+
+        if p := _env("DB"):
             cfg.db_path = p
-        if c := os.environ.get("CONTEXT_M_CODEC"):
+        if c := _env("CODEC"):
             cfg.codec = c
-        if m := os.environ.get("CONTEXT_M_VSA_MODE"):
+        if m := _env("VSA_MODE"):
             cfg.vsa_mode = m
-        if d := os.environ.get("CONTEXT_M_DIMS"):
+        if d := _env("DIMS"):
             cfg.dims = int(d)
-        if _env_bool("CONTEXT_M_TMR", cfg.tmr):
+        if _env_bool_dual("TMR", cfg.tmr):
             cfg.tmr = True
-        if pm := os.environ.get("CONTEXT_M_PII_MODE"):
+        if pm := _env("PII_MODE"):
             cfg.pii_mode = pm
-        if mk := os.environ.get("CONTEXT_M_MASTER_KEY_PATH"):
+        if mk := _env("MASTER_KEY_PATH"):
             cfg.master_key_path = mk
-        if os.environ.get("CONTEXT_M_ENCRYPT"):
-            cfg.encryption_at_rest = _env_bool("CONTEXT_M_ENCRYPT",
-                                               cfg.encryption_at_rest)
-        if aa := os.environ.get("CONTEXT_M_AUDIT"):
+        if _env("ENCRYPT") is not None:
+            cfg.encryption_at_rest = _env_bool_dual("ENCRYPT",
+                                                     cfg.encryption_at_rest)
+        if aa := _env("AUDIT"):
             cfg.audit_actions = aa
-        # Allow flipping the index backend via env (e.g. CONTEXT_M_INDEX_BACKEND=nsg
+        # Allow flipping the index backend via env (e.g. CORTEXM_INDEX_BACKEND=nsg
         # for high-recall cloud deployments where the build cost is amortized).
-        if ib := os.environ.get("CONTEXT_M_INDEX_BACKEND"):
+        if ib := _env("INDEX_BACKEND"):
             cfg.index_backend = ib
         # Production nightly-cron flips. The helm CronJob template sets
-        # CONTEXT_M_FADE=true and CONTEXT_M_TMT=true so the batch process
+        # CORTEXM_FADE=true and CORTEXM_TMT=true so the batch process
         # runs the FadeMem sweep + TiMem TMT hierarchy build on top of the
         # standard consolidate pass. Reading from env (not just CLI flags)
         # means `cortexm consolidate --db …` in the CronJob container
-        # automatically picks them up.
-        if os.environ.get("CONTEXT_M_FADE") is not None:
-            cfg.fade_enabled = _env_bool("CONTEXT_M_FADE", cfg.fade_enabled)
-        if os.environ.get("CONTEXT_M_TMT") is not None:
-            cfg.tmt_enabled = _env_bool("CONTEXT_M_TMT", cfg.tmt_enabled)
-        if os.environ.get("CONTEXT_M_RECONSTRUCT") is not None:
-            cfg.reconstruct_enabled = _env_bool(
-                "CONTEXT_M_RECONSTRUCT", cfg.reconstruct_enabled)
+        # automatically picks them up. Legacy CONTEXT_M_* prefix still
+        # honored for backward compat.
+        if _env("FADE") is not None:
+            cfg.fade_enabled = _env_bool_dual("FADE", cfg.fade_enabled)
+        if _env("TMT") is not None:
+            cfg.tmt_enabled = _env_bool_dual("TMT", cfg.tmt_enabled)
+        if _env("RECONSTRUCT") is not None:
+            cfg.reconstruct_enabled = _env_bool_dual(
+                "RECONSTRUCT", cfg.reconstruct_enabled)
         # HMS Cognition Engine — opt-in self-organization. The helm
-        # CronJob template sets CONTEXT_M_COGNITION=true so the batch
+        # CronJob template sets CORTEXM_COGNITION=true so the batch
         # process also runs PatternScanner + AbstractionEngine +
         # GapDetector + HypothesisEngine + AnalogyDetector on top of
-        # the standard consolidate pass.
-        if os.environ.get("CONTEXT_M_COGNITION") is not None:
-            cfg.cognition_enabled = _env_bool(
-                "CONTEXT_M_COGNITION", cfg.cognition_enabled)
+        # the standard consolidate pass. Also fired by default from
+        # `cortexm consolidate` (CLI flag `--no-cognition` opts out).
+        if _env("COGNITION") is not None:
+            cfg.cognition_enabled = _env_bool_dual(
+                "COGNITION", cfg.cognition_enabled)
         # Enterprise provenance standards. Opt-in — when true, every
         # commit is wrapped in a COSE Sign1 envelope (RFC 9052) and
         # ranges can be exported as W3C VC / SCITT statements.
-        if os.environ.get("CONTEXT_M_PROVENANCE") is not None:
-            cfg.provenance_enabled = _env_bool(
-                "CONTEXT_M_PROVENANCE", cfg.provenance_enabled)
+        if _env("PROVENANCE") is not None:
+            cfg.provenance_enabled = _env_bool_dual(
+                "PROVENANCE", cfg.provenance_enabled)
         # ZK-SQL proofs (PoneglyphDB-style PLONKish). Opt-in.
-        if os.environ.get("CONTEXT_M_ZK_SQL") is not None:
-            cfg.zk_sql_enabled = _env_bool(
-                "CONTEXT_M_ZK_SQL", cfg.zk_sql_enabled)
+        if _env("ZK_SQL") is not None:
+            cfg.zk_sql_enabled = _env_bool_dual(
+                "ZK_SQL", cfg.zk_sql_enabled)
         # Polyglot encoder for non-English text. Opt-in — production
         # deployments that ingest CJK / Indic / Arabic / Cyrillic text
         # flip this on so HashingEmbedder falls back to PolyglotEncoder
         # for >30% non-ASCII text instead of emitting a constant
         # [1,0,0,...] vector that breaks retrieval (Tier-1 bug).
-        if os.environ.get("CONTEXT_M_LABSE") is not None:
-            cfg.labse_enabled = _env_bool("CONTEXT_M_LABSE", cfg.labse_enabled)
+        if _env("LABSE") is not None:
+            cfg.labse_enabled = _env_bool_dual("LABSE", cfg.labse_enabled)
         return cfg
 
     def to_dict(self) -> dict:

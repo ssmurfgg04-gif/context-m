@@ -69,6 +69,13 @@ def main(argv=None) -> int:
     con.add_argument("--no-dreaming", action="store_true",
                      help="skip the Aeon dreaming pass (merge triples, retire stale, "
                           "defrag palace, retrain prefetcher)")
+    con.add_argument("--no-cognition", action="store_true",
+                     help="skip the HMS cognition pass (PatternScanner + "
+                          "AbstractionEngine + GapDetector + HypothesisEngine + "
+                          "AnalogyDetector). Default ON — `cortexm consolidate` "
+                          "fires cognition so HYPOTHESIZED_BY edges (confidence "
+                          "< 0.5) are produced on every consolidate. Use this "
+                          "flag to opt out for sensitive use cases.")
     con.add_argument("--user-id", default=None,
                      help="scope the dreaming pass to one user")
 
@@ -234,6 +241,7 @@ def main(argv=None) -> int:
                 dry_run=getattr(args, "dry_run", False),
                 lifecycle=not getattr(args, "no_lifecycle", False),
                 dreaming=not getattr(args, "no_dreaming", False),
+                run_cognition=not getattr(args, "no_cognition", False),
                 user_id=getattr(args, "user_id", None),
             ), indent=2, default=str))
         elif args.cmd == "export-schema":

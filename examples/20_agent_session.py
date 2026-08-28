@@ -62,7 +62,7 @@ def main():
         ("Alice", "Bob's father is Charles, he lives in Vancouver."),
         ("Alice", "Charles's father is David — he's 89 and a retired teacher."),
         ("Alice", "I prefer Python over Rust for backend work, ngl."),
-        ("Alice", "tbh I love hiking on weekends with Bob."),
+        ("Alice", "btw my sister Carol's father is Robert. Robert's father is George. Both engineers."),
         ("Alice", "Did I mention I switched to Anthropic? Yeah, started Monday."),
     ]
 
@@ -233,9 +233,8 @@ def _extract_and_store(mem, msg, user_id):
         if m:
             _add_fact(mem.store, user_id, "works_at", m.group(1),
                       user_id=user_id, confidence=0.95)
-    # "Bob's father is X"
-    m = re.search(r"(\w[\w']+)'s father is\s+([A-Z][a-z]+)", msg)
-    if m:
+    # "X's father is Y" — finditer so multi-father sentences capture ALL chains
+    for m in re.finditer(r"(\w[\w']+)'s father is\s+([A-Z][a-z]+)", msg):
         _add_fact(mem.store, m.group(1), "father", m.group(2),
                   user_id=user_id)
     # "I prefer X over Y"

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/registry/main/schema/mcp-registry-v1.json",
+  "_comment": "Submission-ready JSON for https://registry.modelcontextprotocol.io. Paste this into the registry submission form (or POST to the registry API once the public endpoint is documented). After acceptance, the README badge in the slot below uncomments automatically once someone replaces the COMMENTED line with the real registry URL.",
+  "name": "contextm",
+  "description": "Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest. HMS-style Cognition Engine self-organizes knowledge by hypothesizing relations, with cryptographic provenance (COSE Sign1 + W3C VC + SCITT), Memory Git (branch/merge/diff/blame), and federation-ready schema export.",
+  "repository": "https://github.com/ssmurfgg04-gif/context-m",
+  "homepage": "https://github.com/ssmurfgg04-gif/context-m",
+  "author": {
+    "name": "Context-M Contributors",
+    "url": "https://github.com/ssmurfgg04-gif/context-m"
+  },
+  "license": "Apache-2.0",
+  "categories": ["memory", "agents", "llm", "neuro-symbolic", "vsa", "hrr", "hdc", "knowledge-graph", "temporal", "provenance", "mcp", "edge", "rag"],
+  "keywords": ["memory", "agents", "llm", "neuro-symbolic", "vsa", "hrr", "hdc", "knowledge-graph", "temporal", "provenance", "mcp", "edge", "rag", "self-organizing", "cognition-engine"],
+  "server": {
+    "type": "stdio",
+    "command": "cortexm",
+    "args": ["serve"],
+    "env": {
+      "CORTEXM_DB": {
+        "description": "Path to the SQLite database file. Default ':memory:' (in-process). Set to a file path for persistence across server restarts.",
+        "required": false
+      },
+      "CORTEXM_CODEC": {
+        "description": "VSA storage codec. One of: int8 (default, 1068 B/fact), binary, rabitq, pq.",
+        "required": false
+      },
+      "CORTEXM_FADE": {
+        "description": "Enable FadeMem forgetting sweep on consolidate. Default 'true'.",
+        "required": false
+      },
+      "CORTEXM_COGNITION": {
+        "description": "Enable HMS Cognition Engine (PatternScanner + AbstractionEngine + GapDetector + HypothesisEngine + AnalogyDetector). Default 'false' (opt-in; also fired by `cortexm consolidate` CLI).",
+        "required": false
+      },
+      "CORTEXM_PROVENANCE": {
+        "description": "Enable enterprise provenance (COSE Sign1 envelope on every commit; W3C VC + SCITT exports). Default 'false'.",
+        "required": false
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "contextm_add",
+      "description": "Store memories from a conversation (μ=0: deterministic, no LLM calls). Accepts a message string or a list of {role, content} dicts."
+    },
+    {
+      "name": "contextm_search",
+      "description": "Neuro-symbolic memory retrieval with cryptographic provenance (query → VSA match → symbolic dereference → source hash → original text)."
+    },
+    {
+      "name": "contextm_structural_query",
+      "description": "Multi-hop symbolic chain query: structural_query(alice, [father, father]) = Charles. Deterministic, no LLM call per hop."
+    },
+    {
+      "name": "contextm_consolidate",
+      "description": "Run lifecycle + dreaming + cognition passes: promote reinforced facts, decay stale ones, merge redundant triples, hypothesize new relations (HYPOTHESIZED_BY edges, confidence < 0.5)."
+    },
+    {
+      "name": "contextm_export_provenance",
+      "description": "Export W3C Verifiable Credentials + COSE Sign1 + SCITT receipts for a fact range."
+    },
+    {
+      "name": "contextm_audit",
+      "description": "Audit log tail / verify / export — full tamper-evidence trail."
+    }
+  ],
+  "samples": [
+    {
+      "_comment": "Minimal client invocation (works in Claude Code, Cursor, any MCP client).",
+      "tool": "contextm_add",
+      "arguments": {
+        "messages": "Alice works at Google. She lives in Mountain View.",
+        "user_id": "alice"
+      }
+    },
+    {
+      "tool": "contextm_search",
+      "arguments": {
+        "query": "Where does Alice work?",
+        "user_id": "alice"
+      }
+    },
+    {
+      "tool": "contextm_consolidate",
+      "arguments": {}
+    }
+  ],
+  "badges": {
+    "_comment": "Once the registry accepts the submission, uncomment the README badge slot.",
+    "registry_url_slot": "https://registry.modelcontextprotocol.io/servers/contextm",
+    "registry_badge_markdown": "<a href=\"https://registry.modelcontextprotocol.io/servers/contextm\"><img src=\"https://img.shields.io/badge/MCP%20Registry-contextm-7c3aed\" alt=\"MCP Registry\"></a>"
+  }
+}

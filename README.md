@@ -7,9 +7,12 @@
   <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml"><img src="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml/badge.svg?branch=main" alt="Tests"></a>
   <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/pr-gate.yml"><img src="https://img.shields.io/github/checks-status/ssmurfgg04-gif/context-m/main/.github/workflows/pr-gate.yml?label=pr-gate" alt="PR Gate"></a>
   <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/v/context-m-langchain?color=%2334D058&label=pypi%20package" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/pyversions/context-m-langchain.svg?color=%2334D058" alt="Python versions"></a>
+  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/v/cortexm?color=%2334D058&label=pypi%20%7Ccortexm" alt="PyPI: cortexm"></a>
+  <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/v/context-m-langchain?color=%2334D058&label=pypi%20%7Clangchain" alt="PyPI: context-m-langchain"></a>
+  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/pyversions/cortexm.svg?color=%2334D058" alt="Python versions"></a>
   <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/AGENTS.md"><img src="https://img.shields.io/badge/AGENTS.md-2026-2f2f2f?logo=github" alt="AGENTS.md"></a>
+  <!-- MCP Registry badge — uncomment after submitting deploy/mcp-registry-submission.json to https://registry.modelcontextprotocol.io -->
+  <!-- <a href="https://registry.modelcontextprotocol.io/servers/contextm"><img src="https://img.shields.io/badge/MCP%20Registry-contextm-7c3aed" alt="MCP Registry"></a> -->
   <!-- Trendshift badge slot — auto-renders when the repo actually trends. -->
   <!-- <a href="https://trendshift.io/repositories/ssmurfgg04-gif/context-m"><img src="https://trendshift.io/api/badge/repositories/ssmurfgg04-gif/context-m.svg" alt="Trendshift"></a> -->
 </div>
