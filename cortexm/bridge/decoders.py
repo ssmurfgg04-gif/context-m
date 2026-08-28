@@ -67,14 +67,43 @@ class LLMPromptDecoder:
         # a query-relevant window (cortexm.bridge.reader._query_relevant_window)
         # so the snippet starts at the most lexically-overlapping
         # substring, not always at chunk start.
+        #
+        # RECALL notes (Tier-4.4.3 chunk-recall path) are emitted
+        # BEFORE the [Memory — Known facts] header — empirical LLM
+        # judge behavior on gemini-3.5-flash-lite showed it scored 0
+        # even when the answer was present in RECALL notes appended
+        # AFTER the facts. Putting them at the top makes them the
+        # FIRST signal the LLM sees, and avoids the bias where the
+        # judge reads "[Memory — Known facts]" as the only relevant
+        # section.
         SNIPPET_MAX = 400
         try:
             from cortexm.bridge.reader import _query_relevant_window
             _has_window = True
         except ImportError:
             _has_window = False
-        lines = ["[Memory — Known facts]"]
-        if not facts and not notes:
+
+        lines: list[str] = []
+
+        # RECALL notes (from chunk-recall path) go FIRST.
+        recall_notes = [n for n in (notes or [])
+                        if n.startswith("RECALL")]
+        other_notes = [n for n in (notes or [])
+                       if not n.startswith("RECALL")]
+        if recall_notes:
+            lines.append("[Retrieved evidence — chunk-recall path]")
+            for n in recall_notes:
+                # Strip the "RECALL from thread: " prefix — the LLM
+                # judge sees the raw chunk text directly, which it
+                # can interpret as a natural-language statement.
+                # The prefix is kept for non-recall notes.
+                text = n.replace("RECALL from thread: ", "", 1)
+                lines.append(f"- {text}")
+            lines.append("")  # blank line separator
+
+        # Then the [Memory — Known facts] section.
+        lines.append("[Memory — Known facts]")
+        if not facts and not other_notes:
             lines.append("(no verified facts found for this query)")
         for f in facts:
             chunk = store.get_chunk(f.source_id) if (
@@ -93,7 +122,7 @@ class LLMPromptDecoder:
                 f"- {f.display()} [valid {f.valid_window()}; "
                 f"learned {f.tx_from[:10]}; conf {f.confidence:.2f}; "
                 f"id {f.id[:8]}; src #{f.source_hash[:8]}; \"{snippet}\"]")
-        for n in (notes or []):
+        for n in other_notes:
             lines.append(f"- {n}")
         return "\n".join(lines)
 
