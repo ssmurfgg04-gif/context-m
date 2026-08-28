@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "context-m"
 version = "0.2.0"
-description = "Context-M: The Universal Neuro-Symbolic Memory Fabric — bi-temporal symbolic Trace + VSA Memory Palace with μ=0 deterministic ingest, cryptographic provenance, PII firewall, encryption at rest, RBAC, audit chain, and GDPR governance."
+description = "Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }

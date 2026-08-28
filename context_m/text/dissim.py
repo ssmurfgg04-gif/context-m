@@ -73,10 +73,28 @@ class DisSimSplitter:
 
     def split(self, sentence: str, depth: int = 0,
               parent_id: int | None = None) -> list[SimplifiedClause]:
-        """Recursively simplify a sentence into core clauses."""
-        sentence = sentence.strip().rstrip(".")
+        """Recursively simplify a sentence into core clauses.
+
+        Preserves trailing sentence-ending punctuation (. ! ?). The
+        downstream μ=0 pattern library in bridge/patterns.py uses
+        lookaheads like ``(?=[,.!?]|...|$)`` to anchor value capture;
+        stripping the trailing period silently broke role/role_as/
+        role_my patterns on clauses emitted here (the "Tier-4 unmess
+        trailing-punct" bug). We capture the terminator up-front and
+        re-attach it to the LAST clause produced, so downstream
+        patterns still see ``"I work as an engineer."`` instead of
+        ``"I work as an engineer"``.
+        """
+        # Capture trailing sentence terminator before splitting.
+        s = sentence.strip()
+        terminator = ""
+        if s and s[-1] in ".!?":
+            terminator = s[-1]
+            s = s[:-1].rstrip()
+        sentence = s
         if depth >= self.max_depth or not sentence:
-            return [SimplifiedClause(text=sentence, parent_id=parent_id,
+            text = sentence + terminator if sentence else terminator
+            return [SimplifiedClause(text=text, parent_id=parent_id,
                                      depth=depth)]
 
         # find first matching rule
@@ -193,12 +211,21 @@ class DisSimSplitter:
                     if c.text and c.text not in seen:
                         seen.add(c.text)
                         out.append(c)
-                return out if out else [SimplifiedClause(
-                    text=sentence, parent_id=parent_id, depth=depth)]
+                if not out:
+                    out = [SimplifiedClause(text=sentence, parent_id=parent_id,
+                                            depth=depth)]
+                # re-attach the trailing terminator to the LAST clause
+                # so downstream μ=0 patterns that anchor on [.!?] still
+                # match (Tier-4 unmess trailing-punct bug fix).
+                if terminator and out:
+                    last = out[-1]
+                    if not (last.text and last.text[-1] in ".!?"):
+                        last.text = last.text + terminator
+                return out
 
-        # no rule matched
-        return [SimplifiedClause(text=sentence, parent_id=parent_id,
-                                 depth=depth)]
+        # no rule matched — re-attach the terminator
+        return [SimplifiedClause(text=sentence + terminator,
+                                 parent_id=parent_id, depth=depth)]
 
     def simplify_text(self, text: str) -> list[SimplifiedClause]:
         """Split a multi-sentence text into simplified clauses."""

@@ -5,6 +5,22 @@ We import from the existing plugins/langchain/context_m_memory.py
 implementation so the PyPI package and the in-repo module share one
 source of truth. Users installing from PyPI get the same code as
 users vendoring the repo.
+
+v0.2.0 (2026-08-28) — Tier-4 reliability pass:
+  * Timeout raised to 10s default (was 5s) — large-context search
+    blocks on a cold SLB can take 6-8s with the full v3 stack
+    (unmess + dissim + bitap + prefilter + ppr + rerank + LaBSE).
+  * New `intent` field surfaced in load_memory_variables output —
+    lets the agent see whether the memory returned a `recall`,
+    `current`, `temporal`, or `list` result, and adapt its prompt
+    accordingly (e.g. abstain on `ordering` intents).
+  * `save_context` now streams the (input, output) turn through the
+    μ=0 ingest path with the unmess pipeline on by default, so
+    paraphrased / slang inputs get extracted at full recall (was
+    silently dropping them when unmess was disabled).
+  * Better error reporting: network failures now surface as a
+    structured `{"error": ..., "context_block": ""}` so the agent
+    can decide whether to retry or proceed without memory.
 """
 # Lazy import to avoid circular dependency on the repo's plugins package
 # when this package is installed standalone from PyPI.
@@ -42,7 +58,11 @@ class ContextMMemory:
                  memory_key: str = "history",
                  return_messages: bool = False,
                  k: int = 12,
-                 timeout: float = 5.0) -> None:
+                 timeout: float = 10.0) -> None:
+        # v0.2.0: timeout raised to 10s default — the full v3 retrieval
+        # stack (unmess + dissim + bitap + prefilter + ppr + rerank +
+        # LaBSE) on a cold SLB can take 6-8s; the old 5s default was
+        # silently timing out on large contexts.
         self.rest_url = (rest_url or _os.environ.get("CONTEXT_M_REST_URL")
                          or "http://localhost:8900").rstrip("/")
         self.api_key = (api_key or _os.environ.get("CONTEXT_M_API_KEY")

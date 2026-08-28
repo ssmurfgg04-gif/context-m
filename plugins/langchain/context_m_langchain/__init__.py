@@ -7,4 +7,4 @@ ContextMMemory`.
 from context_m_langchain.adapter import ContextMMemory
 
 __all__ = ["ContextMMemory"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

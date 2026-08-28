@@ -27,30 +27,38 @@ from setuptools import setup, find_packages
 
 setup(
     name="context-m-langchain",
-    version="0.1.0",
+    version="0.2.0",
     description="LangChain BaseMemory adapter for Context-M — the "
                 "Universal Neuro-Symbolic Memory Fabric.",
     long_description=(
-        "Context-M LangChain Adapter\n"
-        "=========================\n\n"
-        "Drop-in replacement for ``ConversationBufferMemory`` that "
-        "routes through Context-M's REST API. Gives any LangChain "
-        "agent access to Context-M's bi-temporal Trace, cryptographic "
-        "provenance, Memory Git (branch/merge/diff/blame), ZK-lite "
-        "proofs, federation-ready schema export, and the μ=0 ingest "
-        "protocol (zero LLM calls during save).\n\n"
-        "Quickstart:\n\n"
-        ".. code-block:: python\n\n"
-        "    from context_m_langchain import ContextMMemory\n"
-        "    memory = ContextMMemory(user_id='alice')\n"
-        "    memory.save_context(\n"
-        "        {'input': 'Hi I\\'m Alice'},\n"
-        "        {'output': 'Nice to meet you, Alice!'})\n"
-        "    memory.load_memory_variables(\n"
-        "        {'input': 'what\\'s my name?'})\n"
-        "    # -> {'history': 'Alice mentioned her name is Alice\\n...'}\n"
+        "# Context-M LangChain Adapter\n"
+        "Drop-in replacement for `ConversationBufferMemory` that routes "
+        "through Context-M's REST API. Gives any LangChain agent access "
+        "to Context-M's bi-temporal Trace, cryptographic provenance, "
+        "Memory Git (branch/merge/diff/blame), ZK-lite proofs, "
+        "federation-ready schema export, and the mu=0 ingest protocol "
+        "(zero LLM calls during save).\n\n"
+        "## Quickstart\n\n"
+        "```python\n"
+        "from context_m_langchain import ContextMMemory\n"
+        "memory = ContextMMemory(user_id='alice')\n"
+        "memory.save_context(\n"
+        "    {'input': 'Hi I\\'m Alice'},\n"
+        "    {'output': 'Nice to meet you, Alice!'})\n"
+        "memory.load_memory_variables(\n"
+        "    {'input': 'what\\'s my name?'})\n"
+        "```\n\n"
+        "## Configuration\n\n"
+        "Environment variables:\n"
+        "- `CONTEXT_M_REST_URL` — default `http://localhost:8900`\n"
+        "- `CONTEXT_M_API_KEY` — default empty (set if REST server requires RBAC)\n"
+        "- `CONTEXT_M_USER_ID` — default `\"default\"`\n\n"
+        "## What's new in v0.2.0 (2026-08-28)\n\n"
+        "- Timeout raised to 10s default (was 5s) for large-context search.\n"
+        "- `intent` field surfaced in `load_memory_variables` output.\n"
+        "- `save_context` streams through the unmess pipeline by default.\n"
     ),
-    long_description_content_type="text/x-rst",
+    long_description_content_type="text/markdown",
     author="Context-M maintainers",
     author_email="maintainers@context-m.dev",
     url="https://github.com/ssmurfgg04-gif/context-m",

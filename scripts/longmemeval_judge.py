@@ -86,7 +86,13 @@ def run_longmemeval_judge(api_key: str | None = None,
               "nugget judge.")
 
     cfg = Config(db_path=":memory:",
-                 unmess_enabled=False,  # bypass the period-strip bug
+                 unmess_enabled=True,   # Tier-4 fix landed 2026-08-28:
+                                        # DisSim preserves trailing
+                                        # punctuation, role patterns
+                                        # accept |$ end-of-string
+                                        # anchor, Bitap FP penalty
+                                        # filters widened-trigger
+                                        # candidates. Safe to enable.
                  bitap_trigger_enabled=True,
                  tiny_fallback_enabled=True,
                  prefilter_enabled=True,

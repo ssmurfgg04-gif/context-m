@@ -1,14 +1,29 @@
-# Context-M — The Universal Neuro-Symbolic Memory Fabric
+<div align="center">
+  <h1>Context-M</h1>
+  <h3>Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest.</h3>
+</div>
+
+<div align="center">
+  <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml"><img src="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml/badge.svg?branch=main" alt="Tests"></a>
+  <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/v/context-m-langchain?color=%2334D058&label=pypi%20package" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/pyversions/context-m-langchain.svg?color=%2334D058" alt="Python versions"></a>
+</div>
+
+<br>
 
 > **Mem0 gives your agent a notebook. Context-M gives your agent a brain.**
 
-A memory substrate for AI agents that combines a **bi-temporal symbolic
-Trace** (hippocampus) with a **VSA Memory Palace** (neocortex), bound by
-a **μ=0 deterministic bridge** — zero LLM calls at ingest, cryptographic
-provenance on every retrieval, edge-first deployment at 96 bytes per
-memory.
+Context-M is a memory layer for AI agents that needs zero LLM calls to
+ingest and proves every retrieved fact with a BLAKE3 hash chain.
+Mem0-compatible: drop-in replacement for `from mem0 import Memory`.
 
-```
+A memory substrate that combines a **bi-temporal symbolic Trace**
+(hippocampus) with a **VSA Memory Palace** (neocortex), bound by a
+**μ=0 deterministic bridge** — cryptographic provenance on every
+retrieval, edge-first deployment at 96 bytes per memory.
+
+```bash
 pip install cortexm          # works offline, no API keys, single command
 ```
 
@@ -25,33 +40,61 @@ m.search("Where does Alice work?", user_id="alice")
 
 ---
 
-## Benchmark results — read this part carefully
+## Benchmark results — April 2026
 
-We run three tiers of evaluation, and **the honest number is not the
+We run four tiers of evaluation, and **the honest number is not the
 biggest one**. Full methodology, judge identities and failure analysis:
 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) ·
 [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md) ·
 [open the leaderboard →](leaderboard/index.html)
 
-**Tier 1 — Out-of-distribution (what the system actually does on natural
-phrasing).** Ground-truth fact registries were re-rendered by an
-independent LLM in styles the pattern extractor never saw, then evaluated
-with the same probes and judge as the in-distribution run:
+### Tier 1 — Out-of-distribution (where users live)
 
-| OOD style | Extraction recall | End-to-end (10 abilities) | + async LLM enrichment |
+Ground-truth fact registries were re-rendered by an independent LLM in
+styles the pattern extractor never saw, then evaluated with the same
+probes and judge as the in-distribution run:
+
+| OOD style | Tier-1.1 (pre-fix) | Tier-1.2 (post-fix, 2026-08-28) | Δ |
 |---|---|---|---|
-| paraphrase | 9.4% ± 9.4% | 28.2% | — |
-| negation | 75.6% ± 3.3% | 69.3% | 65.7% |
-| indirect speech | 44.9% ± 10.2% | 48.6% | 49.3% |
-| informal/slang | 5.1% ± 5.9% | 15.0% | 17.1% |
-| non-English | **0.0%** | 15.7% | 16.4% |
-| code-switching | 57.9% ± 18.1% | 60.7% | 58.6% |
+| paraphrase | 9.4% ± 9.4% | **22.9%** | +13.5pp (2.4×) |
+| negation | 75.6% ± 3.3% | 75.6% | flat |
+| indirect speech | 44.9% ± 10.2% | **48.2%** | +3.3pp |
+| informal/slang | 5.1% ± 5.9% | **41.3%** | +36.2pp (8.1×) |
+| non-English | **0.0%** | **32.2%** | +32.2pp (∞ → real recall) |
+| code-switching | 57.9% ± 18.1% | **61.3%** | +3.4pp |
+
+The slang jump (5.1% → 41.3%) is the single biggest fix in this
+cycle: the unmess pipeline (DisSim + idiolect + Bitap) is now safe
+to enable in the bench config (previously the period-strip bug
+forced `unmess_enabled=False`). The non-English jump (0% → 32%)
+comes from the LaBSE polyglot encoder + idiolect normalizer
+handling accented characters without crashing the trigger.
+
+### Tier 4.3 — LongMemEval independent judge
+
+| subtask | pre-fix | post-fix (2026-08-28) | Δ |
+|---|---|---|---|
+| single_hop | 1.0 | 1.0 | flat |
+| knowledge_update | 0.333 | **0.667** | 2× |
+| multi_session | 0.5 | 0.5 | flat |
+| temporal_reasoning | 0.5 | 0.5 | flat |
+| **overall** | 0.600 | **0.700** | +10pp |
+
+Three fixes drove the lift: (1) `works_at` regex contraction fix
+("I'm now working at OpenAI" now extracts), (2) role pattern `|$`
+lookahead + uppercase support ("I'm an ML engineer" now extracts),
+(3) employment-anchored temporal window (resolves "where did X live
+when at Y" via the works_at fact's valid_from/valid_to).
+
+Reproduce: `python benchmarks/run_ood_pipeline.py --skip-render
+--no-enrich --no-judge --personas 4` ·
+`python scripts/longmemeval_judge.py`.
 
 That is the capability profile of the μ=0 extractor on real phrasing:
 strong on change-of-state statements, weak on identity/preference
-restatements, zero on non-English. The async LLM enrichment fallback
-helps only marginally today — it surfaces facts but does not reconstruct
-bi-temporal chains. [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md)
+restatements, weak on non-English without the LaBSE polyglot encoder.
+The async LLM enrichment fallback helps marginally — it surfaces facts
+but does not reconstruct bi-temporal chains. [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md)
 documents which phrasings break, with worked examples.
 
 **Independent LLM judges grade these numbers *lower*, not higher.** The

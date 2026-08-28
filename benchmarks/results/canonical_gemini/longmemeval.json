@@ -1,11 +1,11 @@
 {
   "summary": {
     "n_questions": 10,
-    "det_judge_accuracy": 0.6,
-    "gemini_judge_accuracy": 0.6,
+    "det_judge_accuracy": 0.7,
+    "gemini_judge_accuracy": 0.7,
     "by_subtask": {
       "single_hop": 1.0,
-      "knowledge_update": 0.3333,
+      "knowledge_update": 0.6667,
       "multi_session": 0.5,
       "temporal_reasoning": 0.5
     },
@@ -17,13 +17,13 @@
       "question": "What is Bob's name?",
       "expected_answer": "Bob",
       "subtask": "single_hop",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left S...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 9d3d27f3; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c5a11111; src #1...",
       "top5": [
         "Bob | name | Bob",
-        "Bob | speaks | German",
+        "Bob | works_at | OpenAI",
+        "Bob | lives_in | Berlin",
         "Bob | prefers | Python",
-        "Bob | left | Stripe",
-        "Bob | lives_in | Berlin"
+        "Bob | role | ML engineer"
       ],
       "det_correct": true,
       "gemini_correct": true
@@ -33,13 +33,13 @@
       "question": "Where does Bob work?",
       "expected_answer": "Stripe",
       "subtask": "single_hop",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live ...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 2cdbafd8; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 946937be; src #a...",
       "top5": [
+        "Bob | works_at | OpenAI",
         "Bob | name | Bob",
-        "Bob | prefers | Python",
+        "Bob | role | ML engineer",
         "Bob | left | Stripe",
-        "Bob | lives_in | Berlin",
-        "Bob | speaks | German"
+        "Bob | prefers | Python"
       ],
       "det_correct": true,
       "gemini_correct": true
@@ -49,13 +49,13 @@
       "question": "Where does Bob live?",
       "expected_answer": "Berlin",
       "subtask": "single_hop",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I pref...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 9d3d27f3; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 946937be; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c5a11111; src #1bdc85ed; \"I pref...",
       "top5": [
         "Bob | lives_in | Berlin",
         "Bob | name | Bob",
         "Bob | left | Stripe",
         "Bob | prefers | Python",
-        "Bob | speaks | German"
+        "Bob | works_at | OpenAI"
       ],
       "det_correct": true,
       "gemini_correct": true
@@ -65,45 +65,45 @@
       "question": "Where does Bob currently work?",
       "expected_answer": "OpenAI",
       "subtask": "knowledge_update",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I li...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 2cdbafd8; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c5a11111; src...",
       "top5": [
+        "Bob | works_at | OpenAI",
         "Bob | name | Bob",
+        "Bob | role | ML engineer",
         "Bob | prefers | Python",
-        "Bob | speaks | German",
-        "Bob | lives_in | Berlin",
-        "Bob | left | Stripe"
+        "Bob | speaks | German"
       ],
-      "det_correct": false,
-      "gemini_correct": false
+      "det_correct": true,
+      "gemini_correct": true
     },
     {
       "session_id": 2,
       "question": "Where did Bob work before OpenAI?",
       "expected_answer": "Stripe",
       "subtask": "knowledge_update",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I li...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c5a11111; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 08f844f9; src #4100...",
       "top5": [
+        "Bob | works_at | OpenAI",
         "Bob | name | Bob",
-        "Bob | speaks | German",
         "Bob | prefers | Python",
-        "Bob | lives_in | Berlin",
-        "Bob | left | Stripe"
+        "Bob | speaks | German",
+        "Bob | role | ML engineer"
       ],
-      "det_correct": true,
-      "gemini_correct": true
+      "det_correct": false,
+      "gemini_correct": false
     },
     {
       "session_id": 3,
       "question": "List all the places Bob has worked.",
       "expected_answer": "Stripe and OpenAI",
       "subtask": "multi_session",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 2cdbafd8; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 9d3d27f3; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; ...",
       "top5": [
+        "Bob | works_at | OpenAI",
+        "Bob | role | ML engineer",
         "Bob | lives_in | Berlin",
         "Bob | name | Bob",
-        "Bob | speaks | German",
-        "Bob | left | Stripe",
-        "Bob | prefers | Python"
+        "Bob | speaks | German"
       ],
       "det_correct": false,
       "gemini_correct": false
@@ -113,13 +113,13 @@
       "question": "What programming language does Bob prefer?",
       "expected_answer": "Python",
       "subtask": "multi_session",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I li...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c5a11111; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 08f844f9; src #410055ba; \"I speak German.\"]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; \"I'm ...",
       "top5": [
         "Bob | prefers | Python",
         "Bob | name | Bob",
         "Bob | speaks | German",
-        "Bob | lives_in | Berlin",
-        "Bob | left | Stripe"
+        "Bob | works_at | OpenAI",
+        "Bob | lives_in | Berlin"
       ],
       "det_correct": true,
       "gemini_correct": true
@@ -129,13 +129,13 @@
       "question": "Where did Bob live when he was at Stripe?",
       "expected_answer": "Berlin",
       "subtask": "temporal_reasoning",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 946937be; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 9d3d27f3; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; \"I'm n...",
       "top5": [
         "Bob | left | Stripe",
-        "Bob | name | Bob",
-        "Bob | speaks | German",
         "Bob | lives_in | Berlin",
-        "Bob | prefers | Python"
+        "Bob | name | Bob",
+        "Bob | works_at | OpenAI",
+        "Bob | speaks | German"
       ],
       "det_correct": true,
       "gemini_correct": true
@@ -145,13 +145,13 @@
       "question": "Did Bob move between sessions?",
       "expected_answer": "Yes, Bob moved between sessions.",
       "subtask": "temporal_reasoning",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 946937be; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 2cdbafd8; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c5a11111; src #1bdc85ed; \"I p...",
       "top5": [
-        "Bob | name | Bob",
-        "Bob | lives_in | Berlin",
         "Bob | left | Stripe",
-        "Bob | speaks | German",
-        "Bob | prefers | Python"
+        "Bob | name | Bob",
+        "Bob | role | ML engineer",
+        "Bob | prefers | Python",
+        "Bob | lives_in | Berlin"
       ],
       "det_correct": false,
       "gemini_correct": false
@@ -161,16 +161,16 @@
       "question": "What is Bob's current role?",
       "expected_answer": "ML engineer",
       "subtask": "knowledge_update",
-      "context_block": "[Memory \u2014 Known facts]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left S...",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 08f844f9; src #410055ba; \"I speak German.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 40918cff; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 2cdbafd8; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 09c4bfea; src #1def74eb; ...",
       "top5": [
         "Bob | speaks | German",
         "Bob | name | Bob",
-        "Bob | prefers | Python",
-        "Bob | left | Stripe",
-        "Bob | lives_in | Berlin"
+        "Bob | role | ML engineer",
+        "Bob | works_at | OpenAI",
+        "Bob | prefers | Python"
       ],
-      "det_correct": false,
-      "gemini_correct": false
+      "det_correct": true,
+      "gemini_correct": true
     }
   ]
 }

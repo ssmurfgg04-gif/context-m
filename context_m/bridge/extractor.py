@@ -186,17 +186,31 @@ class Extractor:
         # (Wu-Manber is bitwise, no learned weights) and <50μs on a typical
         # sentence — same order as the regex itself.
         trigger_fired = bool(_TRIGGER.search(sent))
+        bitap_widened = False
         if not trigger_fired:
             if (not getattr(self.cfg, "bitap_trigger_enabled", True)
                     or not _bitap_trigger_match(sent,
                                                 self.cfg.bitap_trigger_max_edits)):
                 return out
+            bitap_widened = True  # Tier-4: trigger fired only via Bitap
         for name, rx, handler in PATTERNS:
             for m in rx.finditer(sent):
                 try:
                     cands = handler(m, ctx, sp, ts, sent)
                 except Exception:
                     continue
+                # Tier-4 fix: Bitap FP filtering. When the trigger
+                # fired only via Wu-Manber fuzzy match (not the strict
+                # regex), every emitted candidate carries a 0.10
+                # confidence penalty AND the trigger_source="bitap_widened"
+                # flag. The writer's min_confidence threshold then
+                # filters out low-quality fuzzy-trigger extractions
+                # while keeping the high-confidence ones. μ=0 — no
+                # learned weights, deterministic penalty.
+                if bitap_widened:
+                    for c in cands:
+                        c.confidence = max(0.0, c.confidence - 0.10)
+                        c.trigger_source = "bitap_widened"
                 out.extend(c for c in cands if c.value and len(c.value) >= 2)
         out.extend(extract_events(sent, sp, ts, ctx))
         # --- μ≈0 tiny-transformer fallback (gated on pattern miss) ---------
@@ -218,12 +232,17 @@ class Extractor:
                     sent, subject_hint=ctx.subject,
                     relations=tuple(getattr(ctx, "relations_hint", ())) or ())
                 # convert FallbackCandidate → Candidate so the rest of the
-                # pipeline (dedup, provenance) treats them uniformly
+                # pipeline (dedup, provenance) treats them uniformly.
+                # Tier-4: the tiny-fallback path is ONLY reached when
+                # the Bitap widened the trigger (else we'd have early-
+                # returned). Mark all fallback candidates as bitap_widened
+                # so the writer's FP filter sees them.
                 for fc in cands:
                     out.append(Candidate(
                         subject=fc.subject, relation=fc.relation,
-                        value=fc.value, confidence=fc.confidence,
-                        pattern=fc.pattern, span=fc.span, note=fc.note))
+                        value=fc.value, confidence=max(0.0, fc.confidence - 0.10),
+                        pattern=fc.pattern, span=fc.span, note=fc.note,
+                        trigger_source="bitap_widened"))
             except Exception:
                 # the fallback is best-effort — never let it crash ingest
                 pass

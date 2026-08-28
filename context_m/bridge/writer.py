@@ -215,6 +215,15 @@ class MemoryWriter:
                                 "speaker": speaker,
                                 "span": list(cand.span),
                                 "injection_risk": verdict.risk,
+                                # Tier-4: surface whether this fact
+                                # came from a strict trigger or a
+                                # Bitap-widened one. Downstream audits
+                                # can use this to estimate OOD recall
+                                # vs FP rate; the min_confidence
+                                # filter already applied a 0.10
+                                # penalty on the bitap_widened path.
+                                "trigger_source": getattr(
+                                    cand, "trigger_source", "strict"),
                                 **({"context": cand.note} if cand.note else {})})
                 fact.birth_commit = commit
 

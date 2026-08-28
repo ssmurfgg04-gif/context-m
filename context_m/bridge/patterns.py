@@ -63,6 +63,14 @@ class Candidate:
     valid_to: str | None = None
     retraction: bool = False
     note: str = ""
+    # Tier-4 fix: track whether this candidate came from a strict
+    # trigger match or a Bitap-widened trigger. Bitap widening is
+    # essential for OOD recall (catches "wrks" -> "works"), but the
+    # wider net admits false positives — a sentence that triggered
+    # on a fuzzy match should carry a slightly lower confidence so
+    # the writer's min_confidence threshold can filter out noisy
+    # extractions. Stays μ=0 — the flag is deterministic.
+    trigger_source: str = "strict"  # "strict" | "bitap_widened"
 
 
 @dataclass
@@ -137,7 +145,10 @@ def _called(m, ctx, sp, ts, sent):
 # --- employment ------------------------------------------------------------
 WORK_AT = rf"(?P<val>{ORG})"
 @pattern("works_at",
-         rf"\bi\s+(?:(?:now|currently|these days)\s+)?(?:work|worked|working|'m working|am working)\s+(?:at|for)\s+(?:the\s+)?{WORK_AT}")
+         rf"\bi(?:'?m)?\s+(?:(?:now|currently|these days)\s+)?"
+         rf"(?:work|worked|working"
+         rf"|am\s+(?:(?:now|currently|these days)\s+)?working"
+         rf"|now\s+work)\s+(?:at|for)\s+(?:the\s+)?{WORK_AT}")
 def _works(m, ctx, sp, ts, sent):
     v = clean_value(m.group("val"))
     vf = date_in(sent, ts) if re.search(r"\b(joined|started|got a job)\b", sent, re.I) else None
@@ -179,15 +190,17 @@ def _no_longer_at(m, ctx, sp, ts, sent):
     return [Candidate("SELF", "left", v, 0.88, "no_longer_at", retraction=True)]
 
 
-@pattern("role", rf"\bi\s+(?:work\s+as|am|'m)\s+(?:a|an|the)\s+(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for|and|but|where)\b)")
+@pattern("role", rf"\bi\s+work\s+as\s+(?:a|an|the)\s+(?P<val>[a-zA-Z][a-zA-Z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for|and|but|where)\b|$)"
+              rf"|\bi'?m\s+(?:a|an|the)\s+(?P<val2>[a-zA-Z][a-zA-Z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for|and|but|where)\b|$)"
+              rf"|\bi\s+am\s+(?:a|an|the)\s+(?P<val3>[a-zA-Z][a-zA-Z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for|and|but|where)\b|$)")
 def _role(m, ctx, sp, ts, sent):
-    v = clean_value(m.group("val"))
+    v = clean_value(m.group("val") or m.group("val2") or m.group("val3"))
     if v.lower() in ROLE_BLOCK:
         return []
     return [Candidate("SELF", "role", v, 0.85, "role")]
 
 
-@pattern("role_as", rf"\bas\s+(?:a|an)\s+(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for)\b)")
+@pattern("role_as", rf"\bas\s+(?:a|an)\s+(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for)\b|$)")
 def _role_as(m, ctx, sp, ts, sent):
     v = clean_value(m.group("val"))
     if v.lower() in ROLE_BLOCK:
@@ -195,7 +208,7 @@ def _role_as(m, ctx, sp, ts, sent):
     return [Candidate("SELF", "role", v, 0.8, "role_as")]
 
 
-@pattern("role_my", rf"\bmy\s+(?:job|role|title|position)\s+is\s+(?:a|an|the)?\s*(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for)\b)")
+@pattern("role_my", rf"\bmy\s+(?:job|role|title|position)\s+is\s+(?:a|an|the)?\s*(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for)\b|$)")
 def _role_my(m, ctx, sp, ts, sent):
     v = clean_value(m.group("val"))
     return [Candidate("SELF", "role", v, 0.9, "role_my")]

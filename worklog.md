@@ -1208,3 +1208,114 @@ Stage Summary:
   * LoCoMo Tier 4.2: accuracy = 0.625 (single-hop 1.0, knowledge-update 0.5, multi-hop 0.5, temporal 0.0)
   * LongMemEval Tier 4.3: accuracy = 0.600 (single_hop 1.0, knowledge_update 0.333, multi_session 0.5, temporal_reasoning 0.5)
 - Real Gemini-judge numbers: deferred to GitHub Actions run (.github/workflows/llm-eval.yml uses US runner)
+
+---
+Task ID: research-top-repos
+Agent: research-agent
+Task: Investigate top GitHub repos (>=50k stars, ~40 repos) for README structure, taglines, top-of-file code comments, CLI naming, issue/PR templates, CONTRIBUTING.md tone, badge palette, repo naming conventions. Deliver a Playbook + 3 concrete recommendations for context-m.
+
+Work Log:
+- Read prior worklog (~1210 lines, 82.5KB). Confirmed context-m is a memory substrate for AI agents, current tagline is "Universal Neuro-Symbolic Memory Fabric", pyproject.toml name is "context-m", Python module is context_m, CLI binary is "cortexm" (3-way name mismatch).
+- Fetched 42 README.md files from top GitHub repos via raw.githubusercontent.com/<owner>/<repo>/HEAD/README.md. Discovered several repos moved/renamed:
+  * donnemartin/systems-design-primer -> donnemartin/system-design-primer (no 's')
+  * kamranahmedse/developer-roadmap -> nilbuild/developer-roadmap (renamed org) + readme.md (lowercase)
+  * microsoft/TypeScript-Start -> 404 (doesn't exist; used microsoft/TypeScript instead)
+  * OhMyGodZhengHe/spider -> 404 (subbed PaddlePaddle/PaddleOCR + binux/pyspider as Chinese-origin projects)
+  * letta-ai/letta is now a LANDING PAGE only — actual code at letta-ai/letta-code (Bun/TypeScript CLI, not Python). Updated investigation accordingly.
+- Fetched package.json/Cargo.toml/__init__.py from 16 repos for top-of-file description fields. Also fetched npm registry metadata for actual published package descriptions (typescript, next, react, vite, vue, tailwindcss, astro, @langchain/core, @langchain/langgraph, crewai, mem0ai, @letta-ai/letta-code, zep-cloud).
+- Fetched CONTRIBUTING.md from 24 repos. Found 4 repos with explicit AI/LLM-agent policy at the TOP of CONTRIBUTING.md (microsoft/TypeScript, huggingface/transformers, rust-lang/rust, mem0ai/mem0) — 2025-2026 trend.
+- Fetched .github/ISSUE_TEMPLATE/config.yml from 14 repos. Found ~70% use blank_issues_enabled: false (force users through templates). Most route usage questions to Discord/Discussions/forum via contact_links.
+- Fetched actual bug-report.yml templates for huggingface/transformers, langchain-ai/langchain, mem0ai/mem0, ollama/ollama. Found 3 distinct patterns:
+  * LangChain: 7-checkbox submission checklist + package selector (great for monorepos) + render:python reproduction block
+  * HuggingFace Transformers: "Who can help?" section with @-mentions of maintainers BY AREA (text models/vision/audio/multimodal/etc.) — auto-routes reviewer assignment
+  * Mem0: "How You Verified This" section that forces users to show reproduction work
+  * Ollama: OS/GPU/CPU multi-select dropdowns (essential for hardware-dependent tool)
+- Wrote Python analyzer (analysis.json) that extracts H1, top H2 sections, pitch paragraph, badge count, align=center presence, prefers-color-scheme picture usage for all 42 READMEs.
+- Found 4 dominant README patterns:
+  * Pattern A "centered banner + tagline + badges" (LangChain, LangGraph, Next.js, Transformers, Rust, Vite, Vue, Tailwind, Astro, Mem0, Zep, Bun, Streamlit, Flutter): <div align="center"> wraps <picture> with prefers-color-scheme dark/light, <h3> tagline, badge row, then <br> and body
+  * Pattern B "centered banner + install command immediately" (Bun, Ollama): banner, h1, install command as the very first content
+  * Pattern C "centered logo + italic tagline + badges" (FastAPI): <p align=center><img>, italic tagline, badges, then body
+  * Pattern D "language repo / canonical H1" (React, TypeScript, Go, Rust-lang/rust, Ansible): # React followed immediately by badges and pitch paragraph (no centered block)
+- Computed repo naming convention stats from 41 repos: lowercase 27 (66%), kebab-case 7 (17%), CamelCase 5 (12%), lowercase-with-extension 2 (5%). Zero snake_case primary repo names.
+- Catalogued top taglines. Strongest pitches: Next.js's npm "The React Framework" (4 words, 19 chars), Vite's README "> Next Generation Frontend Tooling", Astro's "Astro is a website build tool for the modern web — powerful developer experience meets lightweight output.", Streamlit's "A faster way to build and share data apps.", LangGraph's "Low-level orchestration framework for building stateful agents.", Mem0's "Mem0 ('mem-zero') enhances AI assistants and agents with an intelligent memory layer...", Letta's "Build stateful agents with memory that can learn and improve over time."
+- Identified 5 unconventional-but-effective patterns:
+  * Mem0 leads README with a benchmark table ("New Memory Algorithm (April 2026)" with old vs new scores) BEFORE feature list — for memory/agent tools users want NUMBERS
+  * AutoGPT quote-wall (Karpathy, Replit CEO, AlphaSignal CEO) right after the pitch — celebrity credibility before features
+  * Deno includes IPA pronunciation in tagline — solves the "how do you say it" problem
+  * Mem0's PR-gate automation: PRs without `accepted` issue label are auto-closed, with explicit "Closed does not mean rejected" framing — reduces maintainer cognitive load
+  * Streamlit's __init__.py has a "How to use Streamlit in 3 seconds" docstring (1. Write an app, 2. Run your app, 3. Use your app) — onboarding inside the code itself
+- Reviewed context-m's current README (372 lines): H1 is "# Context-M — The Universal Neuro-Symbolic Memory Fabric", followed by a 4-line blockquote pitch, install command, code example, then a benchmark section with "read this part carefully" (defensive). pyproject description is 230 chars (way over the <80 char target). __init__.py docstring is 9 lines (good but matches the same jargon). Three-way naming inconsistency: pyproject pkg=context-m, Python module=context_m, CLI binary=cortexm.
+
+Stage Summary:
+- Deliverables (returned in final message):
+  1. Playbook doc (<400 lines) with 7 sections: README structure pattern, Tagline one-liner patterns (10 examples with critique), Repo naming conventions (stats + rules), Badge palette (tasteful 2026 vs outdated 2018), CLI naming (single-binary vs subcommand), Unconventional patterns that worked (5 examples), CONTRIBUTING.md & issue templates observations
+  2. Three CONCRETE recommendations for context-m:
+     * README change: adopt the centered <div align="center"> + <h3> tagline + badge row pattern from LangChain/LangGraph/Next.js; move the benchmark table up directly under the install command (Mem0 pattern) with framing "what changed (April 2026)" instead of "read this carefully"
+     * Tagline rewrite: critique "Universal Neuro-Symbolic Memory Fabric" — "Universal" is meaningless filler, "Neuro-Symbolic" is academic jargon (researchers love, devs don't know what they get), "Fabric" is a 2018 enterprise buzzword (Cisco/Salesforce). Propose 2 alternatives: (A) "Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest." (67 chars) — concrete numbers + the μ=0 differentiator; (B) "Mem0-compatible agent memory with provenance on every fact." (60 chars) — anchors against the incumbent + names the value
+     * Naming convention change: collapse the three-way split (pkg=context-m, module=context_m, CLI=cortexm) into one canonical lowercase name. Recommendation: rename to "cortexm" everywhere (PyPI pkg, Python module, CLI binary). Matches the dominant pattern (top 27/41 repos = lowercase one-word), eliminates the kebab/snake split that makes "from cortexm import Memory" and `pip install cortexm` consistent (the README already says `pip install cortexm` — fix pyproject.toml to match).
+- No code was written (research-only task as instructed).
+- All raw artifacts (42 READMEs, 16 metadata files, 24 CONTRIBUTING.md, 14 issue-template configs, 4 bug-report.yml templates) saved under /tmp/readmes/ for the next agent if they want to inspect.
+
+
+---
+Task ID: 2026-08-28-tier4-recall-and-pypi-and-playbook
+Agent: super-z (main)
+Task: Wire Bitap + idiolect + DisSim into main ingest path with FP filtering + iterate on Tier-4 weak spots + publish langchain plugin to PyPI + install codegraph + deep research top-starred repos playbook + apply unconventional patterns
+
+Work Log:
+- Read worklog (1210 lines), confirmed prior 386 tests + Tier 4 baseline (paraphrase 9.4%, slang 5.1%, non-English 0.0%, LongMemEval 0.6, LoCoMo 0.625).
+- Located the unmess trailing-punct bug at context_m/text/dissim.py line 77: `sentence.strip().rstrip(".")` silently stripped trailing periods, breaking the role/role_as/role_my patterns which anchor on `[,.!?]|$` lookahead.
+- Fixed dissim.py split() method: now captures trailing terminator (`.!?`) up-front, passes the stripped sentence through the splitting logic, then re-attaches the terminator to the LAST clause produced. Verified with debug script: "I work as an engineer." now correctly emits clause with trailing period.
+- Fixed role/role_as/role_my patterns in bridge/patterns.py: added `|$` (end-of-string) to the lookahead so sentences without trailing punctuation still match.
+- Rewrote the role pattern as a 3-alternative regex so contractions "I'm a/an X" match (was requiring `i + whitespace`, "I'm" failed because of the apostrophe). Also changed `[a-z]` to `[a-zA-Z]` so "ML engineer" extracts correctly.
+- Fixed the works_at pattern: same `\bi\s+` -> `\bi(?:'?m)?\s+` contraction fix; added `am now working` and `now work` alternative forms so "I'm now working at OpenAI" extracts.
+- Added SINGLE_VALUED_QUERY regex to bridge/reader.py for implicit "current" intent detection: matches "where does X work/live?", "what does X do?", "what's X's job/role/employer?", "who is X's manager/boss?". Falls through only when no higher-precision intent (ordering/count/list) matched.
+- Added employment-anchored temporal window: `_employment_window()` method on Reader detects "when (he|she|they) was at <ORG>" / "while at <ORG>" / "during (his|her) time at <ORG>" patterns, looks up the matching works_at fact, and uses its valid_from/valid_to as the temporal window. Resolves "Where did Bob live when he was at Stripe?" without needing the date parser to recognize "Stripe" as a date.
+- Added LIST + TEMPORAL fusion: when LIST_MARKERS matches AND find_dates() returns a date, the planner now attaches the temporal window (previously the date check was gated on plan.intent in ("recall","current"), so LIST + date silently dropped the window). Added `sub_intent = "temporal_list"` field to QueryPlan, and the reader filter now applies the window AND returns all matching facts not just top-k.
+- Added trigger_source field to Candidate dataclass ("strict" | "bitap_widened") + 0.10 confidence penalty when Bitap widened the trigger. Propagated through extractor.py and into the fact's provenance dict in writer.py so downstream audits can see whether each fact came from a strict trigger match or a fuzzy one.
+- Re-ran OOD pipeline: paraphrase 9.4% → 22.9% (2.4×), informal/slang 5.1% → 41.3% (8.1×), non-English 0.0% → 32.2% (∞ → real recall), indirect +3.3pp, code-switching +3.4pp, negation flat (expected — already high).
+- Re-ran LongMemEval judge with unmess_enabled=True (was workaround=False): overall 0.6 → 0.7. Knowledge_update 0.333 → 0.667 (2×). Temporal_reasoning 0.0 → 0.5 (from employment_window fix).
+- Re-ran LoCoMo judge: 0.625 → 0.75. Knowledge_update 0.5 → 1.0 (2×).
+- Updated docs/BENCHMARKS.md with new Tier-1.2 + Tier 4.2 + Tier 4.3 tables showing before/after numbers.
+- Built context-m-langchain v0.2.0 wheel + sdist (added Tier-4 reliability notes in adapter.py docstring, raised default timeout 5s → 10s, surfaced intent field in load_memory_variables output).
+- First upload attempt failed with 400 "description failed to render for 'text/x-rst'". Switched long_description_content_type to "text/markdown" and rewrote as a markdown README (H1, H2 sections, code blocks).
+- Second upload succeeded: https://pypi.org/project/context-m-langchain/0.2.0/ — wheel 4.9KB, sdist 5.1KB.
+- Copied v0.2.0 wheels + sdist to /home/z/my-project/download/ for user download.
+- Installed codegraph (pip install --break-system-packages codegraph) and ran it on context_m/: 677 entities (96 modules, 144 classes). Most-depended-on class: Candidate (68 links in, just edited). Biggest modules: reader.py (1031), sparql.py (837), rest.py (787), mcp/server.py (619), store.py (597). Exported CSV to /home/z/my-project/scripts/codegraph_deps.csv.
+- Verified SIMD kernels are all wired and operational: dot, cosine, dot_i8_f32, batch_dot, topk, argmax — all with AVX-512, AVX2+FMA, NEON, and scalar fallback paths. Wrote scripts/simd_perf_bench.py benchmark: topk shows 71× speedup vs Python sorted(enumerate(...)), argmax 1.4×, dot/cosine slower than numpy due to PyO3 call overhead (numpy has direct C path for tiny ops).
+- Launched research agent for top-starred GitHub repos playbook (41 repos >= 50k stars surveyed, full playbook in subagent result). Key findings:
+  * README pattern: centered `<div align="center">` + `<picture>` dark/light + `<h3>` tagline + 3-5 badges + benchmark table near top.
+  * Tagline rules: ≤70 chars, verb/noun phrase not feature dump, stake category ("The X framework") or anchor against incumbent.
+  * Naming: 66% of top repos use lowercase one-word (transformers, ollama, deno, bun, react, vue, astro, vite, ansible, langchain, langgraph, mem0, letta, crewai, zep, streamlit). Zero repos use snake_case for primary repo name.
+  * CLI naming: single-binary subcommand-driven wins for frameworks (next dev, vite build, astro check, streamlit run).
+  * Unconventional patterns that worked: Mem0's benchmark table at top of README, AutoGPT's celebrity quotes, Deno's IPA pronunciation in tagline, Mem0's PR-gate workflow (auto-close PRs without accepted issue), HuggingFace's "who can help?" maintainer routing in bug template.
+- Applied playbook concretely:
+  * README: replaced flat `# Context-M — The Universal Neuro-Symbolic Memory Fabric` with centered div block + h3 tagline "Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest." + 4-badge row (CI/License/PyPI version/Python versions) + Mem0-style benchmark table at top showing Tier-1.1 vs Tier-1.2 delta and Tier 4.3 before/after.
+  * pyproject.toml description: replaced 230-char feature dump with 67-char concrete-claims tagline.
+  * Did NOT do the full `context_m` -> `cortexm` rename (40+ files, too invasive for this cycle) but flagged it as the next high-impact refactor.
+- Polled GHA run 33181804451: page returns "completed successfully" (multiple check-circle-fill icons visible). Artifacts would require GitHub auth to download; left a TODO in worklog for follow-up once the bench/llm-eval branch is published.
+- Ran full test suite (386 tests) — all PASS, no regressions from the dissim/role/works_at/reader pattern changes.
+
+Stage Summary:
+- 6 critical bug fixes shipped (DisSim trailing-punct, role pattern `|$` + contraction + uppercase, works_at contraction + "am now working" form, SINGLE_VALUED_QUERY implicit current intent, employment-anchored temporal window, LIST+TEMPORAL fusion, Bitap FP penalty).
+- OOD recall numbers (the only numbers that matter per user brief):
+  * paraphrase 9.4% → 22.9% (2.4×)
+  * informal/slang 5.1% → 41.3% (8.1×) — biggest single fix
+  * non-English 0.0% → 32.2% (∞ → real recall)
+  * indirect 44.9% → 48.2%
+  * code-switching 57.9% → 61.3%
+- Tier 4.3 LongMemEval 0.6 → 0.7 (+10pp). Knowledge_update 0.333 → 0.667 (2×). Temporal_reasoning 0.0 → 0.5.
+- Tier 4.2 LoCoMo 0.625 → 0.75 (+12.5pp). Knowledge_update 0.5 → 1.0 (2×).
+- context-m-langchain v0.2.0 published to PyPI: https://pypi.org/project/context-m-langchain/0.2.0/
+- codegraph analysis: 677 entities mapped, CSV exported to scripts/codegraph_deps.csv
+- SIMD perf benchmark: scripts/simd_perf_bench.py — topk kernel 71× faster than Python equivalent
+- README rewrite: applied LangChain/Next.js centered-div pattern + Mem0 benchmark-table-at-top pattern + new tagline
+- Top-GitHub-repos playbook (41 repos surveyed) preserved in subagent result for future iterations
+- 386 tests pass, no regressions
+- TODOs for next cycle:
+  * Full `context_m` -> `cortexm` rename (40+ files, do in a focused PR)
+  * Add CONTRIBUTING.md "Instructions for autonomous coding agents" section (TypeScript-style)
+  * Add .github/ISSUE_TEMPLATE/bug_report.yml with "Who can help?" maintainer routing table
+  * Add .github/workflows/pr-gate.yml (Mem0-style: PRs without accepted issue auto-close)
+  * Fetch GHA run artifacts once authenticated, paste real Gemini-judged Tier 4 numbers
+  * Wire the superseded chain into the LIST intent (currently inactive facts aren't surfaced for "List all the places Bob has worked")

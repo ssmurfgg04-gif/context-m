@@ -3,7 +3,7 @@
   "n_personas": 5,
   "long_text_len": 500,
   "before": {
-    "bytes_on_disk": 192512,
+    "bytes_on_disk": 172032,
     "chunks_pages": 1,
     "n_chunks": 5,
     "chunks_text_bytes": 2500,
@@ -11,19 +11,19 @@
     "max_text_bytes": 500
   },
   "after": {
-    "bytes_on_disk": 192512,
+    "bytes_on_disk": 172032,
     "chunks_pages": 1,
     "n_chunks": 5,
     "chunks_text_bytes": 335,
     "avg_text_bytes": 67,
     "max_text_bytes": 67,
     "arena_file_bytes": 1651,
-    "total_bytes_on_disk": 194163
+    "total_bytes_on_disk": 173683
   },
   "reductions": {
     "chunks_text_bytes": 86.6,
     "sqlite_db_file": 0.0,
-    "total_on_disk": -0.86
+    "total_on_disk": -0.96
   },
   "migration_report": {
     "migrated": 5,

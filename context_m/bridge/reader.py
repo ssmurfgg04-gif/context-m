@@ -94,6 +94,23 @@ LIST_MARKERS = re.compile(
     r"(?:that|which|she|he|they|i)\b|\blist\s+all\b", re.I)
 MULTIHOP_MARKERS = re.compile(
     r"\b('s\b|of the|of my|of her|of his|of their)\b", re.I)
+# Tier-4 fix: implicit "current" queries — "where does X work?" /
+# "what does X do?" / "what's X's job/employer/city?" — these are
+# asking for the single-valued CURRENT state but contain no explicit
+# "now" marker. Detecting them lets the reader apply the "current"
+# intent (which sets allow_inactive=True so the superseded chain can
+# surface; for ACTIVE facts only it also biases ranking toward the
+# latest valid_from).
+SINGLE_VALUED_QUERY = re.compile(
+    r"\b(?:where\s+(?:does|do|is)\s+\w+\s+(?:work|live|stay|reside)\b"
+    r"|what(?:'?s| is)\s+\w+(?:'?s)?\s+(?:job|role|title|position|employer|"
+    r"company|boss|manager|location|address|city|home)\b"
+    r"|\bwhat\s+does\s+\w+\s+do\b"
+    r"|\bwho\s+is\s+\w+(?:'?s)?\s+(?:manager|boss|lead|supervisor)\b)", re.I)
+# Temporal + LIST fusion: "list all X from 2024" or "what did X do
+# between A and B" should be a temporal-list (return the full matching
+# set within the window, not just top-k). Detected downstream by the
+# planner when both LIST and a temporal window are set.
 
 
 @dataclass
@@ -104,6 +121,10 @@ class QueryPlan:
     window_start: str | None = None
     window_end: str | None = None
     keywords: list[str] = field(default_factory=list)
+    # Tier-4 fix: sub-intent carries the temporal_list fusion flag
+    # so the reader's filter knows to apply BOTH the temporal window
+    # AND the exhaustive recall semantics (don't truncate to top-k).
+    sub_intent: str | None = None
 
 
 @dataclass
@@ -290,6 +311,17 @@ class MemoryReader:
             plan.intent = "list"      # exhaustive set recall
         elif SUPERSESSION_MARKERS.search(query) or CURRENT_MARKERS.search(query):
             plan.intent = "current"
+        # Tier-4 fix: implicit "current" queries — surface the latest
+        # value on single-valued relations ("where does X work?" /
+        # "what does X do?") even without an explicit "now" marker.
+        # This is the #1 LongMemEval knowledge-update failure mode:
+        # the user asks the obvious question and the engine returns
+        # the superseded (now-inactive) fact because it was never
+        # promoted into the "current" intent. Detected here via the
+        # SINGLE_VALUED_QUERY regex; only fires when no higher-
+        # precision intent (ordering/count/list) already matched.
+        if plan.intent == "recall" and SINGLE_VALUED_QUERY.search(query):
+            plan.intent = "current"
         dates = find_dates(query, ts or datetime.now(timezone.utc))
         if dates and plan.intent in ("recall", "current"):
             plan.intent = "temporal"
@@ -310,6 +342,32 @@ class MemoryReader:
                 plan.window_end = f"{y}-{mo:02d}-{_last:02d}"
             elif dates[0].get("granularity") in ("day", "day_r", "iso_day"):
                 plan.window_end = dates[0]["iso"]
+        # Tier-4 fix: temporal + LIST fusion. "List all of Alice's
+        # projects from 2024" should keep the LIST intent (so the
+        # reader returns the exhaustive set) AND attach the temporal
+        # window (so only facts within 2024 are returned). Previously
+        # the date check above was gated on plan.intent in
+        # ("recall","current"), so LIST + date silently dropped the
+        # window. We now set the window independently of intent, and
+        # add a "temporal_list" sub-intent flag for the reader to use.
+        elif dates and plan.intent == "list":
+            # carry the window through unchanged from the date parser
+            plan.window_start = dates[0]["iso"]
+            plan.window_end = dates[1]["iso"] if len(dates) > 1 else None
+            if dates[0].get("granularity") == "year":
+                y = dates[0]["iso"][:4]
+                plan.window_start = f"{y}-01-01"
+                plan.window_end = f"{y}-12-31"
+            elif dates[0].get("granularity") in ("month", "ym_num"):
+                y, mo = dates[0]["iso"][:4], int(dates[0]["iso"][5:7])
+                _last = [31, 29 if (int(y) % 4 == 0 and (int(y) % 100 != 0
+                            or int(y) % 400 == 0)) else 28,
+                         31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1]
+                plan.window_start = f"{y}-{mo:02d}-01"
+                plan.window_end = f"{y}-{mo:02d}-{_last:02d}"
+            elif dates[0].get("granularity") in ("day", "day_r", "iso_day"):
+                plan.window_end = dates[0]["iso"]
+            plan.sub_intent = "temporal_list"
         if re.search(r"\bbetween\s+.+\s+and\s+", query, re.I) and len(dates) >= 2:
             plan.window_start = min(d["iso"] for d in dates)
             plan.window_end = max(d["iso"] for d in dates)
@@ -321,9 +379,55 @@ class MemoryReader:
             plan.intent = "temporal"
             plan.window_start = dates[0]["iso"]
             plan.window_end = None
+        # Tier-4 fix: employment-anchored temporal window.
+        # "Where did X live when (he|she|they) was at <ORG>?" — the
+        # window is the validity period of (X, works_at, <ORG>).
+        # Date parsers can't see "Stripe" as a date; this is the
+        # LongMemEval "where did X live when at Y" failure mode.
+        emp_window = self._employment_window(query, user_id)
+        if emp_window:
+            ws, we = emp_window
+            plan.window_start = ws
+            plan.window_end = we
+            if plan.intent == "recall":
+                plan.intent = "temporal"
         if MULTIHOP_MARKERS.search(query) and len(plan.relations) >= 2:
             plan.intent = "multihop" if plan.intent == "recall" else plan.intent
         return plan
+
+    def _employment_window(self, query: str, user_id: str) -> tuple[str, str] | None:
+        """Detect "when (he|she|they|while) was at <ORG>" and return the
+        validity window of the matching works_at fact.
+
+        Returns (valid_from, valid_to) where valid_to defaults to today
+        if the fact is still active (Bob is still at OpenAI). Used to
+        answer "Where did Bob live when he was at Stripe?" — the window
+        is the period Bob's works_at Stripe fact was active.
+        """
+        m = re.search(
+            r"\bwhen\s+(?:he|she|they|i|we)\s+(?:was|were|is|are|"
+            r"worked|employed)\s+(?:at|with|for)\s+"
+            r"(?P<org>[A-Z][\w&.-]+(?:\s+[A-Z][\w&.-]+)*)"
+            r"|\bwhile\s+(?:at|with|at\s+(?:his|her|their)\s+job\s+at)\s+"
+            r"(?P<org2>[A-Z][\w&.-]+(?:\s+[A-Z][\w&.-]+)*)"
+            r"|\bduring\s+(?:his|her|their)?\s*(?:time\s+|stint\s+)?at\s+"
+            r"(?P<org3>[A-Z][\w&.-]+(?:\s+[A-Z][\w&.-]+)*)",
+            query, re.I)
+        if not m:
+            return None
+        org = (m.group("org") or m.group("org2") or m.group("org3") or "").strip()
+        if not org:
+            return None
+        # look up the works_at fact for this user + org
+        facts = self.store.query_facts(user_id=user_id,
+                                       relation="works_at", active=False)
+        # match by value substring (case-insensitive)
+        org_l = org.lower()
+        for f in facts:
+            if org_l in f.value.lower() or f.value.lower() in org_l:
+                end = f.valid_to or "9999-12-31"
+                return (f.valid_from or "1900-01-01", end)
+        return None
 
     # ------------------------------------------------------------- search
     def search(self, query: str, *, user_id: str = "default",
@@ -483,7 +587,16 @@ class MemoryReader:
         allow_inactive = plan.intent in ("temporal", "current", "count")
         facts = [f for f in facts if not f.quarantined
                  and (f.is_active or allow_inactive)]
-        facts.sort(key=lambda f: ranked_ids.index(f.id))
+        # Tier-4 fix: temporal_list fusion — if LIST + window were both
+        # set, apply the temporal window AS A FILTER on the recalled
+        # set (return only facts whose valid_from falls in the window)
+        # AND skip the top-k truncation so the user gets the full list.
+        if plan.sub_intent == "temporal_list" and plan.window_start:
+            ws = plan.window_start
+            we = plan.window_end or "9999-12-31"
+            facts = [f for f in facts
+                     if f.valid_from and ws <= f.valid_from <= we]
+        facts.sort(key=lambda f: ranked_ids.index(f.id) if f.id in ranked_ids else 999)
 
         # --- cross-encoder rerank (μ=0) -------------------------------------
         # If enabled, re-score top-k by embedding each fact's natural-
