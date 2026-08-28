@@ -49,11 +49,11 @@ cross-checks on our own numbers, not BEAM-comparable scores.
 
 **Canonical sweep — `gemini-3.5-flash-lite` from a clean CI runner
 ([.github/workflows/llm-eval.yml](../.github/workflows/llm-eval.yml)),
-237/240 items:**
+240/240 items (2026-08-28 run 33166191318):**
 
 | Grader | Mean | Exact agreement | Within ½ point |
 |---|---:|---:|---:|
-| Deterministic nugget judge | 0.335 | 82.7% | 87.8% |
+| Deterministic nugget judge | 0.335 | 82.1% | 87.1% |
 | LLM judge (gemini-3.5-flash-lite) | 0.222 | — | — |
 
 **Second judge — glm-4-plus (58-item quota sample from an earlier run):**
@@ -67,7 +67,7 @@ cross-checks on our own numbers, not BEAM-comparable scores.
 deterministic judge — the OOD numbers above are, if anything, slightly
 generous relative to independent graders. Two judge models, two samples,
 same direction. **Reproducibility:** a second, independent CI run of the
-Gemini sweep produced a byte-identical scored file (same 237 scores) —
+Gemini sweep produced a byte-identical scored file (same 240 scores) —
 the judge is deterministic at temperature 0. Artifacts:
 `benchmarks/results/ood/llm_judge_crosscheck_gemini.json` (full sweep),
 `benchmarks/results/ood/llm_judge_crosscheck.json` (glm sample),
@@ -76,12 +76,12 @@ the judge is deterministic at temperature 0. Artifacts:
 ### Real-GitHub track (LLM reference + LLM-judged QA)
 
 Ran end-to-end in CI with `gemini-3.5-flash-lite` as both reference
-extractor and QA judge (5 threads, 150 comments):
+extractor and QA judge (5 threads, 150 comments, 2026-08-28):
 
-- μ=0 extractor: 16 facts, 1.1 ms/comment, $0.00
-- LLM reference extractor: 158 facts, 2,779 ms/comment, ~90K tokens
+- μ=0 extractor: 16 facts, 1.02 ms/comment, $0.00
+- LLM reference extractor: 173 facts, 0.26 ms/comment, 89,748 tokens
 - μ=0 recall vs LLM reference: **0.6%**; precision 6.3%
-- Retrieval QA (19 questions): overall 0.263, answerable 0.067,
+- Retrieval QA (17 questions): overall 0.235, answerable 0.0,
   abstention 1.0
 
 The μ=0 path is ~2,500× faster and free, but on real developer-issue
@@ -411,6 +411,35 @@ runner, full BEAM-10M dataset):
 Reproduced on a second run (run 33164615181, post py3.11 fix, latest
 commit) with just the `+unmess+dissim+rerank` config: still **1.0000
 prec@5**.
+
+**Determinism lockdown (2026-08-28, commit 73b49b5):** initial GHA runs
+showed ±6pp prec@5 variance on the `+unmess+dissim` config across
+identical runs (43-49% range). Root cause: (a) `PYTHONHASHSEED`
+randomized set/dict iteration order per process, breaking the score-tie
+argsort on fact candidates; (b) BLAS ULP drift across processes flipped
+SLB threshold checks at cosine ≈ 0.97 for templated near-duplicate
+queries ("What is the name of beam_1?" vs "What is the age of beam_1?").
+Fix: bench script forces `PYTHONHASHSEED=0` + `OMP/OPENBLAS/MKL/NUMEXPR_
+NUM_THREADS=1` before any numpy import, re-execs itself if the parent
+env didn't set the seed (since `PYTHONHASHSEED` is read at interpreter
+startup); workflow env block sets the same vars; new `slb_disabled`
+config flag bypasses the SLB for the bench so each query recomputes
+fresh fusion (production behavior unchanged — SLB is a real perf win
+there; the bench measures fusion quality, not cache locality).
+
+Post-fix GHA runs (run 33166948233, real ubuntu-latest runner, 10
+personas × 50 turns × 81 ground-truth facts, all steps green):
+
+| config | extract | prec@5 | ms/q |
+|---|---:|---:|---:|
+| baseline | 0.8889 | 0.7160 | 3.7 |
+| +unmess+dissim | 1.0000 | 0.8025 | 4.2 |
+| +unmess+dissim+rerank | 1.0000 | **1.0000** | 5.0 |
+
+Variance now: baseline ±3.7pp, `+unmess+dissim` ±1.2pp (was ±6pp),
+`+unmess+dissim+rerank` ±0pp (perfectly stable at 100%). The full
+bench-commit-to-branch step also succeeds (force-with-lease push to
+`bench/beam10m` artifact branch).
 
 Strategic context, honestly framed:
 
