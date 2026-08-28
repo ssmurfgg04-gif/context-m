@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -50,7 +50,7 @@ jobs:
 
       - name: Restore BEAM-10M cache
         id: cache-restore
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ./beam_cache
           key: beam-10m-v1-${{ github.run_id }}
@@ -93,14 +93,14 @@ jobs:
 
       - name: Save BEAM-10M cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ./beam_cache
           key: beam-10m-v1-${{ github.run_id }}
 
       - name: Upload manifest artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: beam-10m-manifest
           path: ./beam_cache/manifest.json

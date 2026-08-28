@@ -70,21 +70,22 @@ jobs:
       # never picked up by `git add` in the commit step.
       LLM_CACHE_DIR: /tmp/llm-cache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # judge cache: per-item LLM results keyed by the judged inputs +
       # backend + model — reruns resume and only re-bill missing items.
       # restore/save split (not plain actions/cache): a hard timeout
       # cancel SKIPS post steps, which silently dropped the cache on the
       # 3rd run. The explicit save step below runs under if: always().
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v5
+        id: restore-cache
         with:
           path: /tmp/llm-cache
           key: llm-${{ runner.os }}-${{ env.LLM_BACKEND }}-${{ env.LLM_MODEL }}-${{ hashFiles('benchmarks/ood/judge_items.jsonl', 'benchmarks/real_github/threads.jsonl') }}
           restore-keys: |
             llm-${{ runner.os }}-${{ env.LLM_BACKEND }}-${{ env.LLM_MODEL }}-
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
 
@@ -146,17 +147,21 @@ jobs:
             git push --force-with-lease origin bench/llm-eval
           fi
 
-      - name: Save judge cache (survives timeout cancels)
-        if: always()
-        continue-on-error: true   # exact-key save on a rerun is a no-op error
-        uses: actions/cache/save@v4
+      # Only save on actual cache miss — exact-key save on a rerun is a no-op
+      # which GitHub Actions surfaces as "Cache save failed". Gating on
+      # cache-hit != 'true' both removes the warning AND keeps the
+      # `if: always()` requirement that lets the save run after a hard
+      # timeout cancellation of the judge step.
+      - name: Save judge cache (on miss only)
+        if: always() && steps.restore-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
         with:
           path: /tmp/llm-cache
           key: llm-${{ runner.os }}-${{ env.LLM_BACKEND }}-${{ env.LLM_MODEL }}-${{ hashFiles('benchmarks/ood/judge_items.jsonl', 'benchmarks/real_github/threads.jsonl') }}
 
       - name: Upload results artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: llm-eval-results
           path: |
