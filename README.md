@@ -330,3 +330,42 @@ win. Build: `pip install ./rust/cortexm-core ./rust/quadrant`.
 
 Apache 2.0 — open core done right: the memory fabric is and stays open;
 federated sync and the audit UI are the enterprise tier.
+
+## arXiv-inspired improvements (2026 round)
+
+A second research pass over 2024-2026 arxiv literature surfaced 8
+concrete improvements, all preserving the μ=0 invariant. Full citations
+in `docs/BENCHMARKS.md` Tier 8.
+
+| Improvement | Module | Solves |
+|---|---|---|
+| Hopfield cleanup memory | `context_m/vsa/cleanup.py` | VSA interference after unbind |
+| Bitap fuzzy matching (Wu-Manber) | `context_m/text/fuzzy.py` | Slang/spelling-tolerant pattern triggers |
+| Per-user idiolect normalization | `context_m/text/idiolect.py` | "bruh"→"friend" via embedding k-NN |
+| DisSim rule-based simplifier | `context_m/text/dissim.py` | Compound-sentence pattern recall |
+| TLSH ternary trie | `context_m/vsa/tlsh_trie.py` | O(log N + w) software TCAM |
+| Holographic fact overlay | `context_m/vsa/hologram_overlay.py` | O(1) single-hop fact lookup |
+| ProtoDash attribution | `context_m/vsa/attribution.py` | Source weights for retrieval results |
+| LayerCast FP32 determinism seam | `context_m/bridge/onnx_runtime.py` | μ=0 over LLM enrichment path |
+
+Architectural fixes (per Con #4-#7 list):
+
+- **Storage bloat** → `context_m/trace/dedup.py` formalizes dedup+compression audit
+- **Normalization** → Bitap + idiolect + hybrid search wired into patterns
+- **Debugging** → `retrieval_path ∈ {vsa_unbind, pattern_match, neural_fallback, raw_chunk, tree_index, tlsh_trie}` on every retrieved fact
+- **Determinism** → LayerCast + ONNX Runtime CPU + FP32 seam documented
+
+Plus explicit binary/FP32 tiering (`accel.detect_tier`, `accel.recommend_codec`),
+Hamming ZK proofs (`security/zk_hamming.py`), and `trace/rebuild.py`
+for checksum-audited rebuilds from the symbolic Trace.
+
+## Claude Code plugin — session lifecycle
+
+`plugins/context-m-claude/src/index.ts` v0.2 adds auto-load on Claude
+session start + write-on-end hooks:
+
+- **on session start** → `recall last working state` → "I see you've been working on X. Continue?"
+- **on session end** → "Store summary? [Y/n]" → persists summary as a memory fact
+- Session state at `~/.context-m/session_state.json`
+
+MCP tools added: `contextm_query_extract` (hybrid RAG), `contextm_attribution` (ProtoDash), `contextm_zk_prove` (Hamming proofs).

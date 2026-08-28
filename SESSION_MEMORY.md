@@ -86,3 +86,42 @@ Last updated: CRDT federation + Rust port + Quadrant session, 2026-08-27.
 - pip = system python 3.13; use `python3 -m pip` (venv 3.12)
 - Build wheels: `cd rust/<crate> && maturin build --release` then
   `python3 -m pip install --force-reinstall target/wheels/*.whl`
+
+## arXiv-inspired improvements (this session)
+
+Built 8 new modules + 4 architectural fixes per user's Con #4-#7 list:
+
+- `context_m/text/fuzzy.py` — Bitap (Wu-Manber k-error) + Levenshtein + n-gram
+- `context_m/text/idiolect.py` — per-user idiolect normalization (case-preserving)
+- `context_m/text/dissim.py` — DisSim v1 rule-based sentence splitter
+- `context_m/vsa/cleanup.py` — modern Hopfield cleanup memory
+- `context_m/vsa/tlsh_trie.py` — software TLSH ternary trie (TCAM emulation)
+- `context_m/vsa/hologram_overlay.py` — HRR KG overlay for O(1) single-hop
+- `context_m/vsa/attribution.py` — ProtoDash source attribution + retrieval_path tags
+- `context_m/security/zk_hamming.py` — Hamming-distance ZK-style proofs on binary vectors
+- `context_m/bridge/onnx_runtime.py` — LayerCast FP32 determinism seam (documented contract)
+- `context_m/bridge/query_extract.py` — hybrid query-time extraction (store raw + lazy extract)
+- `context_m/trace/rebuild.py` — formal rebuild_from_trace op (checksum audit + re-encode)
+- `context_m/trace/dedup.py` — dedup + holographic compression audit
+- `context_m/accel.py` updated — explicit binary/FP32 tiering (detect_tier, recommend_codec)
+
+MCP server gained 3 new tools: `contextm_query_extract`,
+`contextm_attribution`, `contextm_zk_prove`.
+
+Claude MCP plugin (`plugins/context-m-claude/src/index.ts`) gained
+`onSessionStart` ("I see you've been working on X. Continue?") and
+`onSessionEnd` ("Store summary? [Y/n]") hooks + session-state file at
+`~/.context-m/session_state.json`.
+
+Tests: 149 passed, 7 skipped (Rust wheels not installed in sandbox).
+38 new tests in `tests/test_arxiv_improvements.py` cover all 8 modules +
+the architectural fixes.
+
+BEAM 10M benchmark: tried HuggingFace (4 candidate datasets), all
+unavailable from sandbox; fell back to 500-persona synthetic corpus
+with mixed styles. Honest numbers in `benchmarks/results/beam_10m.json`
+and `docs/BENCHMARKS.md` Tier 8.
+
+LLM judge: skipped this session (user said "last", "not main thing");
+CI workflow `.github/workflows/llm-eval.yml` remains ready to trigger
+with `GEMINI_API_KEY` secret already set.

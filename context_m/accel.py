@@ -138,3 +138,63 @@ class QuadrantANN:
             return {"n_vectors": n, "mode": "exact-numpy",
                     "note": "quadrant wheel not installed"}
         return {"mode": "quadrant", "detail": self._idx.stats()}
+
+
+# --- explicit binary/FP32 tiering ------------------------------------------
+# User concern (architectural fix #1): "Binary HRR + FFT doesn't work →
+# Separate tiers: binary for edge, FP32 for cloud."
+# The codec stack already supports both (binary/RaBitQ for edge, PQ/INT8
+# for cloud); this makes the routing EXPLICIT based on deployment tier.
+
+EDGE_CODECS = ("binary", "rabitq")   # 96 B/v — fits on Raspberry Pi 5
+CLOUD_CODECS = ("pq", "int8")        # 8 B/v or 770 B/v — bandwidth-dense
+
+
+def detect_tier() -> str:
+    """Auto-detect deployment tier from environment signals.
+
+    Returns 'edge' or 'cloud'. Override via CONTEXTM_TIER env var.
+    """
+    explicit = os.environ.get("CONTEXTM_TIER", "").lower()
+    if explicit in ("edge", "cloud"):
+        return explicit
+    # heuristic: cloud = multi-core + >4GB RAM + has scipy
+    try:
+        import multiprocessing
+        if multiprocessing.cpu_count() >= 4:
+            import os as _os
+            mem = _os.sysconf("SC_PAGE_SIZE") * _os.sysconf("SC_PHYS_PAGES")
+            if mem >= 4 * 1024**3:
+                return "cloud"
+    except Exception:
+        pass
+    return "edge"
+
+
+def recommend_codec(tier: str | None = None, tmr: bool = True) -> str:
+    """Recommend a codec for the deployment tier.
+
+    Edge: binary (with TMR if self-healing required) — 96 B/v.
+    Cloud: pq for bandwidth-dense, int8 for accuracy-critical.
+    """
+    t = tier or detect_tier()
+    if t == "edge":
+        return "binary" if tmr else "rabitq"
+    return "pq"
+
+
+def tier_status() -> dict:
+    """Report current tier + recommended + active codec info."""
+    tier = detect_tier()
+    rec = recommend_codec(tier)
+    return {
+        "tier": tier,
+        "recommended_codec": rec,
+        "edge_codecs": list(EDGE_CODECS),
+        "cloud_codecs": list(CLOUD_CODECS),
+        "rust_enabled": RUST_ENABLED,
+        "quadrant_enabled": QUADRANT_ENABLED,
+        "note": (f"Auto-detected {tier} tier; recommend '{rec}' codec. "
+                 f"Override with CONTEXTM_TIER=edge|cloud"),
+    }
+
