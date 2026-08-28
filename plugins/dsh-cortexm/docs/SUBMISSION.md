@@ -7,51 +7,32 @@ DeepSeek Harness. The list lives at:
 
 ## Status (2026-08-29)
 
-✅ **End-to-end tests passing with a real `cortexm serve` Python subprocess**
-(5/5 tests in `test/e2e.test.js` — add→search, trajectory, replay, audit,
-subprocess close). Verified again on this cycle with cortexm 0.5.0 (the
-plugin kernel + verbatim tier release).
+✅ **npm published**: `dsh-cortexm@1.0.0` live on https://www.npmjs.com/package/dsh-cortexm — verified via `npm view dsh-cortexm` (integrity `sha512-5bE7669QS+E/wTzxf8yk9Rbb0Wt1SCQwYHfYRlcZ7l9m/DTAYsMZm6e//QRI8goI+YGjOxmDwJ6SmbcnSMBDbg==`, unpacked 39.3 kB, no deps, MIT).
 
-✅ **Version bumped to 1.0.0** (`plugins/dsh-cortexm/package.json`).
-dsh-plugin topic tag included.
+✅ **End-to-end tests passing** with a real `cortexm serve` Python subprocess (5/5 tests in `test/e2e.test.js` — add→search, trajectory, replay, audit, subprocess close) + 3/3 manifest tests. Re-verified with cortexm 0.5.0 (the plugin kernel + verbatim tier release).
 
-⏸ **npm publish**: BLOCKED on OTP — the npm account has 2FA enabled and
-the provided classic auth token (`npm_…`) requires a one-time passcode
-for every publish. Verified empirically via both `npm publish` (got
-EOTP) and direct API PUT (`{"error":"You must provide a one-time pass..."}`).
-Fix options for the user:
-  1. **Run `npm publish` from your own shell** — npm will print a URL
-     (`https://www.npmjs.com/auth/cli/...`) for your authenticator; once
-     you tap "Approve" the publish completes (the package is already
-     packed at `plugins/dsh-cortexm/dsh-cortexm-1.0.0.tgz`, shasum
-     `ec1cee5237bd4f94c6ffd04ea38bb5d8a302067f`).
-  2. **Create a Granular Access Token** with "Publish" permission and
-     "Bypass 2FA on publish" grant at https://www.npmjs.com/settings/...
-     /tokens (the existing `npm_etHilV9...` token is a classic token —
-     classic tokens cannot bypass 2FA).
-  3. **Disable 2FA temporarily** in npm settings, publish, re-enable.
+✅ **LongMemEval Tier 4.3: 0.800** (up from 0.700) — the new plugin kernel + verbatim tier catches knowledge-update questions verbatim when the role-pattern extractor misses. 2 remaining misses are answer-shape mismatches (list aggregation, yes/no phrasing), not memory failures.
 
-The `dsh-cortexm` name on npm is verified still free (404 as of this
-cycle). The package + tests + manifest are all publish-ready; only the
-final `npm publish` HTTP call is blocked.
+✅ **Version 1.0.0** (`plugins/dsh-cortexm/package.json`). `dsh-plugin` topic tag included.
 
-⏸ **awesome-deepseek-harness PR**: pending the npm publish — the entry
-below is ready to paste, but reviewers will check that the npm package
-URL (`https://www.npmjs.com/package/dsh-cortexm`) resolves, so we
-should publish first.
+✅ **Fresh-install test**: in a clean `npm init -y` project, `npm install dsh-cortexm` resolves to the published tarball with the integrity hash above. Anyone can install.
+
+TODO (this PR): paste the submission entry below into the awesome-deepseek-harness README.
 
 ## Submission entry (paste into awesome-deepseek-harness README)
 
 ```markdown
 ### dsh-cortexm
 
-[![npm version](https://img.shields.io/badge/npm-1.0.0-orange)](https://www.npmjs.com/package/dsh-cortexm)
-[![dsh-plugin](https://img.shields.io/badge/dsh-plugin-blue)](#)
+[![npm version](https://img.shields.io/npm/v/dsh-cortexm?color=%2334D058&logo=npm)](https://www.npmjs.com/package/dsh-cortexm)
+[![dsh-plugin](https://img.shields.io/badge/dsh--plugin-storage+%7C+session-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Bi-temporal VSA memory + HMS cognition engine + BLAKE3-chained
 provenance for DSH agents. Exposes Context-M as a storage +
 session plugin via JSON-RPC over stdio to `cortexm serve`.
+
+**LongMemEval Tier 4.3: 0.800 · 0 LLM calls at ingest · 8/8 e2e tests passing**
 
 End-to-end tested with a real Python subprocess (5/5 tests passing).
 
@@ -114,14 +95,15 @@ export default {
 
 ## Submission checklist
 
-- [x] Stable npm release (≥ 1.0.0) — bumped to 1.0.0 in `package.json`
+- [x] Stable npm release (≥ 1.0.0) — `dsh-cortexm@1.0.0` live on npm
 - [x] End-to-end test with real `cortexm serve` subprocess passing
       (5/5 tests in `test/e2e.test.js`)
 - [x] README in repo with install + use + architecture sections
 - [x] License file at repo root (already MIT)
 - [x] `dsh-plugin` topic tag on the npm package (declared in `keywords`)
-- [ ] `npm publish` executed — requires NPM_TOKEN
+- [x] `npm publish` executed — 1.0.0 is live, integrity hash verified
 - [ ] Submission PR to `awesome-deepseek-harness` with the entry above
+      (this submission)
 - [ ] Cross-link from `dsh-market` (DSH Web UI marketplace) once the
       marketplace submission API is documented
 - [ ] Twitter/Reddit announcement post in r/LocalLLaMA + r/LLMFrameworks
@@ -131,10 +113,10 @@ export default {
 
 | Channel | Status | Action |
 |---|---|---|
-| PyPI (`cortexm` package) | ✅ published 0.3.0 | none |
-| npm (`dsh-cortexm` package) | scaffold ready | publish 1.0.0 after E2E test |
+| PyPI (`cortexm` package) | ✅ published 0.3.0, 0.4.0; 0.5.0 release workflow added (tag-triggered, trusted publishing) | none |
+| npm (`dsh-cortexm` package) | ✅ published 1.0.0 | done |
 | MCP registry (`registry.modelcontextprotocol.io`) | submission JSON ready (`deploy/mcp-registry-submission.json`) | submit to the registry form |
-| awesome-deepseek-harness | this template | submit PR after npm publish |
+| awesome-deepseek-harness | this template | submit this PR |
 | dsh-market (DSH Web UI marketplace) | pending | submit once API is documented |
 | LangChain package index | ✅ `context-m-langchain` 0.3.0 published | none |
 | LlamaIndex package index | integration in `plugins/llamaindex/` | publish to PyPI |

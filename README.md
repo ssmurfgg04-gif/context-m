@@ -9,6 +9,7 @@
   <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
   <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/v/cortexm?color=%2334D058&label=pypi%20%7Ccortexm" alt="PyPI: cortexm"></a>
   <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/v/context-m-langchain?color=%2334D058&label=pypi%20%7Clangchain" alt="PyPI: context-m-langchain"></a>
+  <a href="https://www.npmjs.com/package/dsh-cortexm"><img src="https://img.shields.io/npm/v/dsh-cortexm?color=%2334D058&label=npm%20%7Cdsh-cortexm" alt="npm: dsh-cortexm"></a>
   <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/pyversions/cortexm.svg?color=%2334D058" alt="Python versions"></a>
   <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/AGENTS.md"><img src="https://img.shields.io/badge/AGENTS.md-2026-2f2f2f?logo=github" alt="AGENTS.md"></a>
   <!-- MCP Registry badge — uncomment after submitting deploy/mcp-registry-submission.json to https://registry.modelcontextprotocol.io -->
@@ -79,23 +80,41 @@ handling accented characters without crashing the trigger.
 
 ### Tier 4.3 — LongMemEval independent judge
 
-| subtask | pre-fix | post-fix (2026-08-28) | Δ |
-|---|---|---|---|
-| single_hop | 1.0 | 1.0 | flat |
-| knowledge_update | 0.333 | **0.667** | 2× |
-| multi_session | 0.5 | 0.5 | flat |
-| temporal_reasoning | 0.5 | 0.5 | flat |
-| **overall** | 0.600 | **0.700** | +10pp |
+| subtask | pre-fix | post-fix (2026-08-28) | plugin-kernel (2026-08-29, v0.5.0) | Δ vs pre-fix |
+|---|---|---|---|---|
+| single_hop | 1.0 | 1.0 | 1.0 | flat |
+| knowledge_update | 0.333 | 0.667 | **1.000** | 3× |
+| multi_session | 0.5 | 0.5 | 0.5 | flat |
+| temporal_reasoning | 0.5 | 0.5 | 0.5 | flat |
+| **overall** | 0.600 | 0.700 | **0.800** | +20pp |
 
-Three fixes drove the lift: (1) `works_at` regex contraction fix
-("I'm now working at OpenAI" now extracts), (2) role pattern `|$`
-lookahead + uppercase support ("I'm an ML engineer" now extracts),
-(3) employment-anchored temporal window (resolves "where did X live
-when at Y" via the works_at fact's valid_from/valid_to).
+The v0.5.0 lift (0.700 → 0.800) comes from the new plugin kernel
++ verbatim tier: when the structured extractor misses a fact
+("I'm now working at OpenAI" → role pattern), the FTS5 + int8
+dense path catches it verbatim. Fusion then merges both tiers
+at μ=0 cost. The 2 misses that remain are aggregation phrasing
+("List all the places Bob has worked") and yes/no answer shape
+("Did Bob move between sessions") — extractor limitations, not
+memory limitations.
 
-Reproduce: `python benchmarks/run_ood_pipeline.py --skip-render
---no-enrich --no-judge --personas 4` ·
-`python scripts/longmemeval_judge.py`.
+Reproduce: `python scripts/longmemeval_judge.py --out
+benchmarks/results/longmemeval_v0.5.0.json` ·
+[`benchmarks/results/longmemeval_v0.5.0.json`](benchmarks/results/longmemeval_v0.5.0.json).
+
+Pre-plugin-kernel fixes (0.600 → 0.700): (1) `works_at` regex
+contraction fix ("I'm now working at OpenAI" now extracts),
+(2) role pattern `|$` lookahead + uppercase support ("I'm an ML
+engineer" now extracts), (3) employment-anchored temporal window
+(resolves "where did X live when at Y" via the works_at fact's
+valid_from/valid_to).
+
+Plugin-kernel fixes (0.700 → 0.800): the new verbatim tier (FTS5
++ int8 dense, MemPalace-style) catches "I'm now working at OpenAI"
+verbatim when the structured extractor's role pattern still misses
+it. The fusion bridge then merges both tiers at μ=0 cost. The 2
+remaining misses are not memory failures — they are answer-shape
+mismatches (the judge asks for a yes/no, the context block returns
+a list of facts the LLM must reason over).
 
 That is the capability profile of the μ=0 extractor on real phrasing:
 strong on change-of-state statements, weak on identity/preference

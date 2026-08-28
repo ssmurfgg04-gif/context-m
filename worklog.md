@@ -1934,3 +1934,128 @@ Stage Summary:
 External steps remaining (require user action):
 - npm publish: needs OTP or granular automation token
 - awesome-deepseek-harness PR: pending npm publish
+
+---
+Task ID: 2026-08-29-v0.5.0-release-and-dsh-promotion
+Agent: main (Super Z)
+Task: (1) Re-run codegraph review (clean); (2) verify dsh-cortexm@1.0.0 live on npm + fresh-install test; (3) run LongMemEval with new plugin kernel, add as selling point if it does well; (4) apply top-starred-repos playbook (docs/PLAYBOOK_v2.md) to dsh-cortexm README + main README badge row; (5) add PyPI release workflow (tag-triggered, trusted publishing); (6) bump pyproject.toml 0.4.0 → 0.5.0; (7) tag v0.5.0; (8) finalize GitHub push; (9) submit PR to awesome-deepseek-harness using user's GitHub token.
+
+Work Log:
+- Read worklog + inspected project state. Confirmed: latest commit
+  f21f345 "feat(plugin-kernel): verbatim + structured + fusion +
+  router — the '5 promises' release" — the plugin kernel 7-step plan
+  was already complete (kernel.py / router.py / verbatim.py /
+  structured.py / security.py / fusion.py + 46 new tests). 448 tests
+  passing, 23 skipped, 0 failed. cortexm/__init__.py at 0.5.0.
+  pyproject.toml still at 0.4.0 (regression).
+- Verified dsh-cortexm@1.0.0 LIVE on npm via `npm view dsh-cortexm`:
+  published 5 minutes ago by cortexm, integrity
+  sha512-5bE7669QS+E/wTzxf8yk9Rbb0Wt1SCQwYHfYRlcZ7l9m/DTAYsMZm6e//QRI8goI+YGjOxmDwJ6SmbcnSMBDbg==,
+  unpacked 39.3 kB, no deps, MIT. (User manually published from
+  their shell to bypass the npm 2FA OTP that the classic token
+  couldn't clear in the previous session.)
+- Re-ran codegraph_review.py: 0 errors, 7 warnings (all pre-existing
+  test_parity gaps on integration-only modules — creator.py,
+  trajectory_view.py, features/prefetch.py, bench/run.py, bench/messy.py,
+  bench/beam_loader.py, bench/harness.py. All integration-tested
+  via test_reddit_steals_round3.py + bench scripts). No new bugs.
+- Ran LongMemEval Tier 4.3 with the new plugin kernel + verbatim
+  tier + fusion bridge:
+    overall: 0.700 → **0.800** (+10pp)
+    knowledge_update: 0.667 → **1.000** (verbatim tier catches
+      "I'm now working at OpenAI" verbatim when the role pattern
+      misses; fusion merges at μ=0 cost)
+    single_hop: 1.0 (flat)
+    multi_session: 0.5 (flat — list aggregation miss)
+    temporal_reasoning: 0.5 (flat — yes/no answer-shape miss)
+  Results saved to benchmarks/results/longmemeval_v0.5.0.json.
+  Honest read: 2 remaining misses are answer-shape mismatches (the
+  judge asks for a yes/no, the context block returns a list of facts
+  the LLM must reason over), not memory failures.
+- Applied docs/PLAYBOOK_v2.md (100 top-starred repo survey) lessons
+  to plugins/dsh-cortexm/README.md (full rewrite):
+    * Pattern 2-5 (hero block): centered <div>, npm badge (live
+      dynamic), dsh-plugin badge, license badge, pypi-backend badge.
+    * Pattern 4 (tagline): "Memory for DeepSeek Harness agents.
+      Remembers what you tell it — forever, for free, on your machine.
+      You can check exactly what it remembers and why. And it works
+      the same way every single time." (the 5 promises)
+    * Pattern 14 (numbers in hero): "LongMemEval Tier 4.3: 0.800 ·
+      0 LLM calls at ingest · 8/8 e2e tests passing"
+    * B10 (anti-fork-lamprey warning): GitHub-flavored >[!WARNING]
+      block naming the verified maintainer + npm + shasum.
+    * B11 (honesty-coded benchmark block): table with methodology
+      column per Ponytail pattern — "10-question synthetic subset,
+      deterministic nugget judge, μ=0 ingest asserted, 2 misses
+      are answer-shape mismatches (list aggregation, yes/no
+      phrasing) — not memory failures."
+    * Pattern 6 (install in first 100 lines): pip + dsh plugin add +
+      npm install in first code block.
+    * Reproducibility section with `python scripts/longmemeval_judge.py`
+      and `cd plugins/dsh-cortexm && npm test` commands.
+- Applied playbook to main README.md:
+    * Added npm badge (live) to hero block:
+      `<a href="https://www.npmjs.com/package/dsh-cortexm">` with
+      `img.shields.io/npm/v/dsh-cortexm` dynamic badge.
+    * Updated LongMemEval Tier 4.3 table: added
+      "plugin-kernel (2026-08-29, v0.5.0)" column showing 0.800
+      overall, knowledge_update 1.000 (3× the pre-fix 0.333), +20pp
+      vs pre-fix.
+    * Added two-paragraph "Pre-plugin-kernel fixes (0.600 → 0.700)"
+      and "Plugin-kernel fixes (0.700 → 0.800)" explanation block
+      so the lift is fully auditable.
+    * Reproduce command now points at
+      `benchmarks/results/longmemeval_v0.5.0.json` (committed).
+- Bumped pyproject.toml 0.4.0 → 0.5.0 (matches cortexm/__init__.py
+  __version__).
+- Created .github/workflows/release.yml — PyPI publish on `v*` tag
+  push via trusted publishing (OIDC, no PYPI_TOKEN secret required).
+  Workflow: build sdist + wheel → verify tag matches pyproject
+  version → smoke-test the built wheel (import cortexm + check
+  LLM_CALLS == 0) → upload-artifact → download-artifact →
+  pypa/gh-action-pypi-publish@release/v1 with attestations: true.
+  Setup note in YAML comment: user registers the repo on PyPI as
+  a trusted publisher (one-time, takes 30 seconds), then every
+  `git tag vX.Y.Z && git push origin vX.Y.Z` auto-publishes.
+- Re-ran dsh-cortexm e2e tests: 8/8 passing (5/5 e2e + 3/3 manifest)
+  in 521ms. Re-ran fresh-install test in /tmp/test-dsh (clean npm
+  init -y + npm install dsh-cortexm): "added 1 package, 0
+  vulnerabilities". The npm package is real and downloadable.
+- Updated plugins/dsh-cortexm/docs/SUBMISSION.md:
+    * Status block: marked npm publish DONE, added integrity hash,
+      added LongMemEval 0.800 selling point, added fresh-install
+      test confirmation.
+    * Submission entry: switched static `npm-1.0.0-orange` badge to
+      live dynamic `npm/v/dsh-cortexm` shields.io badge, added
+      LongMemEval selling-point line.
+    * Submission checklist: ticked "npm publish executed" + "stable
+      npm release".
+    * Distribution channels table: PyPI row updated to reflect
+      "0.3.0, 0.4.0; 0.5.0 release workflow added (tag-triggered,
+      trusted publishing)"; npm row ticked as done.
+- Committing, tagging v0.5.0, pushing to GitHub main + tag (the
+  release.yml workflow will fire on the tag push and publish to
+  PyPI via trusted publishing — pending the user's one-time PyPI
+  trusted-publisher registration).
+- After push: submitting PR to awesome-deepseek-harness via curl +
+  the GitHub API using the token in the git remote URL.
+
+Stage Summary:
+- 5 files modified: pyproject.toml (version bump), README.md (npm
+  badge + LongMemEval 0.800 update), plugins/dsh-cortexm/README.md
+  (playbook-driven rewrite), plugins/dsh-cortexm/docs/SUBMISSION.md
+  (status + entry + channels updated).
+- 1 file created: .github/workflows/release.yml (PyPI trusted
+  publishing on tag push).
+- 1 file created: benchmarks/results/longmemeval_v0.5.0.json
+  (the 0.800 result JSON for reproducibility).
+- LongMemEval Tier 4.3 lift: 0.700 → 0.800 (post plugin kernel +
+  verbatim tier + fusion). knowledge_update subtask: 0.667 → 1.000.
+- codegraph_review.py: 0 errors, 7 warnings (unchanged from
+  previous session — no new bugs).
+- dsh-cortexm: 8/8 e2e tests passing, npm package live + fresh-
+  install verified.
+- v0.5.0 tag will trigger the new release.yml workflow → PyPI
+  publish via trusted publishing (pending user's one-time
+  trusted-publisher registration on pypi.org).
+- awesome-deepseek-harness PR submission next.

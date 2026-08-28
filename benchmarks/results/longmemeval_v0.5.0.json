@@ -1,0 +1,176 @@
+{
+  "summary": {
+    "n_questions": 10,
+    "det_judge_accuracy": 0.8,
+    "gemini_judge_accuracy": 0.8,
+    "by_subtask": {
+      "single_hop": 1.0,
+      "knowledge_update": 1.0,
+      "multi_session": 0.5,
+      "temporal_reasoning": 0.5
+    },
+    "judged_by": "deterministic_nugget"
+  },
+  "results": [
+    {
+      "session_id": 1,
+      "question": "What is Bob's name?",
+      "expected_answer": "Bob",
+      "subtask": "single_hop",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 7fb44816; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 5ce3ee18; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, prefers, Python) ...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | works_at | OpenAI",
+        "Bob | lives_in | Berlin",
+        "Bob | prefers | Python",
+        "Bob | role | ML engineer"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "Where does Bob work?",
+      "expected_answer": "Stripe",
+      "subtask": "single_hop",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 7fb44816; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 5ff3aa65; src #c83b937e; \"I'm an ML engineer.\"]\n- ...",
+      "top5": [
+        "Bob | works_at | OpenAI",
+        "Bob | name | Bob",
+        "Bob | role | ML engineer",
+        "Bob | works_at | Stripe",
+        "Bob | left | Stripe"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "Where does Bob live?",
+      "expected_answer": "Berlin",
+      "subtask": "single_hop",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 5ce3ee18; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c288084f; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, prefers, Pyth...",
+      "top5": [
+        "Bob | lives_in | Berlin",
+        "Bob | name | Bob",
+        "Bob | left | Stripe",
+        "Bob | prefers | Python",
+        "Bob | works_at | OpenAI"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "Where does Bob currently work?",
+      "expected_answer": "OpenAI",
+      "subtask": "knowledge_update",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 7fb44816; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id bd7979af; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob,...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | works_at | OpenAI",
+        "Bob | prefers | Python",
+        "Bob | role | ML engineer",
+        "Bob | left | Stripe"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "Where did Bob work before OpenAI?",
+      "expected_answer": "Stripe",
+      "subtask": "knowledge_update",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 7fb44816; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id bd7979af; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob,...",
+      "top5": [
+        "Bob | works_at | OpenAI",
+        "Bob | name | Bob",
+        "Bob | prefers | Python",
+        "Bob | role | ML engineer",
+        "Bob | left | Stripe"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "List all the places Bob has worked.",
+      "expected_answer": "Stripe and OpenAI",
+      "subtask": "multi_session",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 7fb44816; src #1def74eb; \"I'm now working at OpenAI.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 5ff3aa65; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- ...",
+      "top5": [
+        "Bob | works_at | OpenAI",
+        "Bob | role | ML engineer",
+        "Bob | name | Bob",
+        "Bob | lives_in | Berlin",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    },
+    {
+      "session_id": 3,
+      "question": "What programming language does Bob prefer?",
+      "expected_answer": "Python",
+      "subtask": "multi_session",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id bd7979af; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c288084f; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, speaks, German)...",
+      "top5": [
+        "Bob | prefers | Python",
+        "Bob | name | Bob",
+        "Bob | left | Stripe",
+        "Bob | speaks | German",
+        "Bob | works_at | OpenAI"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Where did Bob live when he was at Stripe?",
+      "expected_answer": "Berlin",
+      "subtask": "temporal_reasoning",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c288084f; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 5ce3ee18; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, works_at, Ope...",
+      "top5": [
+        "Bob | left | Stripe",
+        "Bob | lives_in | Berlin",
+        "Bob | name | Bob",
+        "Bob | works_at | OpenAI",
+        "Bob | speaks | German"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Did Bob move between sessions?",
+      "expected_answer": "Yes, Bob moved between sessions.",
+      "subtask": "temporal_reasoning",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id c288084f; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 5ff3aa65; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, works_at, OpenAI) [valid 2026-...",
+      "top5": [
+        "Bob | left | Stripe",
+        "Bob | name | Bob",
+        "Bob | role | ML engineer",
+        "Bob | works_at | OpenAI",
+        "Bob | lives_in | Berlin"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    },
+    {
+      "session_id": 3,
+      "question": "What is Bob's current role?",
+      "expected_answer": "ML engineer",
+      "subtask": "knowledge_update",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I have a Kubernetes skill.\n\n[Memory \u2014 Known facts]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 8bf6d743; src #410055ba; \"I speak German.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 26f9b73b; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 5ff3aa65; src #c83b937e; \"I'm an ML engineer.\"]\n- (Bob, works_at, OpenAI) [valid 20...",
+      "top5": [
+        "Bob | speaks | German",
+        "Bob | name | Bob",
+        "Bob | role | ML engineer",
+        "Bob | works_at | OpenAI",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    }
+  ]
+}
