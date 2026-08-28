@@ -38,6 +38,23 @@ class VSA:
         self._perms: dict[str, np.ndarray] = {}
         self._inperms: dict[str, np.ndarray] = {}
         self._roles: dict[str, np.ndarray] = {}
+        # NSR-inspired engineered role vectors (optional). When
+        # _engineered is set, role_vec() returns the engineered vector
+        # instead of the random one. This is opt-in via .use_engineered().
+        self._engineered = None
+
+    def use_engineered(self, erv) -> None:
+        """Swap the random role vectors for the engineered ones.
+
+        erv: an EngineeredRoleVectors instance that has been .fit()
+        on the actual fact corpus. After this call:
+            role_vec("S") -> erv.role_vec("S")  (top-1 principal dir)
+            role_vec("R") -> erv.role_vec("R")  (top-2)
+            role_vec("V") -> erv.role_vec("V")  (top-3)
+        The existing random role vectors remain available as a fallback
+        if erv.role_vec(role) returns None.
+        """
+        self._engineered = erv
 
     # ------------------------------------------------------------- roles
     def perm(self, role: str) -> np.ndarray:
@@ -56,6 +73,14 @@ class VSA:
         return self._inperms[role]
 
     def role_vec(self, role: str) -> np.ndarray:
+        # engineered role vectors (NSR-inspired) take precedence when
+        # configured — they sit on the top-k principal directions of
+        # the actual fact corpus, giving higher effective capacity and
+        # lower cross-talk than random role vectors.
+        if self._engineered is not None and self._engineered.is_fit:
+            v = self._engineered.role_vec(role)
+            if v is not None:
+                return v
         v = self._roles.get(role)
         if v is None:
             rng = np.random.default_rng(_h64(f"role:{role}", self.seed) & 0xFFFFFFFF)

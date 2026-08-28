@@ -173,11 +173,26 @@ class PerUserIdiolectNormalizer:
         return None
 
     def normalize(self, user_id: str, text: str) -> str:
-        """Normalize all tokens in text per-user."""
+        """Normalize all tokens in text per-user.
+
+        Preserves whitespace (including newlines) so downstream regex
+        patterns that use ^ to anchor line starts still work — the
+        text-speak map collapses multi-char tokens (u→you, 2→to) but
+        shouldn't collapse newlines into spaces.
+        """
         if not text:
             return text
+        import re as _re
         out = []
-        for tok in text.split():
+        # use re.split with capture to preserve whitespace
+        # tokens: runs of non-whitespace
+        for piece in _re.split(r"(\s+)", text):
+            if not piece:
+                continue
+            if piece.isspace():
+                out.append(piece)
+                continue
+            tok = piece
             # CRITICAL: check the text-speak map for the FULL token
             # (with punctuation) BEFORE stripping — otherwise "@" gets
             # stripped to "" and never reaches the map. This is what
@@ -204,7 +219,7 @@ class PerUserIdiolectNormalizer:
                 out.append(prefix + canon + suffix)
             else:
                 out.append(tok)
-        return " ".join(out)
+        return "".join(out)
 
     # ------------------------------------------------------- admin
     def stats(self) -> dict:

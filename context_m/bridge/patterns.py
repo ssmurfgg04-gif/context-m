@@ -104,7 +104,7 @@ PATTERNS: list[tuple[str, re.Pattern, object]] = []
 
 
 def pattern(name: str, rx: str):
-    compiled = re.compile(rx, re.I)
+    compiled = re.compile(rx, re.I | re.M)
 
     def deco(fn):
         PATTERNS.append((name, compiled, fn))
@@ -582,3 +582,77 @@ def extract_events(sent: str, sp: tuple[int, int], ts: datetime | None,
     return [Candidate("SELF", "event", vp, 0.7, "event",
                       valid_from=dates[0]["iso"],
                       span=(sp[0] + m.start(), sp[0] + m.end()))]
+
+
+# --- label-value form (BEAM-10M user_profile bullets) ---------------------
+# BEAM-10M's user_profile uses "Name: X / Age: Y / Location: Z / Profession: P"
+# form (label-value pairs separated by a colon). This is a different surface
+# than the conversational "My name is X" form — the user_profile section is
+# a structured profile, not a chat message. The patterns below extract facts
+# from that structured form so the μ=0 extractor can score on BEAM-10M
+# ground-truth facts.
+#
+# Confidence is 0.90 (vs 0.95 for "my name is X") because the profile
+# form doesn't establish first-person attribution as strongly as a
+# user saying "my name is X" in their own chat turn — the profile
+# could be metadata about another user. The writer's quarantine /
+# sandbox layer still applies.
+@pattern("profile_name",
+         rf"^\s*•?\s*Name:\s+(?P<val>{NAME})\s*$")
+def _profile_name(m, ctx, sp, ts, sent):
+    v = clean_value(m.group("val"))
+    target = ctx.subject_name or "SELF"
+    rel = "name" if ctx.subject_name is None else "alias"
+    return [Candidate(target, rel, v, 0.90, "profile_name")]
+
+
+@pattern("profile_age",
+         rf"^\s*•?\s*Age:\s+(?P<val>\d+)\s*(?:years?\s*old)?\s*$")
+def _profile_age(m, ctx, sp, ts, sent):
+    v = clean_value(m.group("val"))
+    target = ctx.subject_name or "SELF"
+    return [Candidate(target, "age", v, 0.88, "profile_age")]
+
+
+@pattern("profile_gender",
+         rf"^\s*•?\s*Gender:\s+(?P<val>male|female|non-binary|other)\s*$")
+def _profile_gender(m, ctx, sp, ts, sent):
+    v = clean_value(m.group("val"))
+    target = ctx.subject_name or "SELF"
+    return [Candidate(target, "gender", v, 0.88, "profile_gender")]
+
+
+@pattern("profile_location",
+         rf"^\s*•?\s*Location:\s+(?P<val>[^\n]+?)\s*$")
+def _profile_location(m, ctx, sp, ts, sent):
+    v = clean_value(m.group("val"))
+    target = ctx.subject_name or "SELF"
+    return [Candidate(target, "location", v, 0.88, "profile_location")]
+
+
+@pattern("profile_profession",
+         rf"^\s*•?\s*Profession:\s+(?P<val>[^\n]+?)\s*$")
+def _profile_profession(m, ctx, sp, ts, sent):
+    v = clean_value(m.group("val"))
+    target = ctx.subject_name or "SELF"
+    return [Candidate(target, "profession", v, 0.88, "profile_profession")]
+
+
+# --- relationship bullets (BEAM-10M user_relationships) ------------------
+# The user_relationships section uses bullet form like:
+#   • Alicia (female, age 80)
+# under a header like "PARENTS & GUARDIANS:" — we match the bullet+name
+# but the section header sets the relation. Since we don't track state
+# across matches in the pattern layer (the ExtractionContext doesn't
+# see the section header), we emit these as "related_to" with the name
+# as the value. A post-process pass (in the writer) could resolve
+# section→relation by re-reading the user_relationships text.
+@pattern("profile_relative",
+         rf"^\s*•\s+(?P<val>{NAME})\s*\(.*?\)\s*$")
+def _profile_relative(m, ctx, sp, ts, sent):
+    v = clean_value(m.group("val"))
+    target = ctx.subject_name or "SELF"
+    # we don't know the section here; emit as 'related_to' so the
+    # fact is stored and the relation can be re-classified later.
+    return [Candidate(target, "related_to", v, 0.75,
+                       "profile_relative")]

@@ -51,6 +51,20 @@ def main(argv=None) -> int:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--db", default=None)
 
+    # extend consolidate with toggles for each pass
+    # (the loop above already created 'consolidate'; we fetch it
+    # by name and add extra flags)
+    con = [a for a in sub.choices.values() if a.prog.endswith("consolidate")][0]
+    con.add_argument("--dry-run", action="store_true",
+                     help="don't commit changes — just report what would happen")
+    con.add_argument("--no-lifecycle", action="store_true",
+                     help="skip the lifecycle pass (short→long promotion / decay)")
+    con.add_argument("--no-dreaming", action="store_true",
+                     help="skip the Aeon dreaming pass (merge triples, retire stale, "
+                          "defrag palace, retrain prefetcher)")
+    con.add_argument("--user-id", default=None,
+                     help="scope the dreaming pass to one user")
+
     p = sub.add_parser("keys", help="API key management (RBAC)")
     p.add_argument("op", choices=["create", "list", "revoke"])
     p.add_argument("--db", default=None)
@@ -204,7 +218,12 @@ def main(argv=None) -> int:
         elif args.cmd == "verify":
             print(json.dumps(m.verify_integrity(), indent=2, default=str))
         elif args.cmd == "consolidate":
-            print(json.dumps(m.consolidate(), indent=2))
+            print(json.dumps(m.consolidate(
+                dry_run=getattr(args, "dry_run", False),
+                lifecycle=not getattr(args, "no_lifecycle", False),
+                dreaming=not getattr(args, "no_dreaming", False),
+                user_id=getattr(args, "user_id", None),
+            ), indent=2, default=str))
         elif args.cmd == "export-schema":
             print(json.dumps(m.export_schema_report(), indent=2, default=str))
         elif args.cmd == "migrate":

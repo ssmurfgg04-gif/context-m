@@ -1,0 +1,34 @@
+{
+  "benchmark": "engineered_role_vectors",
+  "n_personas": 200,
+  "n_epochs": 200,
+  "baseline": {
+    "precision_at_k": 0.945,
+    "n_queries": 200,
+    "n_correct": 189,
+    "cross_talk": 0.0175652876496315
+  },
+  "engineered": {
+    "precision_at_k": 0.945,
+    "n_queries": 200,
+    "n_correct": 189,
+    "cross_talk": 1.383821169535319e-05
+  },
+  "delta": {
+    "precision_at_5": 0.0,
+    "cross_talk": -1.76
+  },
+  "ae_report": {
+    "trained": true,
+    "n_samples": 2946,
+    "dims": 768,
+    "n_roles": 3,
+    "epochs": 200,
+    "final_loss": 0.7901036158274892,
+    "initial_loss": 0.960533368368984,
+    "loss_reduction_pct": 17.743241219291505,
+    "off_diag_sum": 0.00022222474217414856,
+    "condition_number": 1.0000712871551514
+  },
+  "saved_to": "/tmp/role_vectors.npz"
+}

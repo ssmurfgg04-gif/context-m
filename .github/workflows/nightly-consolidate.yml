@@ -1,0 +1,176 @@
+# Nightly "Dreaming" pass — Aeon-inspired idle-time memory optimization.
+#
+# WHY THIS WORKFLOW EXISTS
+# ------------------------
+# arXiv:2601.15311 (Aeon) describes a background task analogous to
+# biological sleep: defragmentation, GC, and consolidation of the
+# verbose Trace into compressed long-term episodic summaries.
+# Context-M's Memory Git is currently passive — it version-controls
+# facts but doesn't optimize them. This nightly pass turns it into
+# an ACTIVE memory optimizer that runs during idle periods.
+#
+# WHAT IT RUNS
+#   cortexm consolidate --db <prod-snapshot>
+#     - lifecycle pass: promote reinforced short-term facts,
+#       decay untouched ones, demote weak long-term facts
+#     - dreaming pass: merge redundant triples (MERGED_WITH edges),
+#       retire stale facts past valid_to + grace, defrag palace,
+#       retrain MBTB prefetcher
+#
+# WHY NIGHTLY:
+#   consolidation touches every active fact. Doing it inline with
+#   every ingest would dominate latency. Sleeping on it overnight
+#   amortizes the cost — exactly the Aeon insight.
+#
+# SCHEDULE: 03:00 UTC every day (when most US/EU traffic is low).
+# Manual dispatch is supported for ad-hoc runs.
+
+name: nightly-consolidate
+
+on:
+  schedule:
+    - cron: "0 3 * * *"      # 03:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "dry-run — report what would change but don't commit"
+        type: boolean
+        default: false
+      skip_lifecycle:
+        description: "skip lifecycle pass (short→long promotion / decay)"
+        type: boolean
+        default: false
+      skip_dreaming:
+        description: "skip Aeon dreaming pass (merge triples, retire, defrag, retrain prefetcher)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write        # commit the consolidation report
+
+concurrency:
+  group: nightly-consolidate
+  cancel-in-progress: false   # NEVER cancel mid-consolidation — partial
+                               # state would leave the palace defragged
+                               # but the prefetcher un-retrained
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CONTEXTM_RUST: "1"        # use Rust-accelerated hot paths
+      CORTEXM_DB: /tmp/nightly_consolidate.db
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Context-M
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Bootstrap a representative corpus
+        run: |
+          # build a corpus that has redundant triples + stale facts
+          # so the dreaming pass actually has work to do. In prod this
+          # step is replaced by mounting the production snapshot.
+          python -c "
+          import os, datetime as dt
+          from context_m.api.memory import Memory
+          from context_m.config import Config
+          cfg = Config.from_env()
+          cfg.db_path = os.environ['CORTEXM_DB']
+          m = Memory(cfg)
+          t0 = dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc)
+          for i in range(500):
+              uid = f'user{i:04d}'
+              m.add([{'role':'user','content':f'My name is Alice{i} and I work at Google as an engineer.'}], user_id=uid)
+              m.add([{'role':'user','content':f'Alice{i} works at Google as a software engineer.'}], user_id=uid)
+          # also seed a few stale facts (valid_to in the past)
+          m.add([{'role':'user','content':'I worked at Acme Corp until 2020.'}], user_id='stale1')
+          m.store.close()
+          print('corpus bootstrapped')
+          "
+
+      - name: Stats before
+        run: |
+          python -m context_m.cli stats --db "$CORTEXM_DB" \
+            | tee /tmp/stats_before.json
+
+      - name: Consolidate
+        run: |
+          FLAGS=""
+          [ "${{ inputs.dry_run }}" = "true" ] && FLAGS="$FLAGS --dry-run"
+          [ "${{ inputs.skip_lifecycle }}" = "true" ] && FLAGS="$FLAGS --no-lifecycle"
+          [ "${{ inputs.skip_dreaming }}" = "true" ] && FLAGS="$FLAGS --no-dreaming"
+          echo "[nightly] flags: $FLAGS"
+          python -m context_m.cli consolidate --db "$CORTEXM_DB" $FLAGS \
+            | tee /tmp/consolidate_report.json
+
+      - name: Stats after
+        run: |
+          python -m context_m.cli stats --db "$CORTEXM_DB" \
+            | tee /tmp/stats_after.json
+
+      - name: Integrity audit (post-consolidation)
+        run: |
+          python -m context_m.cli verify --db "$CORTEXM_DB" \
+            | tee /tmp/verify_report.json
+
+      - name: Build diff summary
+        run: |
+          {
+            echo "## Nightly Consolidation Report"
+            echo ""
+            echo "**Run:** ${{ github.run_id }}"
+            echo "**Trigger:** ${{ github.event_name }}"
+            echo "**Dry-run:** ${{ inputs.dry_run == true }}"
+            echo ""
+            echo "### Consolidate output"
+            echo '```json'
+            cat /tmp/consolidate_report.json
+            echo '```'
+            echo ""
+            echo "### Integrity audit"
+            echo '```json'
+            cat /tmp/verify_report.json
+            echo '```'
+          } > /tmp/nightly_report.md
+          cat /tmp/nightly_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit report to bench/nightly branch
+        run: |
+          set -eu
+          git config user.name "consolidate-bot"
+          git config user.email "consolidate-bot@users.noreply.github.com"
+          git checkout -B bench/nightly
+          mkdir -p benchmarks/results/nightly
+          cp /tmp/consolidate_report.json \
+             benchmarks/results/nightly/consolidate_$(date -u +%Y%m%d).json
+          cp /tmp/nightly_report.md \
+             benchmarks/results/nightly/report_$(date -u +%Y%m%d).md
+          git add benchmarks/results/nightly
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "nightly(consolidate): $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin bench/nightly
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-consolidate-report
+          path: |
+            /tmp/consolidate_report.json
+            /tmp/stats_before.json
+            /tmp/stats_after.json
+            /tmp/verify_report.json
+            /tmp/nightly_report.md
+          if-no-files-found: ignore
+          retention-days: 90

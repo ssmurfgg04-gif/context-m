@@ -1,0 +1,209 @@
+{
+  "benchmark": "beam10m_real",
+  "source": "Mohammadta/BEAM-10M",
+  "n_personas": 3,
+  "max_turns_per_persona": 30,
+  "total_chars": 62204,
+  "total_ground_truth_facts": 25,
+  "configs": {
+    "baseline": {
+      "config": "baseline",
+      "n_facts_stored": 44,
+      "extraction_recall": 0.64,
+      "retrieval_precision_at_5": 0.28,
+      "ingest_time_s": 0.11,
+      "query_time_s": 0.06,
+      "ms_per_ingest_persona": 36.4,
+      "ms_per_query": 2.4,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess": {
+      "config": "+unmess",
+      "n_facts_stored": 45,
+      "extraction_recall": 0.64,
+      "retrieval_precision_at_5": 0.28,
+      "ingest_time_s": 2.7,
+      "query_time_s": 0.07,
+      "ms_per_ingest_persona": 899.7,
+      "ms_per_query": 2.7,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess+dissim": {
+      "config": "+unmess+dissim",
+      "n_facts_stored": 69,
+      "extraction_recall": 1.0,
+      "retrieval_precision_at_5": 0.36,
+      "ingest_time_s": 2.86,
+      "query_time_s": 0.09,
+      "ms_per_ingest_persona": 954.4,
+      "ms_per_query": 3.7,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess+dissim+query": {
+      "config": "+unmess+dissim+query",
+      "n_facts_stored": 69,
+      "extraction_recall": 1.0,
+      "retrieval_precision_at_5": 0.4,
+      "ingest_time_s": 2.97,
+      "query_time_s": 0.09,
+      "ms_per_ingest_persona": 989.4,
+      "ms_per_query": 3.7,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    }
+  },
+  "personas": [
+    {
+      "user_id": "beam_1",
+      "n_turns": 30,
+      "n_facts": 9,
+      "text_chars": 24137,
+      "facts": [
+        {
+          "subject": "beam_1",
+          "relation": "name",
+          "value": "Jennifer Mccall"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "age",
+          "value": "59"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "parent",
+          "value": "Alicia"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "partner",
+          "value": "James"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "child",
+          "value": "Mary"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "child",
+          "value": "Nancy"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_2",
+      "n_turns": 30,
+      "n_facts": 10,
+      "text_chars": 16491,
+      "facts": [
+        {
+          "subject": "beam_2",
+          "relation": "name",
+          "value": "Jason Mccall"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "age",
+          "value": "37"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "parent",
+          "value": "Heather"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "parent",
+          "value": "Kevin"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Mary"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Nicholas"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Timothy"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_3",
+      "n_turns": 30,
+      "n_facts": 6,
+      "text_chars": 21576,
+      "facts": [
+        {
+          "subject": "beam_3",
+          "relation": "name",
+          "value": "Jason Mccall"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "age",
+          "value": "29"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "partner",
+          "value": "Catherine"
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,8 @@ import datetime as _dt
 import os
 from datetime import datetime, timezone
 
+import numpy as np
+
 from context_m import metrics
 from context_m.bridge.extractor import Extractor
 from context_m.bridge.reader import MemoryReader, RetrievalResult
@@ -409,8 +411,31 @@ class Memory:
         self.reader.invalidate_caches()
         return out
 
-    def consolidate(self, now=None) -> dict:
-        return lifecycle.consolidate(self.store, now)
+    def consolidate(self, now=None, **kwargs) -> dict:
+        """Run BOTH consolidation passes:
+
+        (1) lifecycle.consolidate — Dual-Layer Agentic Memory: promote
+            reinforced short-term facts, decay untouched ones, demote
+            weak long-term facts. Fast, pure-SQL.
+
+        (2) trace.consolidate.consolidate — Aeon-inspired "dreaming":
+            merge redundant triples (MERGED_WITH edges), retire stale
+            facts past valid_to + grace, defrag palace, retrain
+            MBTB prefetcher. Slower, idempotent, safe.
+
+        Returns a combined report. Either pass may be skipped via
+        kwargs lifecycle=False / dreaming=False.
+        """
+        out = {"lifecycle": {}, "dreaming": {}}
+        if kwargs.get("lifecycle", True):
+            out["lifecycle"] = lifecycle.consolidate(self.store, now)
+        if kwargs.get("dreaming", True):
+            from context_m.trace.consolidate import consolidate as _dream
+            out["dreaming"] = _dream(self.store, palace=self.palace,
+                                       prefetcher=self.prefetcher,
+                                       user_id=kwargs.get("user_id"),
+                                       dry_run=kwargs.get("dry_run", False))
+        return out
 
     def export_schema_report(self, user_id: str | None = None) -> dict:
         return export_schema_report(self.store, user_id)
@@ -434,6 +459,122 @@ class Memory:
 
     def storage_stats(self) -> dict:
         return self.palace.storage_stats()
+
+    # -------------------------------------------------- sidecar blob arena
+    def enable_blob_arena(self, path: str | os.PathLike) -> dict:
+        """Opt-in: migrate chunks.text into a sidecar mmap-backed blob
+        file (Aeon-inspired). After migration:
+
+          - chunks.text      := first 64 bytes of the source (preview)
+          - chunks.blob_offset := byte offset in the arena file
+          - chunks.blob_len  := payload length
+          - chunks.blob_compressed := 0/1
+
+        Graph queries that only need the preview still work without
+        touching the arena. Full text is fetched on demand via
+        arena.get_text(offset, len, compressed).
+
+        Returns a migration report dict.
+        """
+        from context_m.trace.blob_arena import (
+            BlobArena, migrate_chunks_to_arena)
+        arena = BlobArena(path)
+        report = migrate_chunks_to_arena(self.store, arena)
+        # keep arena handle on self so it stays alive for the life of
+        # the Memory instance; the host can grab it via .blob_arena
+        self.blob_arena = arena
+        return report
+
+    def get_chunk_text(self, chunk_id: str) -> str:
+        """Fetch full text for a chunk — from the arena if migrated,
+        otherwise from the inline text column."""
+        arena = getattr(self, "blob_arena", None)
+        if arena is not None:
+            from context_m.trace.blob_arena import get_chunk_text as _g
+            return _g(self.store, arena, chunk_id)
+        row = self.store.conn.execute(
+            "SELECT text FROM chunks WHERE id=?", (chunk_id,)).fetchone()
+        return row[0] if row else ""
+
+    # ------------------------------------- engineered role vectors (NSR)
+    def use_engineered_role_vectors(self, *, n_epochs: int = 200,
+                                     lr: float = 0.01,
+                                     save_path: str | None = None,
+                                     verbose: bool = False) -> dict:
+        """NSR-inspired: train a tiny autoencoder on the actual fact
+        corpus and use the top-k principal directions as role vectors.
+
+        arXiv insight: random role vectors (current default) waste
+        capacity on directions orthogonal to the data. Engineered ones
+        sit on the data's principal axes — higher effective capacity,
+        lower cross-talk, better retrieval SNR.
+
+        After this call, the palace's VSA will use the engineered role
+        vectors for bind() / unbind() / probe() operations. New facts
+        ingested after this call will be encoded with the engineered
+        vectors; previously-encoded facts keep their original (random)
+        holograms until the palace is rebuilt.
+
+        Returns the autoencoder training report.
+
+        NOTE: this is OPT-IN. The default behavior (random role
+        vectors) is unchanged unless this method is called.
+        """
+        from context_m.vsa.role_vectors import EngineeredRoleVectors
+        # pull the fact matrix from the palace — we need the actual
+        # S/R/V vectors used to encode the existing facts
+        facts = self.store.query_facts(active=True)
+        if not facts:
+            return {"trained": False, "reason": "no_facts_in_store"}
+        # build a (n_facts * 3, dims) matrix: S, R, V vectors for each
+        # fact, stacked. Each row is a single role-filler vector.
+        rows = []
+        for f in facts:
+            for field, role in (
+                    (f.subject, "S"), (f.relation, "R"), (f.value, "V")):
+                if field:
+                    rows.append(self.palace.embedder.embed(field))
+        if not rows:
+            return {"trained": False, "reason": "no_text_to_embed"}
+        matrix = np.stack(rows).astype(np.float32)
+        # cap the matrix size — 10k samples is plenty for PCA
+        if len(matrix) > 10_000:
+            import numpy as _np
+            rng = _np.random.default_rng(self.config.seed)
+            idx = rng.choice(len(matrix), 10_000, replace=False)
+            matrix = matrix[idx]
+        erv = EngineeredRoleVectors(
+            dims=self.config.dims, n_roles=3,
+            seed=self.config.seed, n_epochs=n_epochs, lr=lr)
+        report = erv.fit(matrix)
+        if erv.is_fit:
+            self.palace.vsa.use_engineered(erv)
+            self._engineered_role_vectors = erv
+            if save_path:
+                erv.save(save_path)
+            if verbose:
+                print(f"[engineered-role-vectors] {report}")
+        return report
+
+    def save_engineered_role_vectors(self, path: str) -> None:
+        erv = getattr(self, "_engineered_role_vectors", None)
+        if erv is None:
+            raise RuntimeError("no engineered role vectors to save — "
+                                "call use_engineered_role_vectors() first")
+        erv.save(path)
+
+    def load_engineered_role_vectors(self, path: str) -> dict:
+        """Load a previously-saved .npz of engineered role vectors
+        and swap them in as the active role vectors."""
+        from context_m.vsa.role_vectors import EngineeredRoleVectors
+        erv = EngineeredRoleVectors(dims=self.config.dims,
+                                     seed=self.config.seed)
+        erv.load(path)
+        if erv.is_fit:
+            self.palace.vsa.use_engineered(erv)
+            self._engineered_role_vectors = erv
+            return {"loaded": True, "path": path}
+        return {"loaded": False, "reason": "file_empty_or_corrupt"}
 
     def close(self) -> None:
         self.palace.close()
