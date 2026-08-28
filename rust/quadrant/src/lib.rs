@@ -28,7 +28,9 @@
 //! function of max_leaves/margin and corpus geometry, not a constant.
 
 mod simd;
+mod nsg;
 
+use crate::nsg::NsgIndex;
 use numpy::PyReadonlyArray1;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -440,5 +442,6 @@ impl QuadrantIndex {
 #[pymodule]
 fn quadrant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<QuadrantIndex>()?;
+    m.add_class::<NsgIndex>()?;
     Ok(())
 }

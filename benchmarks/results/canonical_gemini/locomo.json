@@ -1,0 +1,144 @@
+{
+  "summary": {
+    "n_questions": 8,
+    "det_judge_accuracy": 0.625,
+    "gemini_judge_accuracy": 0.625,
+    "by_category": {
+      "single-hop": 1.0,
+      "knowledge-update": 0.5,
+      "multi-hop": 0.5,
+      "temporal": 0.0
+    },
+    "judged_by": "deterministic_nugget"
+  },
+  "results": [
+    {
+      "session_id": 1,
+      "question": "Where does Alice work?",
+      "expected_answer": "Google",
+      "category": "single-hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Alice, prefers, Python for backend work (for backend work)) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id aae04927; src #76e08b3f; \"I prefer Python for backend work.\"]\n- (Alice, left, Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.90; id 4bab42a9; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, event, left Google) [valid 2026...",
+      "top5": [
+        "Alice | name | Alice",
+        "Alice | prefers | Python for backend work (for backend work)",
+        "Alice | left | Google",
+        "Alice | event | left Google",
+        "Alice | role | senior engineer"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "What is Alice's role?",
+      "expected_answer": "senior engineer",
+      "category": "single-hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, event, left Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.70; id a68f6106; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Alice, left, Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.90; id 4bab42a9; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, likes, hiking on weekends) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf ...",
+      "top5": [
+        "Alice | event | left Google",
+        "Alice | name | Alice",
+        "Alice | left | Google",
+        "Alice | likes | hiking on weekends",
+        "Alice | role | senior engineer"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "Where does Alice live?",
+      "expected_answer": "Toronto",
+      "category": "single-hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, lives_in, Toronto) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id ee12760f; src #3e89441f; \"I live in Toronto.\"]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Alice, left, Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.90; id 4bab42a9; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, event, left Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.70; id a68f6...",
+      "top5": [
+        "Alice | lives_in | Toronto",
+        "Alice | name | Alice",
+        "Alice | left | Google",
+        "Alice | event | left Google",
+        "Alice | moved_to | Mountain View"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "Where does Alice work now?",
+      "expected_answer": "Anthropic",
+      "category": "knowledge-update",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Alice, prefers, Python for backend work (for backend work)) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id aae04927; src #76e08b3f; \"I prefer Python for backend work.\"]\n- (Alice, role, senior engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.80; id 0c845b3d; src #93525ec4; \"I work at Google as a senior engineer.\"]\n- (Alice, left, Go...",
+      "top5": [
+        "Alice | name | Alice",
+        "Alice | prefers | Python for backend work (for backend work)",
+        "Alice | role | senior engineer",
+        "Alice | left | Google",
+        "Alice | event | left Google"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    },
+    {
+      "session_id": 2,
+      "question": "Where did Alice work before?",
+      "expected_answer": "Google",
+      "category": "knowledge-update",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Alice, event, left Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.70; id a68f6106; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, prefers, Python for backend work (for backend work)) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id aae04927; src #76e08b3f; \"I prefer Python for backend work.\"]\n- (Alice, role, senior engineer) [v...",
+      "top5": [
+        "Alice | name | Alice",
+        "Alice | event | left Google",
+        "Alice | prefers | Python for backend work (for backend work)",
+        "Alice | role | senior engineer",
+        "Alice | left | Google"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "What was Alice's role at her previous job?",
+      "expected_answer": "senior engineer",
+      "category": "multi-hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, event, left Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.70; id a68f6106; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, left, Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.90; id 4bab42a9; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Alice, role, senior engineer) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.80...",
+      "top5": [
+        "Alice | event | left Google",
+        "Alice | left | Google",
+        "Alice | name | Alice",
+        "Alice | role | senior engineer",
+        "Alice | lives_in | Toronto"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Where has Alice lived?",
+      "expected_answer": "Toronto and Mountain View",
+      "category": "temporal",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Alice, left, Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.90; id 4bab42a9; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, event, left Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.70; id a68f6106; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, lives_in, Toronto) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id...",
+      "top5": [
+        "Alice | name | Alice",
+        "Alice | left | Google",
+        "Alice | event | left Google",
+        "Alice | lives_in | Toronto",
+        "Alice | moved_to | Mountain View"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    },
+    {
+      "session_id": 3,
+      "question": "Summarize Alice's career changes.",
+      "expected_answer": "Started at Google as senior engineer, then joined Anthropic.",
+      "category": "multi-hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Alice, left, Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.90; id 4bab42a9; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, event, left Google) [valid 2026-08-21\u2192\u221e; learned 2026-08-28; conf 0.70; id a68f6106; src #f14fd39c; \"I left Google last week.\"]\n- (Alice, name, Alice) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id 86137afb; src #c80bcce3; \"My name is Alice.\"]\n- (Mountain View, mentioned, Mountain View) [valid 2026-08-28\u2192\u221e; learned 2026-08-28...",
+      "top5": [
+        "Alice | left | Google",
+        "Alice | event | left Google",
+        "Alice | name | Alice",
+        "Mountain View | mentioned | Mountain View",
+        "Alice | lives_in | Toronto"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    }
+  ]
+}

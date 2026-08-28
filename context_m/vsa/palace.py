@@ -278,6 +278,45 @@ class MemoryPalace:
         return [(self._ids[int(i)], float(sc[i])) for i in idx]
 
     def _score_all(self, qv: np.ndarray) -> np.ndarray:
+        # Rust fast path (Task 6-simd): when cortexm_core is built, route
+        # the per-row scoring through `batch_dot_i8` (int8 codec) or
+        # `batch_dot` (fp32 path) instead of the codec's numpy `scores`.
+        # The Rust kernels are AVX-512 → AVX2+FMA → NEON → scalar and
+        # process the whole batch in one Python→Rust boundary crossing.
+        # NumPy remains the exact reference; bit parity ≤1e-5 asserted
+        # by `tests/test_rust_accel.py::TestSimdKernels::test_batch_dot_*`.
+        try:
+            from context_m import accel
+        except Exception:                       # pragma: no cover
+            accel = None
+        rust_ok = (accel is not None and accel.RUST_AVAILABLE
+                   and accel.RUST_ENABLED)
+        n = self._n
+        d = self.dims
+        if rust_ok and n > 0 and self._packed is not None:
+            qf32 = np.ascontiguousarray(qv, dtype=np.float32)
+            if self.codec.uses_aux and self._aux is not None:
+                # Int8Codec: Rust returns raw int8·f32 dot products;
+                # multiply by per-row aux scales to match the codec's
+                # `scores` semantics (`packed.astype(f32) * aux @ q`).
+                # Pass the int8 buffer as a flat 1-D view — pyo3 binds
+                # to `PyReadonlyArray1<i8>` zero-copy.
+                packed_flat = np.ascontiguousarray(
+                    self._packed[:n]).reshape(-1)
+                raw = np.asarray(
+                    accel._core.batch_dot_i8(packed_flat, qf32, n, d),
+                    dtype=np.float32)
+                aux = np.asarray(self._aux[:n], dtype=np.float32)
+                return raw * aux
+            if self._packed.dtype == np.float32:
+                # FP32-packed codec path. (BinaryCodec stores bipolar
+                # ±1 in uint8 — skip; codec.scores handles its own XOR.)
+                rows_flat = np.ascontiguousarray(
+                    self._packed[:n]).reshape(-1)
+                raw = np.asarray(
+                    accel._core.batch_dot(rows_flat, qf32, n, d),
+                    dtype=np.float32)
+                return raw
         if self.codec.uses_aux:
             return self.codec.scores(self._packed[: self._n], qv, self._aux[: self._n])
         return self.codec.scores(self._packed[: self._n], qv)

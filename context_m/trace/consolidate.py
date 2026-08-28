@@ -48,14 +48,17 @@ def consolidate(store, palace=None, prefetcher=None, *,
                 retrain_prefetcher: bool = True,
                 run_fade: bool = True,
                 run_tmt: bool = False,
+                run_cognition: bool = False,
                 dry_run: bool = False,
                 fade_cfg: dict | None = None,
-                tmt_cfg: dict | None = None) -> dict:
+                tmt_cfg: dict | None = None,
+                cognition_cfg: dict | None = None) -> dict:
     """Run a single consolidation pass.
 
     Returns a stats dict:
         {merged_pairs, retired_facts, palace_defragged,
-         prefetcher_retrained, fade_stats, tmt_stats, commit_id, dry_run}
+         prefetcher_retrained, fade_stats, tmt_stats,
+         cognition_stats, commit_id, dry_run}
 
     Parameters:
         store           — TraceStore
@@ -70,8 +73,14 @@ def consolidate(store, palace=None, prefetcher=None, *,
         retrain_prefetcher — rebuild the MBTB from access_count stats
         run_fade        — also run FadeMem sweep (decay + deactivate + merge)
         run_tmt         — also run TiMem TMT hierarchy build
+        run_cognition   — also run the HMS-style Cognition Engine pass
+                           (PatternScanner + AbstractionEngine + GapDetector
+                           + HypothesisEngine + AnalogyDetector). Emits
+                           HYPOTHESIZED_BY edges with confidence < 0.5 —
+                           never active in retrieval unless promoted.
         fade_cfg        — kwargs for fade_sweep (lambda_, thresholds, etc.)
         tmt_cfg         — kwargs for tmt_build (cluster mins, etc.)
+        cognition_cfg   — kwargs for run_cognition_pass
         dry_run         — compute the changes but don't apply them
     """
     stats = {
@@ -81,6 +90,7 @@ def consolidate(store, palace=None, prefetcher=None, *,
         "prefetcher_retrained": False,
         "fade_stats": None,
         "tmt_stats": None,
+        "cognition_stats": None,
         "commit_id": None,
         "dry_run": dry_run,
     }
@@ -245,6 +255,37 @@ def consolidate(store, palace=None, prefetcher=None, *,
             stats["tmt_stats"] = tmt_build(store, palace, **tmt_kwargs)
         except Exception as e:
             stats["tmt_stats"] = {"error": str(e)}
+
+    # ---------- 7. HMS Cognition Engine pass ----------------------------
+    # PatternScanner + AbstractionEngine + GapDetector + HypothesisEngine
+    # + AnalogyDetector. Surfaces structural regularities, builds
+    # prototype categories, fills in missing relations via hypotheses,
+    # finds cross-domain analogies. Output is derived facts with
+    # confidence < 0.5 and is_derived=1, never promoted to active
+    # retrieval unless explicitly confirmed by user input.
+    if run_cognition:
+        try:
+            from context_m.cognition import run_cognition_pass
+            cog_kwargs = dict(
+                dry_run=dry_run,
+                user_id=user_id,
+            )
+            if cognition_cfg:
+                cog_kwargs.update(cognition_cfg)
+            cog_report = run_cognition_pass(store, palace=palace,
+                                              **cog_kwargs)
+            stats["cognition_stats"] = {
+                "scan": cog_report.scan,
+                "abstraction": cog_report.abstraction,
+                "gaps": cog_report.gaps,
+                "hypotheses": cog_report.hypotheses,
+                "analogies": cog_report.analogies,
+                "total_derived_facts": cog_report.total_derived_facts,
+                "duration_ms": round(cog_report.duration_ms, 2),
+                "cognition_commit_id": cog_report.commit_id,
+            }
+        except Exception as e:
+            stats["cognition_stats"] = {"error": str(e)}
 
     if not dry_run:
         store.end_batch()

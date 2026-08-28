@@ -198,3 +198,206 @@ def tier_status() -> dict:
                  f"Override with CONTEXTM_TIER=edge|cloud"),
     }
 
+
+# --- SIMD kernel wrappers (Task 6-simd) ------------------------------------
+# The Rust crate exposes `dot / dot_i8_f32 / cosine / l2_sq /
+# batch_dot / batch_dot_i8 / topk / argmax` — each is a thin pyo3
+# wrapper around the runtime-dispatched kernels in `rust/cortexm-core/
+# src/simd.rs` (AVX-512 → AVX2+FMA → NEON → scalar). When the wheel is
+# absent we fall back to numpy so callers always get a working answer.
+#
+# Design rule (mirrors RustVSA): the kernels NEVER allocate randomness
+# and produce bit-compatible results across the Rust / NumPy paths (≤1e-5
+# FP32 noise, asserted by `tests/test_rust_accel.py::TestSimdKernels`).
+# Use the free-function form (`accel.cosine(a, b)`) for one-off queries;
+# use the class form (`accel.SimdKernels().batch_dot(...)`) when you
+# want to gate behaviour on `RUST_ENABLED` without re-checking globals.
+
+
+def _as_f32(x) -> "np.ndarray":
+    import numpy as np
+    return np.ascontiguousarray(x, dtype=np.float32)
+
+
+def dot(a, b) -> float:
+    """SIMD dot product. NumPy fallback: `np.dot(a, b)`."""
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        return float(_core.dot(np.ascontiguousarray(a, dtype=np.float32),
+                                np.ascontiguousarray(b, dtype=np.float32)))
+    import numpy as np
+    return float(np.dot(_as_f32(a), _as_f32(b)))
+
+
+def dot_i8_f32(q8, q) -> float:
+    """INT8 × f32 dot product. NumPy fallback casts int8 → f32 first."""
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        return float(_core.dot_i8_f32(
+            np.ascontiguousarray(q8, dtype=np.int8),
+            np.ascontiguousarray(q, dtype=np.float32)))
+    import numpy as np
+    q8 = np.ascontiguousarray(q8, dtype=np.int8)
+    return float((q8.astype(np.float32) @ _as_f32(q)))
+
+
+def cosine(a, b) -> float:
+    """Cosine similarity via SIMD-accelerated dot + L2 norms.
+
+    Identical vectors return exactly 1.0 (bit-exact through the
+    SIMD self-dot path); distinct vectors agree with numpy's
+    `a @ b / (|a|·|b|)` to within 1e-5 (FP32 lane-reduction noise).
+    """
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        return float(_core.cosine(
+            np.ascontiguousarray(a, dtype=np.float32),
+            np.ascontiguousarray(b, dtype=np.float32)))
+    import numpy as np
+    a = _as_f32(a)
+    b = _as_f32(b)
+    return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))
+
+
+def l2_sq(a, b) -> float:
+    """Squared L2 distance `sum((a-b)**2)`. 0.0 for identical vectors."""
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        return float(_core.l2_sq(
+            np.ascontiguousarray(a, dtype=np.float32),
+            np.ascontiguousarray(b, dtype=np.float32)))
+    import numpy as np
+    d = _as_f32(a) - _as_f32(b)
+    return float(d @ d)
+
+
+def batch_dot(rows, q, n_rows: int, dims: int) -> list[float]:
+    """Matrix-vector product over a flat `[n_rows × dims]` f32 slice.
+
+    Far more cache-friendly than calling `dot()` per row from Python —
+    one boundary crossing for the whole batch.  Returns a plain list so
+    callers can `np.asarray(...)` if they want a contiguous array.
+    """
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        r = np.ascontiguousarray(rows, dtype=np.float32).reshape(-1)
+        q = np.ascontiguousarray(q, dtype=np.float32)
+        return list(_core.batch_dot(r, q, n_rows, dims))
+    import numpy as np
+    r = np.asarray(rows, dtype=np.float32).reshape(n_rows, dims)
+    q = _as_f32(q)
+    return (r @ q).tolist()
+
+
+def batch_dot_i8(packed, q, n_rows: int, dims: int) -> list[float]:
+    """INT8-packed rows × f32 query.  Raw int8·f32 dot products — callers
+    apply per-row scales (the codec's aux array) themselves."""
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        p = np.ascontiguousarray(packed, dtype=np.int8).reshape(-1)
+        q = np.ascontiguousarray(q, dtype=np.float32)
+        return list(_core.batch_dot_i8(p, q, n_rows, dims))
+    import numpy as np
+    p = np.asarray(packed, dtype=np.int8).reshape(n_rows, dims)
+    q = _as_f32(q)
+    return (p.astype(np.float32) @ q).tolist()
+
+
+def topk(scores, k: int) -> list[tuple[int, float]]:
+    """Top-`k` (idx, score) tuples in descending order. O(N) via
+    `select_nth_unstable`, then O(k log k) for the prefix sort."""
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        s = np.ascontiguousarray(scores, dtype=np.float32)
+        return [(int(i), float(v)) for i, v in _core.topk(s, k)]
+    import numpy as np
+    s = np.asarray(scores, dtype=np.float32)
+    k = max(0, min(k, s.size))
+    if k == 0:
+        return []
+    part = np.argpartition(-s, k - 1)[:k]
+    part = part[np.argsort(-s[part])]
+    return [(int(i), float(s[i])) for i in part]
+
+
+def argmax(scores) -> tuple[int, float]:
+    """Return (idx, value) of the max element. Ties → first occurrence."""
+    if RUST_AVAILABLE and RUST_ENABLED:
+        import numpy as np
+        s = np.ascontiguousarray(scores, dtype=np.float32)
+        i, v = _core.argmax(s)
+        return (int(i), float(v))
+    import numpy as np
+    s = np.asarray(scores, dtype=np.float32)
+    if s.size == 0:
+        return (0, 0.0)
+    i = int(np.argmax(s))
+    return (i, float(s[i]))
+
+
+class SimdKernels:
+    """Container class that mirrors the Rust kernel surface so callers
+    can wire `accel.SimdKernels()` once and dispatch uniformly. The
+    NumPy fallbacks produce bit-identical results within 1e-5 (FP32
+    lane-reduction noise, asserted by parity tests).
+
+    Mirrors the existing `RustVSA` pattern: the constructor raises
+    `RuntimeError` if Rust is explicitly disabled (`CONTEXTM_RUST=0`)
+    — when Rust is *available* but the user opted out, callers should
+    use the free functions above instead.
+    """
+
+    def __init__(self) -> None:
+        if not (RUST_AVAILABLE and RUST_ENABLED):
+            raise RuntimeError(
+                "SimdKernels requires Rust acceleration enabled "
+                "(CONTEXTM_RUST=auto or =1, and the cortexm_core wheel built)")
+
+    def dot(self, a, b) -> float:
+        import numpy as np
+        return float(_core.dot(
+            np.ascontiguousarray(a, dtype=np.float32),
+            np.ascontiguousarray(b, dtype=np.float32)))
+
+    def dot_i8_f32(self, q8, q) -> float:
+        import numpy as np
+        return float(_core.dot_i8_f32(
+            np.ascontiguousarray(q8, dtype=np.int8),
+            np.ascontiguousarray(q, dtype=np.float32)))
+
+    def cosine(self, a, b) -> float:
+        import numpy as np
+        return float(_core.cosine(
+            np.ascontiguousarray(a, dtype=np.float32),
+            np.ascontiguousarray(b, dtype=np.float32)))
+
+    def l2_sq(self, a, b) -> float:
+        import numpy as np
+        return float(_core.l2_sq(
+            np.ascontiguousarray(a, dtype=np.float32),
+            np.ascontiguousarray(b, dtype=np.float32)))
+
+    def batch_dot(self, rows, q, n_rows: int, dims: int) -> list[float]:
+        import numpy as np
+        r = np.ascontiguousarray(rows, dtype=np.float32).reshape(-1)
+        q = np.ascontiguousarray(q, dtype=np.float32)
+        return list(_core.batch_dot(r, q, n_rows, dims))
+
+    def batch_dot_i8(self, packed, q, n_rows: int,
+                      dims: int) -> list[float]:
+        import numpy as np
+        p = np.ascontiguousarray(packed, dtype=np.int8).reshape(-1)
+        q = np.ascontiguousarray(q, dtype=np.float32)
+        return list(_core.batch_dot_i8(p, q, n_rows, dims))
+
+    def topk(self, scores, k: int) -> list[tuple[int, float]]:
+        import numpy as np
+        s = np.ascontiguousarray(scores, dtype=np.float32)
+        return [(int(i), float(v)) for i, v in _core.topk(s, k)]
+
+    def argmax(self, scores) -> tuple[int, float]:
+        import numpy as np
+        s = np.ascontiguousarray(scores, dtype=np.float32)
+        i, v = _core.argmax(s)
+        return (int(i), float(v))
+

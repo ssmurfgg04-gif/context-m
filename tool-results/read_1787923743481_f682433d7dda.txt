@@ -1,0 +1,622 @@
+     1→"""Model Context Protocol server — stdio JSON-RPC 2.0.
+     2→
+     3→Day-1 MCP support per the plan: any agent (Claude, Cursor, OpenCode)
+     4→discovers Context-M as a native memory tool. Zero dependencies — the
+     5→protocol is implemented directly on line-delimited JSON-RPC.
+     6→
+     7→Run:  cortexm serve          (or: python -m context_m.mcp.server)
+     8→Config: CONTEXT_M_DB sets the database path; CONTEXT_M_CODEC selects
+     9→the storage tier (int8 | binary | rabitq | pq).
+    10→"""
+    11→
+    12→from __future__ import annotations
+    13→
+    14→import json
+    15→import os
+    16→import sys
+    17→
+    18→from context_m.config import Config
+    19→from context_m.api.memory import Memory
+    20→
+    21→PROTOCOL_VERSION = "2025-06-18"
+    22→SERVER_INFO = {"name": "context-m", "version": "0.1.0"}
+    23→
+    24→TOOLS = [
+    25→    {
+    26→        "name": "contextm_add",
+    27→        "description": "Store memories from a conversation (μ=0: deterministic, "
+    28→                       "no LLM calls). Accepts a message string or a list of "
+    29→                       "{role, content} dicts.",
+    30→        "inputSchema": {
+    31→            "type": "object",
+    32→            "properties": {
+    33→                "messages": {"type": ["string", "array"]},
+    34→                "user_id": {"type": "string", "default": "default"},
+    35→                "agent_id": {"type": "string"},
+    36→                "run_id": {"type": "string"},
+    37→                "timestamp": {"type": "string"},
+    38→            },
+    39→            "required": ["messages"],
+    40→        },
+    41→    },
+    42→    {
+    43→        "name": "contextm_search",
+    44→        "description": "Neuro-symbolic memory retrieval with cryptographic "
+    45→                       "provenance (query → VSA match → symbolic dereference → "
+    46→                       "source hash → original text).",
+    47→        "inputSchema": {
+    48→            "type": "object",
+    49→            "properties": {
+    50→                "query": {"type": "string"},
+    51→                "user_id": {"type": "string", "default": "default"},
+    52→                "limit": {"type": "integer", "default": 12},
+    53→            },
+    54→            "required": ["query"],
+    55→        },
+    56→    },
+    57→    {
+    58→        "name": "contextm_get_all",
+    59→        "description": "List all active memories for a user.",
+    60→        "inputSchema": {
+    61→            "type": "object",
+    62→            "properties": {"user_id": {"type": "string"},
+    63→                           "limit": {"type": "integer", "default": 200}},
+    64→        },
+    65→    },
+    66→    {
+    67→        "name": "contextm_history",
+    68→        "description": "Bi-temporal history of a fact chain, including all "
+    69→                       "supersessions.",
+    70→        "inputSchema": {
+    71→            "type": "object",
+    72→            "properties": {"memory_id": {"type": "string"}},
+    73→            "required": ["memory_id"],
+    74→        },
+    75→    },
+    76→    {
+    77→        "name": "contextm_temporal",
+    78→        "description": "Zep-compatible temporal query: facts in a time window. "
+    79→                       "op: before | after | between; field: valid (reality) "
+    80→                       "or tx (when recorded).",
+    81→        "inputSchema": {
+    82→            "type": "object",
+    83→            "properties": {
+    84→                "op": {"type": "string", "enum": ["before", "after", "between"]},
+    85→                "start": {"type": "string"},
+    86→                "end": {"type": "string"},
+    87→                "user_id": {"type": "string"},
+    88→                "field": {"type": "string", "default": "valid"},
+    89→            },
+    90→            "required": ["op"],
+    91→        },
+    92→    },
+    93→    {
+    94→        "name": "contextm_audit",
+    95→        "description": "The 'Why' audit trail for a query: full provenance "
+    96→                       "chain with hash verification for every returned fact.",
+    97→        "inputSchema": {
+    98→            "type": "object",
+    99→            "properties": {"query": {"type": "string"},
+   100→                           "user_id": {"type": "string"}},
+   101→            "required": ["query"],
+   102→        },
+   103→    },
+   104→    {
+   105→        "name": "contextm_prove",
+   106→        "description": "Zero-knowledge-lite proof: prove a matching fact "
+   107→                       "exists (Merkle membership + attestation) without "
+   108→                       "revealing its content to the LLM.",
+   109→        "inputSchema": {
+   110→            "type": "object",
+   111→            "properties": {"query": {"type": "string"},
+   112→                           "user_id": {"type": "string"}},
+   113→            "required": ["query"],
+   114→        },
+   115→    },
+   116→    {
+   117→        "name": "contextm_stats",
+   118→        "description": "Memory fabric statistics: facts, vectors, codec, "
+   119→                       "SLB hit rate, μ=0 protocol status.",
+   120→        "inputSchema": {"type": "object", "properties": {}},
+   121→    },
+   122→    {
+   123→        "name": "contextm_delete",
+   124→        "description": "Deactivate a memory (audit-logged, never hard-deleted).",
+   125→        "inputSchema": {
+   126→            "type": "object",
+   127→            "properties": {"memory_id": {"type": "string"}},
+   128→            "required": ["memory_id"],
+   129→        },
+   130→    },
+   131→    {
+   132→        "name": "contextm_query_extract",
+   133→        "description": "Query-time extraction (arXiv 2026 hybrid RAG): retrieve "
+   134→                       "raw chunks relevant to the query and run the deterministic "
+   135→                       "extractor on them lazily. Adds extracted_at temporal axis. "
+   136→                       "Closes the 'half-empty palace' gap for slang/paraphrase.",
+   137→        "inputSchema": {
+   138→            "type": "object",
+   139→            "properties": {
+   140→                "query": {"type": "string"},
+   141→                "user_id": {"type": "string", "default": "default"},
+   142→                "k": {"type": "integer", "default": 5},
+   143→            },
+   144→            "required": ["query"],
+   145→        },
+   146→    },
+   147→    {
+   148→        "name": "contextm_attribution",
+   149→        "description": "Source attribution (ProtoDash): for a given query, "
+   150→                       "show which source chunks contributed to the retrieval "
+   151→                       "result and with what weights. Audit trail for debugging.",
+   152→        "inputSchema": {
+   153→            "type": "object",
+   154→            "properties": {"query": {"type": "string"},
+   155→                           "user_id": {"type": "string"}},
+   156→            "required": ["query"],
+   157→        },
+   158→    },
+   159→    {
+   160→        "name": "contextm_zk_prove",
+   161→        "description": "Hamming-distance ZK-style proof on binary vectors: prove "
+   162→                       "you hold a memory within threshold Hamming distance of a "
+   163→                       "public commitment, without revealing the memory.",
+   164→        "inputSchema": {
+   165→            "type": "object",
+   166→            "properties": {
+   167→                "memory_id": {"type": "string"},
+   168→                "public_commitment": {"type": "string"},
+   169→                "threshold": {"type": "integer", "default": 32},
+   170→            },
+   171→            "required": ["memory_id", "public_commitment"],
+   172→        },
+   173→    },
+   174→    {
+   175→        "name": "contextm_reconstruct",
+   176→        "description": "Active memory reconstruction (MRAgent ICML 2026 lineage). "
+   177→                       "For a given query, expand seed facts via 2-hop Personalized "
+   178→                       "PageRank, score each hop's relevance, prune low-scoring "
+   179→                       "branches, and return a synthesized narrative view of the "
+   180→                       "user's memory state. Use this when a normal search would "
+   181→                       "miss multi-hop context (e.g. 'what's the connection between "
+   182→                       "Alice's job and her sister's hobby?').",
+   183→        "inputSchema": {
+   184→            "type": "object",
+   185→            "properties": {
+   186→                "query": {"type": "string"},
+   187→                "user_id": {"type": "string", "default": "default"},
+   188→                "k": {"type": "integer", "default": 10},
+   189→                "max_hops": {"type": "integer", "default": 3},
+   190→            },
+   191→            "required": ["query"],
+   192→        },
+   193→    },
+   194→    {
+   195→        "name": "contextm_consolidate",
+   196→        "description": "Trigger a memory consolidation pass on demand (normally "
+   197→                       "runs nightly via cron). Runs the FadeMem sweep "
+   198→                       "(decay + deactivate + merge), TiMem TMT hierarchy build "
+   199→                       "(session→day→persona summaries), and Aeon-style dreaming "
+   200→                       "(merge redundant triples, defrag palace). Measured 43.2%% "
+   201→                       "storage reduction with zero retrieval-precision regression. "
+   202→                       "Returns a stats dict; safe to call repeatedly (idempotent).",
+   203→        "inputSchema": {
+   204→            "type": "object",
+   205→            "properties": {
+   206→                "user_id": {"type": "string", "default": "default"},
+   207→                "dry_run": {"type": "boolean", "default": False},
+   208→                "lifecycle": {"type": "boolean", "default": True},
+   209→                "dreaming": {"type": "boolean", "default": True},
+   210→                "fade": {"type": "boolean", "default": True},
+   211→                "tmt": {"type": "boolean", "default": True},
+   212→            },
+   213→        },
+   214→    },
+   215→    {
+   216→        "name": "contextm_working_memory",
+   217→        "description": "Holographic working memory — compress the top-k retrieved "
+   218→                       "facts into a single HRR (Holographic Reduced Representation) "
+   219→                       "superposition. Returns a short (~30-50 token) preamble for "
+   220→                       "LLM system-prompt injection + the HRR vector base64-packed. "
+   221→                       "5-10× token reduction for context windows with repeated "
+   222→                       "memory injection across turns.",
+   223→        "inputSchema": {
+   224→            "type": "object",
+   225→            "properties": {
+   226→                "query": {"type": "string"},
+   227→                "user_id": {"type": "string", "default": "default"},
+   228→                "k": {"type": "integer", "default": 12},
+   229→            },
+   230→            "required": ["query"],
+   231→        },
+   232→    },
+   233→    {
+   234→        "name": "contextm_hologram_extract",
+   235→        "description": "Unbind a role (S/R/V) from a holographic working memory "
+   236→                       "vector and return the top-3 candidate facts. Used by agents "
+   237→                       "that received a working-memory hologram via "
+   238→                       "contextm_working_memory and want to recall a specific fact "
+   239→                       "slot on demand. Pure HRR algebra — μ=0.",
+   240→        "inputSchema": {
+   241→            "type": "object",
+   242→            "properties": {
+   243→                "hrr_b64": {"type": "string",
+   244→                            "description": "base64-packed HRR vector from contextm_working_memory"},
+   245→                "role": {"type": "string", "enum": ["S", "R", "V"]},
+   246→                "candidate_ids": {"type": "array", "items": {"type": "string"}},
+   247→                "user_id": {"type": "string", "default": "default"},
+   248→            },
+   249→            "required": ["hrr_b64", "role", "candidate_ids"],
+   250→        },
+   251→    },
+   252→]
+   253→
+   254→
+   255→class MCPServer:
+   256→    def __init__(self, memory: Memory) -> None:
+   257→        self.memory = memory
+   258→
+   259→    # ------------------------------------------------------------------
+   260→    def handle(self, request: dict) -> dict | None:
+   261→        method = request.get("method", "")
+   262→        req_id = request.get("id")
+   263→        if method == "initialize":
+   264→            return self._ok(req_id, {
+   265→                "protocolVersion": PROTOCOL_VERSION,
+   266→                "capabilities": {"tools": {"listChanged": False}},
+   267→                "serverInfo": SERVER_INFO,
+   268→            })
+   269→        if method == "notifications/initialized":
+   270→            return None
+   271→        if method == "ping":
+   272→            return self._ok(req_id, {})
+   273→        if method == "tools/list":
+   274→            return self._ok(req_id, {"tools": TOOLS})
+   275→        if method == "tools/call":
+   276→            return self._ok(req_id, self._call_tool(
+   277→                request.get("params", {}).get("name", ""),
+   278→                request.get("params", {}).get("arguments", {}) or {}))
+   279→        if method == "resources/list":
+   280→            return self._ok(req_id, {"resources": []})
+   281→        if req_id is not None:
+   282→            return self._err(req_id, -32601, f"method not found: {method}")
+   283→        return None
+   284→
+   285→    # ------------------------------------------------------------------
+   286→    def _call_tool(self, name: str, args: dict) -> dict:
+   287→        m = self.memory
+   288→        try:
+   289→            if name == "contextm_add":
+   290→                out = m.add(args.get("messages"),
+   291→                            user_id=args.get("user_id", "default"),
+   292→                            agent_id=args.get("agent_id"),
+   293→                            run_id=args.get("run_id"),
+   294→                            timestamp=args.get("timestamp"))
+   295→                text = json.dumps({"stored": len(out.get("results", [])),
+   296→                                   "stats": out.get("stats")}, default=str)
+   297→            elif name == "contextm_search":
+   298→                out = m.search(args.get("query", ""),
+   299→                               user_id=args.get("user_id", "default"),
+   300→                               limit=args.get("limit", 12))
+   301→                text = out["context_block"]
+   302→            elif name == "contextm_get_all":
+   303→                out = m.get_all(user_id=args.get("user_id", "default"),
+   304→                                limit=args.get("limit", 200))
+   305→                text = "\n".join(r["memory"] for r in out["results"]) or "(empty)"
+   306→            elif name == "contextm_history":
+   307→                out = m.history(args.get("memory_id", ""))
+   308→                text = json.dumps(out, indent=1, default=str)
+   309→            elif name == "contextm_temporal":
+   310→                op = args.get("op", "between")
+   311→                if op == "before":
+   312→                    out = m.get_before(args.get("end") or args.get("start"),
+   313→                                       user_id=args.get("user_id", "default"),
+   314→                                       field=args.get("field", "valid"))
+   315→                elif op == "after":
+   316→                    out = m.get_after(args.get("start"),
+   317→                                      user_id=args.get("user_id", "default"),
+   318→                                      field=args.get("field", "valid"))
+   319→                else:
+   320→                    out = m.get_between(args.get("start"), args.get("end"),
+   321→                                        user_id=args.get("user_id", "default"),
+   322→                                        field=args.get("field", "valid"))
+   323→                text = json.dumps(out, indent=1, default=str)
+   324→            elif name == "contextm_audit":
+   325→                out = m.audit(args.get("query", ""),
+   326→                              user_id=args.get("user_id", "default"))
+   327→                text = json.dumps(out, indent=1, default=str)
+   328→            elif name == "contextm_prove":
+   329→                proof = m.prove(args.get("query", ""),
+   330→                                user_id=args.get("user_id", "default"))
+   331→                text = proof["llm_view"] + f"\nMerkle root: {proof['merkle_root'][:16]}…"
+   332→            elif name == "contextm_stats":
+   333→                text = json.dumps(m.stats(), indent=1, default=str)
+   334→            elif name == "contextm_delete":
+   335→                out = m.delete(args.get("memory_id", ""))
+   336→                text = json.dumps(out)
+   337→            elif name == "contextm_query_extract":
+   338→                # Query-time extraction (hybrid RAG) — extract from raw
+   339→                # chunks relevant to the query, even if μ=0 ingest missed.
+   340→                out = self._query_extract(
+   341→                    args.get("query", ""),
+   342→                    user_id=args.get("user_id", "default"),
+   343→                    k=args.get("k", 5))
+   344→                text = json.dumps(out, indent=1, default=str)
+   345→            elif name == "contextm_attribution":
+   346→                # ProtoDash source attribution — which chunks contributed.
+   347→                out = self._attribution(
+   348→                    args.get("query", ""),
+   349→                    user_id=args.get("user_id", "default"))
+   350→                text = json.dumps(out, indent=1, default=str)
+   351→            elif name == "contextm_zk_prove":
+   352→                # Hamming ZK proof on binary codec vectors.
+   353→                out = self._zk_prove(
+   354→                    args.get("memory_id", ""),
+   355→                    args.get("public_commitment", ""),
+   356→                    threshold=args.get("threshold", 32))
+   357→                text = json.dumps(out, indent=1, default=str)
+   358→            elif name == "contextm_reconstruct":
+   359→                # MRAgent-style active reconstruction.
+   360→                out = self._reconstruct(
+   361→                    args.get("query", ""),
+   362→                    user_id=args.get("user_id", "default"),
+   363→                    k=args.get("k", 10),
+   364→                    max_hops=args.get("max_hops", 3))
+   365→                text = json.dumps(out, indent=1, default=str)
+   366→            elif name == "contextm_consolidate":
+   367→                # On-demand consolidation pass (FadeMem + TMT + dreaming).
+   368→                out = self._consolidate(
+   369→                    user_id=args.get("user_id", "default"),
+   370→                    dry_run=args.get("dry_run", False),
+   371→                    lifecycle=args.get("lifecycle", True),
+   372→                    dreaming=args.get("dreaming", True),
+   373→                    fade=args.get("fade", True),
+   374→                    tmt=args.get("tmt", True))
+   375→                text = json.dumps(out, indent=1, default=str)
+   376→            elif name == "contextm_working_memory":
+   377→                # Holographic working-memory compression.
+   378→                out = self._working_memory(
+   379→                    args.get("query", ""),
+   380→                    user_id=args.get("user_id", "default"),
+   381→                    k=args.get("k", 12))
+   382→                text = json.dumps(out, indent=1, default=str)
+   383→            elif name == "contextm_hologram_extract":
+   384→                # Unbind a role from a HRR hologram and return top-3.
+   385→                out = self._hologram_extract(
+   386→                    args.get("hrr_b64", ""),
+   387→                    args.get("role", "S"),
+   388→                    args.get("candidate_ids", []),
+   389→                    user_id=args.get("user_id", "default"))
+   390→                text = json.dumps(out, indent=1, default=str)
+   391→            else:
+   392→                return {"content": [{"type": "text",
+   393→                                     "text": f"unknown tool {name}"}],
+   394→                        "isError": True}
+   395→            return {"content": [{"type": "text", "text": text}]}
+   396→        except Exception as e:  # surface errors to the agent
+   397→            return {"content": [{"type": "text", "text": f"error: {e}"}],
+   398→                    "isError": True}
+   399→
+   400→    # ------------------------------------------------------------------
+   401→    def _query_extract(self, query: str, user_id: str = "default",
+   402→                       k: int = 5) -> dict:
+   403→        """Hybrid query-time extraction. Uses QueryTimeExtractor if
+   404→        available; falls back to standard search results if not."""
+   405→        try:
+   406→            from context_m.bridge.query_extract import QueryTimeExtractor
+   407→            from context_m.text.dissim import DisSimSplitter
+   408→            from context_m.text.idiolect import PerUserIdiolectNormalizer
+   409→            from context_m.text.embedder import HashingEmbedder
+   410→
+   411→            palace = self.memory.palace
+   412→            store = self.memory.store
+   413→            embedder = HashingEmbedder(palace.dims, palace.cfg.seed)
+   414→            dissim = DisSimSplitter(max_depth=2)
+   415→            idiolect = PerUserIdiolectNormalizer(embedder)
+   416→            extractor = QueryTimeExtractor(
+   417→                palace, store, embedder, dissim=dissim,
+   418→                idiolect=idiolect,
+   419→                pattern_extractor=self.memory.extractor if hasattr(
+   420→                    self.memory, "extractor") else None)
+   421→            results = extractor.query(query, user_id=user_id, k=k)
+   422→            return {
+   423→                "query": query,
+   424→                "user_id": user_id,
+   425→                "extracted_count": len(results),
+   426→                "results": results,
+   427→                "path": "query_time_pattern",
+   428→            }
+   429→        except Exception as e:
+   430→            # graceful fallback: standard search
+   431→            out = self.memory.search(query, user_id=user_id, limit=k)
+   432→            return {
+   433→                "query": query,
+   434→                "user_id": user_id,
+   435→                "fallback": "standard_search",
+   436→                "error": str(e),
+   437→                "context_block": out.get("context_block", ""),
+   438→            }
+   439→
+   440→    def _attribution(self, query: str, user_id: str = "default") -> dict:
+   441→        """ProtoDash attribution for a query — which source chunks contributed."""
+   442→        try:
+   443→            from context_m.vsa.attribution import ProtoDashAttributer, sentence_level_score
+   444→            from context_m.text.embedder import HashingEmbedder
+   445→            import numpy as np
+   446→
+   447→            # standard search to get candidates
+   448→            out = self.memory.search(query, user_id=user_id, limit=10)
+   449→            results = out.get("results", [])
+   450→            if not results:
+   451→                return {"query": query, "attributions": []}
+   452→            embedder = HashingEmbedder(self.memory.palace.dims,
+   453→                                       self.memory.palace.cfg.seed)
+   454→            q_emb = embedder.embed(query)
+   455→            cand_embs = np.stack([embedder.embed(r.get("memory", ""))
+   456→                                   for r in results])
+   457→            cand_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
+   458→            attrib = ProtoDashAttributer(kernel="linear")
+   459→            weights = attrib.attribute(q_emb, cand_embs, cand_ids, m=5)
+   460→            return {
+   461→                "query": query,
+   462→                "user_id": user_id,
+   463→                "attributions": [
+   464→                    {"fact_id": fid, "weight": w, "memory": r.get("memory", "")}
+   465→                    for (fid, w), r in zip(weights, results)
+   466→                ],
+   467→            }
+   468→        except Exception as e:
+   469→            return {"query": query, "error": str(e), "attributions": []}
+   470→
+   471→    def _zk_prove(self, memory_id: str, public_commitment: str,
+   472→                  threshold: int = 32) -> dict:
+   473→        """Hamming ZK proof on binary codec vectors."""
+   474→        try:
+   475→            from context_m.security.zk_hamming import HammingZKProver
+   476→            palace = self.memory.palace
+   477→            # fetch the memory's packed vector
+   478→            row = palace._id2row.get(memory_id)
+   479→            if row is None:
+   480→                return {"error": f"memory {memory_id} not in palace"}
+   481→            packed = palace._packed[row]
+   482→            # convert public commitment hex → bytes
+   483→            public = bytes.fromhex(public_commitment)
+   484→            private = bytes(packed.tobytes())
+   485→            prover = HammingZKProver(dims=palace.dims, threshold=threshold)
+   486→            proof = prover.prove(public, private)
+   487→            verified = prover.verify(public, proof)
+   488→            return {
+   489→                "memory_id": memory_id,
+   490→                "verified": verified,
+   491→                "weight": proof.weight,
+   492→                "threshold": proof.threshold,
+   493→                "commitment": proof.commitment[:32] + "...",
+   494→            }
+   495→        except Exception as e:
+   496→            return {"memory_id": memory_id, "error": str(e)}
+   497→
+   498→    # ------------------------------------------------------------------
+   499→    def _reconstruct(self, query: str, user_id: str = "default",
+   500→                     k: int = 10, max_hops: int = 3) -> dict:
+   501→        """MRAgent-style active memory reconstruction.
+   502→
+   503→        Uses Memory.reader.reconstruct() (which exists from prior work
+   504→        — bridge/reader.py). Falls back to standard search if the
+   505→        reconstruct path is disabled in Config.
+   506→        """
+   507→        try:
+   508→            reader = getattr(self.memory, "reader", None)
+   509→            if reader is None:
+   510→                out = self.memory.search(query, user_id=user_id, limit=k)
+   511→                return {"query": query, "fallback": "standard_search",
+   512→                        "context_block": out.get("context_block", "")}
+   513→            reconstruct_fn = getattr(reader, "reconstruct", None)
+   514→            if (reconstruct_fn is None
+   515→                    or not getattr(self.memory.config,
+   516→                                    "reconstruct_enabled", False)):
+   517→                out = self.memory.search(query, user_id=user_id, limit=k * 2)
+   518→                return {"query": query, "fallback": "standard_search_wide",
+   519→                        "context_block": out.get("context_block", ""),
+   520→                        "results": out.get("results", [])[:k]}
+   521→            res = reconstruct_fn(query, user_id=user_id, k=k,
+   522→                                  max_hops=max_hops)
+   523→            return {
+   524→                "query": query,
+   525→                "user_id": user_id,
+   526→                "intent": getattr(res, "intent", "reconstruct"),
+   527→                "narrative": getattr(res, "context_block", ""),
+   528→                "facts": [
+   529→                    {"id": getattr(f, "id", ""), "subject": f.subject,
+   530→                     "relation": f.relation, "value": f.value,
+   531→                     "confidence": getattr(f, "confidence", 0.0)}
+   532→                    for f in getattr(res, "facts", [])
+   533→                ],
+   534→                "provenance": getattr(res, "provenance", {}),
+   535→                "timing": getattr(res, "timing", {}),
+   536→            }
+   537→        except Exception as e:
+   538→            return {"query": query, "error": str(e)}
+   539→
+   540→    # ------------------------------------------------------------------
+   541→    def _consolidate(self, user_id: str = "default", dry_run: bool = False,
+   542→                     lifecycle: bool = True, dreaming: bool = True,
+   543→                     fade: bool = True, tmt: bool = True) -> dict:
+   544→        """On-demand consolidation: FadeMem + TMT + Aeon dreaming.
+   545→
+   546→        Wraps Memory.consolidate() with explicit fade/tmt toggles so
+   547→        callers can run a partial pass (e.g. fade-only) on demand.
+   548→        Idempotent — safe to call repeatedly.
+   549→        """
+   550→        try:
+   551→            out = self.memory.consolidate(
+   552→                lifecycle=lifecycle, dreaming=dreaming,
+   553→                run_fade=fade, run_tmt=tmt, user_id=user_id,
+   554→                dry_run=dry_run)
+   555→            return {"user_id": user_id, "dry_run": dry_run,
+   556→                    "lifecycle": out.get("lifecycle", {}),
+   557→                    "dreaming": out.get("dreaming", {})}
+   558→        except Exception as e:
+   559→            return {"user_id": user_id, "error": str(e)}
+   560→
+   561→    # ------------------------------------------------------------------
+   562→    def _working_memory(self, query: str, user_id: str = "default",
+   563→                        k: int = 12) -> dict:
+   564→        """Compress top-k retrieved facts into a single HRR superposition."""
+   565→        try:
+   566→            reader = getattr(self.memory, "reader", None)
+   567→            if reader is None:
+   568→                return {"query": query, "error": "reader not available"}
+   569→            return reader.working_memory(query, user_id=user_id, k=k)
+   570→        except Exception as e:
+   571→            return {"query": query, "error": str(e)}
+   572→
+   573→    # ------------------------------------------------------------------
+   574→    def _hologram_extract(self, hrr_b64: str, role: str,
+   575→                          candidate_ids: list[str],
+   576→                          user_id: str = "default") -> dict:
+   577→        """Unbind a role from a HRR hologram and return top-3 matches."""
+   578→        try:
+   579→            reader = getattr(self.memory, "reader", None)
+   580→            if reader is None:
+   581→                return {"error": "reader not available"}
+   582→            hits = reader.hologram_extract(hrr_b64, role,
+   583→                                             candidate_ids=candidate_ids,
+   584→                                             user_id=user_id)
+   585→            return {"role": role, "hits": hits}
+   586→        except Exception as e:
+   587→            return {"error": str(e)}
+   588→
+   589→    # ------------------------------------------------------------------
+   590→    @staticmethod
+   591→    def _ok(req_id, result) -> dict:
+   592→        return {"jsonrpc": "2.0", "id": req_id, "result": result}
+   593→
+   594→    @staticmethod
+   595→    def _err(req_id, code, message) -> dict:
+   596→        return {"jsonrpc": "2.0", "id": req_id,
+   597→                "error": {"code": code, "message": message}}
+   598→
+   599→
+   600→def serve(db_path: str | None = None) -> None:
+   601→    cfg = Config.from_env()
+   602→    if db_path:
+   603→        cfg.db_path = db_path
+   604→    memory = Memory(cfg)
+   605→    server = MCPServer(memory)
+   606→    for line in sys.stdin:
+   607→        line = line.strip()
+   608→        if not line:
+   609→            continue
+   610→        try:
+   611→            request = json.loads(line)
+   612→        except json.JSONDecodeError:
+   613→            continue
+   614→        response = server.handle(request)
+   615→        if response is not None:
+   616→            sys.stdout.write(json.dumps(response) + "\n")
+   617→            sys.stdout.flush()
+   618→
+   619→
+   620→if __name__ == "__main__":
+   621→    serve()
+   622→

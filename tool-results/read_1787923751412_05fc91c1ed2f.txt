@@ -1,0 +1,625 @@
+     1→"""Context-M Memory — the Mem0-compatible facade.
+     2→
+     3→Drop-in surface (``pip install cortexm`` → ``from cortexm import Memory``):
+     4→
+     5→    m = Memory()
+     6→    m.add("I work at Google", user_id="alice")
+     7→    m.search("Where does Alice work?", user_id="alice")
+     8→    m.get_all(user_id="alice")
+     9→    m.history(memory_id)
+    10→
+    11→…plus everything Mem0 does not ship: Zep-compatible temporal queries,
+    12→cryptographic provenance on every retrieval, Memory Git (branch/merge/
+    13→diff/blame), ZK-lite proofs, self-healing vector storage, predictive
+    14→prefetching, federation-ready schema export, and a μ=0 ingest counter
+    15→that proves zero LLM calls.
+    16→"""
+    17→
+    18→from __future__ import annotations
+    19→
+    20→import datetime as _dt
+    21→import os
+    22→from datetime import datetime, timezone
+    23→
+    24→import numpy as np
+    25→
+    26→from context_m import metrics
+    27→from context_m.bridge.extractor import Extractor
+    28→from context_m.bridge.reader import MemoryReader, RetrievalResult
+    29→from context_m.bridge.writer import MemoryWriter
+    30→from context_m.config import Config
+    31→from context_m.errors import ContextMError
+    32→from context_m.features.git import MemoryGit
+    33→from context_m.features.prefetch import Prefetcher
+    34→from context_m.features.zk import ZKProver
+    35→from context_m.federation import export_schema_report, merge_schema_reports
+    36→from context_m.security.hashes import HashProvider
+    37→from context_m.trace import lifecycle
+    38→from context_m.trace.store import TraceStore
+    39→from context_m.util import parse_ts
+    40→from context_m.vsa.palace import MemoryPalace
+    41→
+    42→
+    43→class Memory:
+    44→    """The Universal Neuro-Symbolic Memory Fabric — one object, every layer."""
+    45→
+    46→    def __init__(self, config: Config | None = None, **overrides) -> None:
+    47→        if config is None:
+    48→            config = Config.from_env(**overrides)
+    49→        elif overrides:
+    50→            import dataclasses
+    51→            changes = {k: v for k, v in overrides.items()
+    52→                       if hasattr(config, k)}
+    53→            config = dataclasses.replace(config, **changes)
+    54→        self.config = config
+    55→        self.store = TraceStore(config.db_path, HashProvider(config.hash_provider),
+    56→                               wal_sync=getattr(config, "wal_sync", "normal"))
+    57→        self.palace = MemoryPalace(config, self.store)
+    58→        self.extractor = Extractor(config)
+    59→        self.prefetcher = Prefetcher()
+    60→        self.writer = MemoryWriter(config, self.store, self.palace, self.extractor)
+    61→        self.reader = MemoryReader(config, self.store, self.palace,
+    62→                                   self.prefetcher)
+    63→        self.git = MemoryGit(self.store, self.palace)
+    64→        self.zk = ZKProver(self.store, self.reader)
+    65→
+    66→        # --- enterprise layer (PII, crypto, RBAC, audit, governance) ---------
+    67→        from context_m.security.crypto import AESGCMCipher, load_master_key
+    68→        from context_m.security.pii import PIIGuard, PIIVault
+    69→        from context_m.security.rbac import APIKeyStore
+    70→        from context_m.enterprise.audit import AuditLog
+    71→        from context_m.enterprise.governance import Governance
+    72→        self.cipher = None
+    73→        if config.encryption_at_rest:
+    74→            key = load_master_key(config.master_key_path)
+    75→            if key is None:
+    76→                sidecar = ("" if config.db_path == ":memory:"
+    77→                           else config.db_path + ".key")
+    78→                if sidecar and os.path.exists(sidecar):
+    79→                    key = load_master_key(sidecar)
+    80→            if key is None:
+    81→                from context_m.security.crypto import generate_master_key
+    82→                if config.db_path != ":memory:":
+    83→                    key = generate_master_key(config.db_path + ".key")
+    84→            if key is not None:
+    85→                self.cipher = AESGCMCipher(key, store=self.store)
+    86→        self.pii_vault = PIIVault(self.store, self.cipher)
+    87→        self.pii_guard = PIIGuard(config.pii_mode, self.pii_vault)
+    88→        self.keys = APIKeyStore(self.store)
+    89→        self.audit_log = AuditLog(self.store, enabled=config.audit_enabled)
+    90→        self.governance = Governance(self)
+    91→
+    92→    # ------------------------------------------------------------ Mem0 API
+    93→    def add(self, messages, *, user_id: str | None = None,
+    94→            agent_id: str | None = None, run_id: str | None = None,
+    95→            metadata: dict | None = None, timestamp=None, **kw) -> dict:
+    96→        """μ=0 ingest. Accepts str | list[str] | mem0-style message dicts.
+    97→
+    98→        When ``pii_mode`` is ``redact``/``block``, the write path passes
+    99→        through the PII guard BEFORE extraction — raw personal data never
+   100→        reaches facts, chunks, or vectors."""
+   101→        user_id = user_id or self.config.default_user_id
+   102→        ts = parse_ts(timestamp) if timestamp else None
+   103→        if self.pii_guard.mode != "off":
+   104→            messages = self._apply_pii(messages)
+   105→            if messages is None:
+   106→                self.audit_log.log("memory.add", resource=user_id,
+   107→                               outcome="blocked_pii",
+   108→                               meta={"reason": "pii_mode=block"})
+   109→                return {"results": [], "blocked": "pii_policy"}
+   110→        out = self.writer.add(messages, user_id=user_id, agent_id=agent_id,
+   111→                              run_id=run_id, ts=ts, metadata=metadata, **kw)
+   112→        self.reader.invalidate_caches()
+   113→        if self.config.audit_actions == "all":
+   114→            self.audit_log.log("memory.add", resource=user_id,
+   115→                           meta={"facts": len(out.get("results", []))})
+   116→        return out
+   117→
+   118→    def _apply_pii(self, messages):
+   119→        """Run the PII guard over every message text. Returns redacted
+   120→        messages, or None when the policy blocks the write."""
+   121→        if isinstance(messages, str):
+   122→            res = self.pii_guard.process(messages)
+   123→            if res.blocked:
+   124→                return None
+   125→            return res.redacted_text
+   126→        if isinstance(messages, list):
+   127→            out = []
+   128→            for m in messages:
+   129→                if isinstance(m, dict) and "content" in m:
+   130→                    res = self.pii_guard.process(str(m["content"]))
+   131→                    if res.blocked:
+   132→                        return None
+   133→                    m = {**m, "content": res.redacted_text}
+   134→                elif isinstance(m, str):
+   135→                    res = self.pii_guard.process(m)
+   136→                    if res.blocked:
+   137→                        return None
+   138→                    m = res.redacted_text
+   139→                out.append(m)
+   140→            return out
+   141→        return messages
+   142→
+   143→    def search(self, query: str, *, user_id: str | None = None,
+   144→               agent_id: str | None = None, run_id: str | None = None,
+   145→               limit: int | None = None, timestamp=None,
+   146→               branch: str | None = None, **kw) -> dict:
+   147→        """Neuro-symbolic retrieval with full provenance. Mem0-shaped output."""
+   148→        user_id = user_id or self.config.default_user_id
+   149→        ts = parse_ts(timestamp) if timestamp else None
+   150→        result = self.reader.search(query, user_id=user_id, agent_id=agent_id,
+   151→                                    run_id=run_id, k=limit, ts=ts,
+   152→                                    branch=branch)
+   153→        hits = result.facts and self.prefetcher.note_hits(
+   154→            [f.id for f in result.facts])
+   155→        return {
+   156→            "results": result.memories(),
+   157→            "context_block": result.context_block,
+   158→            "relations": [{"source": f.subject, "relationship": f.relation,
+   159→                           "destination": f.value,
+   160→                           "valid_from": f.valid_from, "valid_to": f.valid_to}
+   161→                          for f in result.facts],
+   162→            "provenance": result.provenance,
+   163→            "intent": result.intent,
+   164→            "timing": result.timing,
+   165→            "llm_calls": 0,
+   166→        }
+   167→
+   168→    def get_all(self, *, user_id: str | None = None, agent_id: str | None = None,
+   169→                run_id: str | None = None, limit: int = 200,
+   170→                branch: str | None = None) -> dict:
+   171→        user_id = user_id or self.config.default_user_id
+   172→        facts = self.store.query_facts(user_id=user_id, agent_id=agent_id,
+   173→                                       run_id=run_id, branch=branch,
+   174→                                       active=True, limit=limit)
+   175→        return {"results": [{"id": f.id,
+   176→                             "memory": f"{f.subject} | {f.relation} | {f.value}",
+   177→                             "event": "ADD",
+   178→                             "valid_from": f.valid_from,
+   179→                             "valid_to": f.valid_to,
+   180→                             "confidence": f.confidence,
+   181→                             "memory_type": f.memory_type,
+   182→                             "hash": f.source_hash} for f in facts]}
+   183→
+   184→    def get(self, memory_id: str) -> dict | None:
+   185→        f = self.store.get_fact(memory_id)
+   186→        if not f:
+   187→            return None
+   188→        chunk = self.store.get_chunk(f.source_id) if f.source_id else None
+   189→        return {"id": f.id, "memory": f"{f.subject} | {f.relation} | {f.value}",
+   190→                "event": "ADD", "valid_from": f.valid_from,
+   191→                "valid_to": f.valid_to, "confidence": f.confidence,
+   192→                "hash": f.source_hash, "source": chunk["text"] if chunk else None,
+   193→                "verified": bool(chunk and chunk["hash"] == f.source_hash)}
+   194→
+   195→    def history(self, memory_id: str) -> list[dict]:
+   196→        """Full bi-temporal history of a fact chain (supersessions included)."""
+   197→        f = self.store.get_fact(memory_id)
+   198→        if not f:
+   199→            return []
+   200→        chain = [f]
+   201→        seen = {f.id}
+   202→        frontier = [f.id]
+   203→        while frontier:
+   204→            nxt = []
+   205→            for fid in frontier:
+   206→                for e in self.store.edges_of(fid, "CONTRADICTS", "out"):
+   207→                    other = self.store.get_fact(e["dst"])
+   208→                    if other and other.id not in seen:
+   209→                        seen.add(other.id)
+   210→                        chain.append(other)
+   211→                        nxt.append(other.id)
+   212→                for e in self.store.edges_of(fid, "CONTRADICTS", "in"):
+   213→                    other = self.store.get_fact(e["src"])
+   214→                    if other and other.id not in seen:
+   215→                        seen.add(other.id)
+   216→                        chain.append(other)
+   217→                        nxt.append(other.id)
+   218→            frontier = nxt
+   219→        chain.sort(key=lambda x: (x.valid_from, x.tx_from))
+   220→        return [{"id": c.id,
+   221→                 "memory": f"{c.subject} | {c.relation} | {c.value}",
+   222→                 "event": "ADD" if c.is_active else ("QUARANTINED" if c.quarantined else "SUPERSEDED"),
+   223→                 "valid_from": c.valid_from, "valid_to": c.valid_to,
+   224→                 "recorded_at": c.tx_from} for c in chain]
+   225→
+   226→    def update(self, memory_id: str, data: str) -> dict:
+   227→        """Rewrite a fact's value (audit-logged, hash re-verified)."""
+   228→        f = self.store.get_fact(memory_id)
+   229→        if not f:
+   230→            raise ContextMError(f"no fact {memory_id}")
+   231→        old = f.value
+   232→        self.store.update_fact(memory_id, value=data,
+   233→                               provenance={**f.provenance,
+   234→                                           "manual_update": True,
+   235→                                           "previous_value": old})
+   236→        self.palace.add(memory_id, self.palace.vsa.encode_fact(
+   237→            self.palace.embedder.embed(f.subject),
+   238→            self.palace.embedder.embed(f.relation),
+   239→            self.palace.embedder.embed(data)))
+   240→        return {"id": memory_id, "event": "UPDATE",
+   241→                "previous_value": old, "new_value": data}
+   242→
+   243→    def delete(self, memory_id: str) -> dict:
+   244→        f = self.store.get_fact(memory_id)
+   245→        if not f:
+   246→            return {"id": memory_id, "event": "NOOP"}
+   247→        self.store.update_fact(memory_id, is_active=0,
+   248→                               provenance={**f.provenance, "deleted": True})
+   249→        return {"id": memory_id, "event": "DELETE"}
+   250→
+   251→    def delete_all(self, *, user_id: str | None = None) -> dict:
+   252→        user_id = user_id or self.config.default_user_id
+   253→        facts = self.store.query_facts(user_id=user_id, active=True)
+   254→        for f in facts:
+   255→            self.store.update_fact(f.id, is_active=0,
+   256→                                   provenance={**f.provenance, "deleted": True})
+   257→        return {"event": "DELETE_ALL", "count": len(facts)}
+   258→
+   259→    def users(self) -> list[str]:
+   260→        rows = self.store.conn.execute(
+   261→            "SELECT DISTINCT user_id FROM facts").fetchall()
+   262→        return [r["user_id"] for r in rows]
+   263→
+   264→    def reset(self) -> None:
+   265→        self.store.conn.executescript(
+   266→            "DELETE FROM facts; DELETE FROM chunks; DELETE FROM edges; "
+   267→            "DELETE FROM vectors; DELETE FROM commits; DELETE FROM branches; "
+   268→            "DELETE FROM kv;")
+   269→        self.store.conn.commit()
+   270→        self.store._ensure_genesis()
+   271→        self.palace = MemoryPalace(self.config, self.store)
+   272→        self.writer = MemoryWriter(self.config, self.store, self.palace,
+   273→                                   self.extractor)
+   274→        self.reader = MemoryReader(self.config, self.store, self.palace,
+   275→                                   self.prefetcher)
+   276→        self.git = MemoryGit(self.store, self.palace)
+   277→        self.zk = ZKProver(self.store, self.reader)
+   278→
+   279→    # -------------------------------------------------- Zep temporal API
+   280→    def get_between(self, start, end, *, user_id: str | None = None,
+   281→                    field: str = "valid") -> list[dict]:
+   282→        user_id = user_id or self.config.default_user_id
+   283→        s = parse_ts(start)
+   284→        e = parse_ts(end)
+   285→        facts = self.store.temporal_window(
+   286→            s.isoformat() if s else None, e.isoformat() if e else None,
+   287→            user_id=user_id, field=field, active=False)
+   288→        return [{"id": f.id, "fact": f.display(),
+   289→                 "valid_from": f.valid_from, "valid_to": f.valid_to,
+   290→                 "is_active": f.is_active} for f in facts]
+   291→
+   292→    def get_before(self, ts, *, user_id: str | None = None,
+   293→                   field: str = "valid") -> list[dict]:
+   294→        return self.get_between("1970-01-01", ts, user_id=user_id, field=field)
+   295→
+   296→    def get_after(self, ts, *, user_id: str | None = None,
+   297→                  field: str = "valid") -> list[dict]:
+   298→        return self.get_between(ts, "9999-12-31", user_id=user_id, field=field)
+   299→
+   300→    # -------------------------------------------------- provenance & trust
+   301→    def audit(self, query: str, *, user_id: str | None = None) -> dict:
+   302→        """The 'Why' audit trail: query → VSA match → symbolic dereference →
+   303→        source hash → original text, for every returned fact."""
+   304→        res = self.search(query, user_id=user_id)
+   305→        return {"query": query,
+   306→                "verification": res["provenance"]["verification"],
+   307→                "chain": res["provenance"]["chain"],
+   308→                "llm_calls": 0}
+   309→
+   310→    def verify_integrity(self, sample: int | None = None) -> dict:
+   311→        """Recompute source hashes + vector hashes (tamper detection)."""
+   312→        chunks = self.store.conn.execute(
+   313→            "SELECT id, text, hash FROM chunks").fetchall()
+   314→        bad_chunks = 0
+   315→        for c in chunks:
+   316→            if self.store.hasher.hash_text(c["text"]) != c["hash"]:
+   317→                bad_chunks += 1
+   318→        vec = self.palace.health_check(sample)
+   319→        return {"chunks_checked": len(chunks), "corrupt_chunks": bad_chunks,
+   320→                "vector_check": {k: v for k, v in vec.items()
+   321→                                 if k != "corrupt_ids"},
+   322→                "hash_provider": self.store.hasher.name,
+   323→                "ok": bad_chunks == 0 and vec["corrupt"] == 0}
+   324→
+   325→    # -------------------------------------------------- Memory Git
+   326→    def branch(self, name: str, from_commit: str | None = None,
+   327→               switch: bool = True) -> str:
+   328→        out = self.git.branch(name, from_commit, switch)
+   329→        self.reader.invalidate_caches()
+   330→        return out
+   331→
+   332→    def checkout(self, name: str) -> None:
+   333→        self.git.checkout(name)
+   334→        self.reader.invalidate_caches()
+   335→
+   336→    def merge(self, name: str, strategy: str = "latest-wins") -> dict:
+   337→        out = self.git.merge(name, strategy)
+   338→        self.reader.invalidate_caches()
+   339→        return out
+   340→
+   341→    def diff(self, a: str, b: str) -> dict:
+   342→        return self.git.diff(a, b)
+   343→
+   344→    def blame(self, subject: str, relation: str | None = None) -> list[dict]:
+   345→        return self.git.blame(subject, relation)
+   346→
+   347→    def log(self, limit: int = 50) -> list[dict]:
+   348→        return self.git.log(limit=limit)
+   349→
+   350→    # -------------------------------------------------- ZK-lite
+   351→    def prove(self, query: str, *, user_id: str | None = None,
+   352→              threshold: float = 0.2) -> dict:
+   353→        return self.zk.prove(query, user_id=user_id or
+   354→                             self.config.default_user_id,
+   355→                             threshold=threshold)
+   356→
+   357→    def verify_proof(self, proof: dict) -> bool:
+   358→        return self.zk.verify(proof)
+   359→
+   360→    # -------------------------------------------------- self-healing
+   361→    def health_check(self, sample: int | None = None) -> dict:
+   362→        return self.palace.health_check(sample)
+   363→
+   364→    def heal(self) -> dict:
+   365→        facts = {f.id: f for f in self.store.query_facts(active=None)}
+   366→        return self.palace.heal(facts)
+   367→
+   368→    def corrupt(self, rate: float, seed: int = 0, persist: bool = False) -> int:
+   369→        return self.palace.corrupt(rate, seed=seed, persist=persist)
+   370→
+   371→    # -------------------------------------------------- lifecycle & ops
+   372→    def apply_rules(self) -> int:
+   373→        """Deferred Datalog materialization after bulk ingest."""
+   374→        self.store.begin_batch()
+   375→        derived = self.writer.apply_rules()
+   376→        self.reader.invalidate_caches()
+   377→        return len(derived)
+   378→
+   379→    # -------------------------------------------------- async enrichment
+   380→    def enrich(self, user_id: str | None = None, *, extractor=None,
+   381→               limit: int | None = None, min_confidence: float | None = None,
+   382→               dry_run: bool = False) -> dict:
+   383→        """Post-store LLM enrichment fallback (μ=0 stays intact on the
+   384→        synchronous ingest path; this is the plan's graceful-degradation
+   385→        second pass over zero-signal chunks). Returns an EnrichmentReport
+   386→        as a dict — LLM call count and provenance markers are auditable.
+   387→        """
+   388→        from context_m.bridge.enrich import enrich as _enrich
+   389→        rep = _enrich(self.writer, user_id, extractor=extractor,
+   390→                      limit=limit, min_confidence=min_confidence,
+   391→                      dry_run=dry_run)
+   392→        self.reader.invalidate_caches()
+   393→        return rep.to_dict()
+   394→
+   395→    def enrich_async(self, user_id: str | None = None, **kw):
+   396→        """Background-thread variant of enrich(). Returns (thread, holder)."""
+   397→        from context_m.bridge.enrich import enrich_async as _ea
+   398→        return _ea(self.writer, user_id, **kw)
+   399→
+   400→    # -------------------------------------------------- scope sandbox
+   401→    def promote(self, fact_ids: list[str], *, reviewed_by: str = "system",
+   402→                force: bool = False) -> dict:
+   403→        """Promote agent-scoped facts into the user scope (InjecMEM policy).
+   404→
+   405→        Gated on confidence + a fresh InjecMEM/MINJA rescan of the source
+   406→        chunk; every decision lands in the tamper-evident audit chain.
+   407→        """
+   408→        from context_m.security.sandbox import ScopeSandbox
+   409→        sandbox = ScopeSandbox(self.config, self.store, self.audit_log)
+   410→        out = sandbox.promote(fact_ids, reviewed_by=reviewed_by, force=force)
+   411→        self.reader.invalidate_caches()
+   412→        return out
+   413→
+   414→    def consolidate(self, now=None, **kwargs) -> dict:
+   415→        """Run BOTH consolidation passes:
+   416→
+   417→        (1) lifecycle.consolidate — Dual-Layer Agentic Memory: promote
+   418→            reinforced short-term facts, decay untouched ones, demote
+   419→            weak long-term facts. Fast, pure-SQL.
+   420→
+   421→        (2) trace.consolidate.consolidate — Aeon-inspired "dreaming":
+   422→            merge redundant triples (MERGED_WITH edges), retire stale
+   423→            facts past valid_to + grace, defrag palace, retrain
+   424→            MBTB prefetcher. Slower, idempotent, safe.
+   425→
+   426→        Returns a combined report. Either pass may be skipped via
+   427→        kwargs lifecycle=False / dreaming=False.
+   428→        """
+   429→        out = {"lifecycle": {}, "dreaming": {}}
+   430→        if kwargs.get("lifecycle", True):
+   431→            out["lifecycle"] = lifecycle.consolidate(self.store, now)
+   432→        if kwargs.get("dreaming", True):
+   433→            from context_m.trace.consolidate import consolidate as _dream
+   434→            # Respect the Config's fade_enabled / tmt_enabled flags by
+   435→            # default so `cortexm consolidate` runs the full production
+   436→            # pass without requiring CLI flag plumbing. CLI / env can
+   437→            # still turn them off via kwargs.
+   438→            run_fade = kwargs.get("run_fade",
+   439→                                   getattr(self.config, "fade_enabled", True))
+   440→            run_tmt = kwargs.get("run_tmt",
+   441→                                  getattr(self.config, "tmt_enabled", False))
+   442→            out["dreaming"] = _dream(self.store, palace=self.palace,
+   443→                                       prefetcher=self.prefetcher,
+   444→                                       user_id=kwargs.get("user_id"),
+   445→                                       dry_run=kwargs.get("dry_run", False),
+   446→                                       run_fade=run_fade,
+   447→                                       run_tmt=run_tmt)
+   448→        return out
+   449→
+   450→    def export_schema_report(self, user_id: str | None = None) -> dict:
+   451→        return export_schema_report(self.store, user_id)
+   452→
+   453→    @staticmethod
+   454→    def merge_schema_reports(reports: list[dict]) -> dict:
+   455→        return merge_schema_reports(reports)
+   456→
+   457→    # -------------------------------------------------- introspection
+   458→    def stats(self) -> dict:
+   459→        s = self.store.stats()
+   460→        s.update(self.palace.storage_stats())
+   461→        s.update(self.reader.slb.stats())
+   462→        s.update(self.prefetcher.stats())
+   463→        s["counters"] = metrics.counters()
+   464→        s["u0_protocol"] = "verified" if metrics.llm_calls() == 0 else "VIOLATED"
+   465→        s["hash_provider"] = self.store.hasher.name
+   466→        s["vsa_mode"] = self.config.vsa_mode
+   467→        s["dims"] = self.config.dims
+   468→        return s
+   469→
+   470→    def storage_stats(self) -> dict:
+   471→        return self.palace.storage_stats()
+   472→
+   473→    # -------------------------------------------------- sidecar blob arena
+   474→    def enable_blob_arena(self, path: str | os.PathLike) -> dict:
+   475→        """Opt-in: migrate chunks.text into a sidecar mmap-backed blob
+   476→        file (Aeon-inspired). After migration:
+   477→
+   478→          - chunks.text      := first 64 bytes of the source (preview)
+   479→          - chunks.blob_offset := byte offset in the arena file
+   480→          - chunks.blob_len  := payload length
+   481→          - chunks.blob_compressed := 0/1
+   482→
+   483→        Graph queries that only need the preview still work without
+   484→        touching the arena. Full text is fetched on demand via
+   485→        arena.get_text(offset, len, compressed).
+   486→
+   487→        Returns a migration report dict.
+   488→        """
+   489→        from context_m.trace.blob_arena import (
+   490→            BlobArena, migrate_chunks_to_arena)
+   491→        arena = BlobArena(path)
+   492→        report = migrate_chunks_to_arena(self.store, arena)
+   493→        # keep arena handle on self so it stays alive for the life of
+   494→        # the Memory instance; the host can grab it via .blob_arena
+   495→        self.blob_arena = arena
+   496→        return report
+   497→
+   498→    def get_chunk_text(self, chunk_id: str) -> str:
+   499→        """Fetch full text for a chunk — from the arena if migrated,
+   500→        otherwise from the inline text column."""
+   501→        arena = getattr(self, "blob_arena", None)
+   502→        if arena is not None:
+   503→            from context_m.trace.blob_arena import get_chunk_text as _g
+   504→            return _g(self.store, arena, chunk_id)
+   505→        row = self.store.conn.execute(
+   506→            "SELECT text FROM chunks WHERE id=?", (chunk_id,)).fetchone()
+   507→        return row[0] if row else ""
+   508→
+   509→    # ------------------------------------- engineered role vectors (NSR)
+   510→    def use_engineered_role_vectors(self, *, n_epochs: int = 200,
+   511→                                     lr: float = 0.01,
+   512→                                     save_path: str | None = None,
+   513→                                     verbose: bool = False) -> dict:
+   514→        """NSR-inspired: train a tiny autoencoder on the actual fact
+   515→        corpus and use the top-k principal directions as role vectors.
+   516→
+   517→        arXiv insight: random role vectors (current default) waste
+   518→        capacity on directions orthogonal to the data. Engineered ones
+   519→        sit on the data's principal axes — higher effective capacity,
+   520→        lower cross-talk, better retrieval SNR.
+   521→
+   522→        After this call, the palace's VSA will use the engineered role
+   523→        vectors for bind() / unbind() / probe() operations. New facts
+   524→        ingested after this call will be encoded with the engineered
+   525→        vectors; previously-encoded facts keep their original (random)
+   526→        holograms until the palace is rebuilt.
+   527→
+   528→        Returns the autoencoder training report.
+   529→
+   530→        NOTE: this is OPT-IN. The default behavior (random role
+   531→        vectors) is unchanged unless this method is called.
+   532→        """
+   533→        from context_m.vsa.role_vectors import EngineeredRoleVectors
+   534→        # pull the fact matrix from the palace — we need the actual
+   535→        # S/R/V vectors used to encode the existing facts
+   536→        facts = self.store.query_facts(active=True)
+   537→        if not facts:
+   538→            return {"trained": False, "reason": "no_facts_in_store"}
+   539→        # build a (n_facts * 3, dims) matrix: S, R, V vectors for each
+   540→        # fact, stacked. Each row is a single role-filler vector.
+   541→        rows = []
+   542→        for f in facts:
+   543→            for field, role in (
+   544→                    (f.subject, "S"), (f.relation, "R"), (f.value, "V")):
+   545→                if field:
+   546→                    rows.append(self.palace.embedder.embed(field))
+   547→        if not rows:
+   548→            return {"trained": False, "reason": "no_text_to_embed"}
+   549→        matrix = np.stack(rows).astype(np.float32)
+   550→        # cap the matrix size — 10k samples is plenty for PCA
+   551→        if len(matrix) > 10_000:
+   552→            import numpy as _np
+   553→            rng = _np.random.default_rng(self.config.seed)
+   554→            idx = rng.choice(len(matrix), 10_000, replace=False)
+   555→            matrix = matrix[idx]
+   556→        erv = EngineeredRoleVectors(
+   557→            dims=self.config.dims, n_roles=3,
+   558→            seed=self.config.seed, n_epochs=n_epochs, lr=lr)
+   559→        report = erv.fit(matrix)
+   560→        if erv.is_fit:
+   561→            self.palace.vsa.use_engineered(erv)
+   562→            self._engineered_role_vectors = erv
+   563→            if save_path:
+   564→                erv.save(save_path)
+   565→            if verbose:
+   566→                print(f"[engineered-role-vectors] {report}")
+   567→        return report
+   568→
+   569→    def save_engineered_role_vectors(self, path: str) -> None:
+   570→        erv = getattr(self, "_engineered_role_vectors", None)
+   571→        if erv is None:
+   572→            raise RuntimeError("no engineered role vectors to save — "
+   573→                                "call use_engineered_role_vectors() first")
+   574→        erv.save(path)
+   575→
+   576→    def load_engineered_role_vectors(self, path: str) -> dict:
+   577→        """Load a previously-saved .npz of engineered role vectors
+   578→        and swap them in as the active role vectors."""
+   579→        from context_m.vsa.role_vectors import EngineeredRoleVectors
+   580→        erv = EngineeredRoleVectors(dims=self.config.dims,
+   581→                                     seed=self.config.seed)
+   582→        erv.load(path)
+   583→        if erv.is_fit:
+   584→            self.palace.vsa.use_engineered(erv)
+   585→            self._engineered_role_vectors = erv
+   586→            return {"loaded": True, "path": path}
+   587→        return {"loaded": False, "reason": "file_empty_or_corrupt"}
+   588→
+   589→    def close(self) -> None:
+   590→        self.palace.close()
+   591→        self.store.close()
+   592→
+   593→    def _reopen(self) -> None:
+   594→        """Rebind every component to a freshly-opened store (post-restore)."""
+   595→        from context_m.security.pii import PIIGuard, PIIVault
+   596→        from context_m.security.rbac import APIKeyStore
+   597→        from context_m.enterprise.audit import AuditLog
+   598→        from context_m.enterprise.governance import Governance
+   599→        self.store = TraceStore(self.config.db_path,
+   600→                                HashProvider(self.config.hash_provider),
+   601→                                wal_sync=getattr(self.config, "wal_sync", "normal"))
+   602→        self.palace = MemoryPalace(self.config, self.store)
+   603→        self.writer = MemoryWriter(self.config, self.store, self.palace,
+   604→                                   self.extractor)
+   605→        self.reader = MemoryReader(self.config, self.store, self.palace,
+   606→                                   self.prefetcher)
+   607→        self.git = MemoryGit(self.store, self.palace)
+   608→        self.zk = ZKProver(self.store, self.reader)
+   609→        self.pii_vault = PIIVault(self.store, self.cipher)
+   610→        self.pii_guard = PIIGuard(self.config.pii_mode, self.pii_vault)
+   611→        self.keys = APIKeyStore(self.store)
+   612→        self.audit_log = AuditLog(self.store, enabled=self.config.audit_enabled)
+   613→        self.governance = Governance(self)
+   614→        # the governance object captured the OLD store/palace in __init__;
+   615→        # rebind to the fresh ones
+   616→        self.governance.store = self.store
+   617→        self.governance.palace = self.palace
+   618→        self.governance.audit = self.audit_log
+   619→
+   620→    def __enter__(self) -> "Memory":
+   621→        return self
+   622→
+   623→    def __exit__(self, *exc) -> None:
+   624→        self.close()
+   625→

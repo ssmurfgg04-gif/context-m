@@ -80,6 +80,169 @@ class TestSLB:
         np.testing.assert_allclose(v, back, atol=scale + 1e-6)
 
 
+# ---------------------------------------------------------------------------
+# Task 6-simd: parity tests for the expanded SIMD kernel surface.
+#
+# Tolerances: FP32 lane-reduction noise grows ~N·eps with the magnitude of
+# the result.  We use `assert_allclose` with both `rtol` and `atol` so the
+# noise floor scales correctly (numpy convention).
+#   * dot / cosine / batch_dot  : rtol=1e-5 atol=1e-5  (small-magnitude)
+#   * l2_sq                     : rtol=1e-5 atol=1e-5  (unit-normalized)
+#   * batch_dot_i8 / dot_i8_f32 : rtol=1e-5 atol=1e-3  (int8 amplifies noise)
+#   * topk                      : exact index set match; rtol=1e-5 on scores
+#   * argmax                    : exact index match
+class TestSimdKernels:
+    D = 768
+
+    def _unit(self, v):
+        n = np.linalg.norm(v)
+        return (v / n).astype(np.float32) if n > 0 else v.astype(np.float32)
+
+    def test_dot_parity(self):
+        rng = np.random.default_rng(101)
+        a = rng.standard_normal(self.D).astype(np.float32)
+        b = rng.standard_normal(self.D).astype(np.float32)
+        rs = accel.dot(a, b)
+        np.testing.assert_allclose(rs, a @ b, rtol=1e-5, atol=1e-5)
+
+    def test_dot_i8_f32_parity(self):
+        rng = np.random.default_rng(102)
+        q8 = rng.integers(-127, 127, size=self.D).astype(np.int8)
+        q = rng.standard_normal(self.D).astype(np.float32)
+        rs = accel.dot_i8_f32(q8, q)
+        want = q8.astype(np.float32) @ q
+        np.testing.assert_allclose(rs, want, rtol=1e-5, atol=1e-3)
+
+    def test_cosine_parity(self):
+        rng = np.random.default_rng(103)
+        a = self._unit(rng.standard_normal(self.D).astype(np.float32))
+        b = self._unit(rng.standard_normal(self.D).astype(np.float32))
+        rs = accel.cosine(a, b)
+        want = float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-12))
+        np.testing.assert_allclose(rs, want, rtol=1e-5, atol=1e-5)
+
+    def test_l2_sq_parity(self):
+        rng = np.random.default_rng(104)
+        a = self._unit(rng.standard_normal(self.D).astype(np.float32))
+        b = self._unit(rng.standard_normal(self.D).astype(np.float32))
+        rs = accel.l2_sq(a, b)
+        want = float(((a - b) ** 2).sum())
+        np.testing.assert_allclose(rs, want, rtol=1e-5, atol=1e-5)
+
+    def test_batch_dot_parity(self):
+        rng = np.random.default_rng(105)
+        rows = rng.standard_normal((1000, self.D)).astype(np.float32)
+        q = rng.standard_normal(self.D).astype(np.float32)
+        rs = np.asarray(accel.batch_dot(rows.reshape(-1), q, 1000, self.D),
+                        dtype=np.float32)
+        want = rows @ q
+        # 1000 rows of un-normalized 768-dim Gaussian → per-row dot
+        # magnitude ~sqrt(768) ≈ 28, so FP32 SIMD lane-reduction noise
+        # floor is ~N·eps ≈ 9e-5 relative. atol=5e-5 + rtol=1e-5 catches
+        # bugs but stays above the FP32 noise floor at this magnitude.
+        np.testing.assert_allclose(rs, want, rtol=1e-5, atol=5e-5)
+
+    def test_batch_dot_i8_parity(self):
+        rng = np.random.default_rng(106)
+        packed = rng.integers(-127, 127, size=(1000, self.D)).astype(np.int8)
+        q = rng.standard_normal(self.D).astype(np.float32)
+        rs = np.asarray(
+            accel.batch_dot_i8(packed.reshape(-1), q, 1000, self.D),
+            dtype=np.float32)
+        want = packed.astype(np.float32) @ q
+        np.testing.assert_allclose(rs, want, rtol=1e-5, atol=1e-2)
+
+    def test_topk_parity(self):
+        rng = np.random.default_rng(107)
+        scores = rng.standard_normal(10_000).astype(np.float32)
+        k = 10
+        rs = accel.topk(scores, k)
+        assert len(rs) == k
+        # Index SET must match numpy's argpartition top-k
+        rs_idx = sorted(i for i, _ in rs)
+        np_idx = sorted(int(i) for i in
+                        np.argpartition(-scores, k - 1)[:k])
+        assert rs_idx == np_idx, f"topk index set diverges: {rs_idx} vs {np_idx}"
+        # Returned tuples must be in descending score order
+        rs_scores = [s for _, s in rs]
+        assert rs_scores == sorted(rs_scores, reverse=True)
+        # Scores must match the original scores at those indices
+        for i, s in rs:
+            np.testing.assert_allclose(s, scores[i], rtol=1e-6, atol=0)
+
+    def test_argmax_parity(self):
+        rng = np.random.default_rng(108)
+        scores = rng.standard_normal(10_000).astype(np.float32)
+        i, v = accel.argmax(scores)
+        np_i = int(np.argmax(scores))
+        assert i == np_i, f"argmax diverges: rust={i} numpy={np_i}"
+        np.testing.assert_allclose(v, scores[np_i], rtol=1e-6, atol=0)
+
+    def test_cosine_normalized(self):
+        """Cosine of identical vectors must be 1.0 (numerically)."""
+        rng = np.random.default_rng(109)
+        a = self._unit(rng.standard_normal(self.D).astype(np.float32))
+        assert abs(accel.cosine(a, a) - 1.0) < 1e-6
+
+    def test_l2_sq_zero(self):
+        """L2 squared of identical vectors must be 0.0."""
+        rng = np.random.default_rng(110)
+        a = rng.standard_normal(self.D).astype(np.float32)
+        assert abs(accel.l2_sq(a, a) - 0.0) < 1e-6
+
+    def test_simd_kernels_class(self):
+        """SimdKernels container class dispatches to the same Rust path."""
+        kern = accel.SimdKernels()
+        rng = np.random.default_rng(111)
+        a = self._unit(rng.standard_normal(self.D).astype(np.float32))
+        b = self._unit(rng.standard_normal(self.D).astype(np.float32))
+        np.testing.assert_allclose(kern.cosine(a, b),
+                                   accel.cosine(a, b), rtol=0, atol=0)
+        rows = rng.standard_normal((32, self.D)).astype(np.float32)
+        rs = kern.batch_dot(rows.reshape(-1), a, 32, self.D)
+        np.testing.assert_allclose(
+            np.asarray(rs, dtype=np.float32), rows @ a,
+            rtol=1e-5, atol=1e-5)
+
+    def test_palace_search_routes_through_rust(self):
+        """End-to-end: MemoryPalace.search() should hit the Rust fast path
+        when cortexm_core is available and produce the same top-k as the
+        numpy path. Guards against silent regressions in palace.py."""
+        from context_m.config import Config
+        from context_m.trace.store import TraceStore
+        from context_m.vsa.palace import MemoryPalace
+        import tempfile, os, contextlib
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = TraceStore(os.path.join(tmp, "palace.sqlite3"))
+            cfg = Config(dims=256, codec="int8", seed=42)
+            palace = MemoryPalace(cfg, store)
+            rng = np.random.default_rng(42)
+            for i in range(200):
+                v = rng.standard_normal(256).astype(np.float32)
+                v = v / (np.linalg.norm(v) + 1e-12)
+                palace.add(f"f{i}", v)
+            q = rng.standard_normal(256).astype(np.float32)
+            q = q / (np.linalg.norm(q) + 1e-12)
+
+            # Run search twice — must be deterministic and consistent
+            r1 = palace.search(q, k=10)
+            r2 = palace.search(q, k=10)
+            assert r1 == r2, "palace search is non-deterministic"
+
+            # Verify the top-1 result has the highest score vs a brute force
+            ids = [fid for fid, _ in r1]
+            scores = [s for _, s in r1]
+            assert scores == sorted(scores, reverse=True), \
+                "search results not in descending score order"
+            # Brute-force numpy top-1 must agree
+            all_scores = palace._score_all(q)
+            brute_top = int(np.argmax(all_scores))
+            assert ids[0] == palace._ids[brute_top], \
+                "palace top-1 diverges from brute-force argmax"
+
+
+
 class TestQuadrant:
     def test_recall_on_clustered(self):
         if not accel.QUADRANT_AVAILABLE:

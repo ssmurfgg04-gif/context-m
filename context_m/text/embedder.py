@@ -6,6 +6,14 @@ token bigrams and character n-grams via signed feature hashing
 (Weinberger et al., 2009). A ``EmbeddingProvider`` protocol allows
 swapping in a local transformer (e.g. ONNX MiniLM) or an API-backed
 model in production without touching the rest of the fabric.
+
+With ``labse_enabled=True`` (Config.labse_enabled), text whose non-ASCII
+ratio exceeds 30% is delegated to ``PolyglotEncoder`` — a LaBSE-inspired
+Unicode n-gram hasher that handles CJK / Devanagari / Arabic / Cyrillic
+scripts (which the regex tokenizer drops entirely, producing a constant
+embedding and zero retrieval recall — see docs/BENCHMARKS.md Tier-1).
+English text stays on the existing fast path. See
+``context_m/text/labse.py`` for the polyglot algorithm.
 """
 
 from __future__ import annotations
@@ -15,6 +23,7 @@ from typing import Protocol
 
 import numpy as np
 
+from context_m.text.labse import PolyglotEncoder
 from context_m.text.tokenizer import STOPWORDS, words
 from context_m.util import h64 as _h64
 
@@ -35,16 +44,47 @@ def _h64(feature: str, seed: int) -> int:
 
 
 class HashingEmbedder:
-    """Signed feature hashing over token/bigram/char-ngram features."""
+    """Signed feature hashing over token/bigram/char-ngram features.
+
+    With ``labse_enabled=True``, non-English text (>30% non-ASCII chars)
+    is delegated to ``PolyglotEncoder`` — a LaBSE-inspired Unicode
+    n-gram encoder that handles scripts the regex tokenizer drops
+    (CJK, Devanagari, Arabic, Cyrillic, Thai, Hangul, Kana). English
+    text stays on the existing fast path. Default OFF so existing
+    behavior is unchanged; opt in via ``Config.labse_enabled`` or the
+    ``CONTEXT_M_LABSE`` env var.
+    """
 
     def __init__(self, dims: int = 768, seed: int = 0x0C0FFEE,
                  char_ngrams: tuple[int, ...] = (3, 4, 5),
-                 use_bigrams: bool = True) -> None:
+                 use_bigrams: bool = True,
+                 labse_enabled: bool = False) -> None:
         self.dims = dims
         self.seed = seed & 0xFFFFFFFFFFFFFFFF
         self.char_ngrams = char_ngrams
         self.use_bigrams = use_bigrams
+        self.labse_enabled = labse_enabled
         self._feat_cache: dict[str, tuple[int, int, float]] = {}
+        # Lazy-initialized polyglot encoder — only built when first needed
+        # so the labse.py module import cost is paid only by users who
+        # actually ingest non-English text.
+        self._polyglot: PolyglotEncoder | None = None
+
+    @property
+    def polyglot(self) -> PolyglotEncoder:
+        """Lazily-constructed PolyglotEncoder (dims/seed-matched)."""
+        if self._polyglot is None:
+            self._polyglot = PolyglotEncoder(
+                dims=self.dims, seed=self.seed)
+        return self._polyglot
+
+    @staticmethod
+    def _non_ascii_ratio(text: str) -> float:
+        """Fraction of non-ASCII chars in text. 0.0 for empty input."""
+        if not text:
+            return 0.0
+        non_ascii = sum(1 for c in text if ord(c) > 127)
+        return non_ascii / len(text)
 
     # -- feature extraction -------------------------------------------------
 
@@ -79,6 +119,12 @@ class HashingEmbedder:
     # -- API ------------------------------------------------------------------
 
     def embed(self, text: str) -> np.ndarray:
+        # Polyglot fallback for non-English text — the regex tokenizer
+        # in words() drops non-ASCII letters entirely, so without this
+        # delegation, every non-English sentence embeds to the constant
+        # [1, 0, 0, ...] vector (Tier-1 non-English recall = 0.000).
+        if self.labse_enabled and self._non_ascii_ratio(text) > 0.30:
+            return self.polyglot.encode(text)
         vec = np.zeros(self.dims, dtype=np.float32)
         toks = words(text)
         if not toks:

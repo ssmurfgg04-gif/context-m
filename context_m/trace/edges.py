@@ -48,12 +48,28 @@ MERGED_WITH: Final[str] = "MERGED_WITH"            # fact -> fact (merged into t
 REFERS_TO: Final[str] = "REFERS_TO"                # fact -> fact/concept (episodic → atlas)
 SAME_PERSON: Final[str] = "SAME_PERSON"            # alias fact -> canonical fact (e.g. "Priya" → "Priya Johnson")
 
+# HMS cognition engine edges — produced by context_m.cognition.*.
+# HYPOTHESIZED_BY: hypothesis fact -> supporting fact(s) (reasoning chain)
+# PROMOTED_FROM:   user-confirmed fact -> hypothesis origin (truth
+#                   maintenance — when a hypothesis is verified by
+#                   user input, the new fact links back to its origin)
+# ABSTRACTS:       abstraction prototype -> member (categorization)
+# INSTANTIATES:    member -> abstraction prototype (inverse)
+# ANALOGOUS_TO:    relation_a -> relation_b (structural isomorphism)
+HYPOTHESIZED_BY: Final[str] = "HYPOTHESIZED_BY"
+PROMOTED_FROM: Final[str] = "PROMOTED_FROM"
+ABSTRACTS: Final[str] = "ABSTRACTS"
+INSTANTIATES: Final[str] = "INSTANTIATES"
+ANALOGOUS_TO: Final[str] = "ANALOGOUS_TO"
+
 # All kinds in one place for enumeration / display
 ALL_KINDS: Final[tuple[str, ...]] = (
     EXTRACTED_FROM, MENTIONS,
     TEMPORALLY_PRECEDED_BY, CAUSAL, NEXT,
     CONTRADICTS, SUPERSEDES, RETRACTED_BY, MERGED_WITH,
     REFERS_TO, SAME_PERSON,
+    HYPOTHESIZED_BY, PROMOTED_FROM,
+    ABSTRACTS, INSTANTIATES, ANALOGOUS_TO,
 )
 
 # Group by purpose — used by the reader / PPR / consolidator
@@ -61,8 +77,14 @@ PROVENANCE_EDGES: Final[tuple[str, ...]] = (EXTRACTED_FROM, MENTIONS)
 TEMPORAL_EDGES: Final[tuple[str, ...]] = (TEMPORALLY_PRECEDED_BY, NEXT)
 CAUSAL_EDGES: Final[tuple[str, ...]] = (CAUSAL,)
 TRUTH_MAINTENANCE_EDGES: Final[tuple[str, ...]] = (
-    CONTRADICTS, SUPERSEDES, RETRACTED_BY, MERGED_WITH)
-SEMANTIC_REF_EDGES: Final[tuple[str, ...]] = (REFERS_TO, SAME_PERSON)
+    CONTRADICTS, SUPERSEDES, RETRACTED_BY, MERGED_WITH,
+    PROMOTED_FROM)
+SEMANTIC_REF_EDGES: Final[tuple[str, ...]] = (
+    REFERS_TO, SAME_PERSON,
+    ABSTRACTS, INSTANTIATES, ANALOGOUS_TO)
+COGNITION_EDGES: Final[tuple[str, ...]] = (
+    HYPOTHESIZED_BY, PROMOTED_FROM,
+    ABSTRACTS, INSTANTIATES, ANALOGOUS_TO)
 
 
 # ---------- Helpers -----------------------------------------------------
@@ -179,8 +201,11 @@ __all__ = [
     "EXTRACTED_FROM", "MENTIONS", "TEMPORALLY_PRECEDED_BY",
     "CAUSAL", "NEXT", "CONTRADICTS", "SUPERSEDES",
     "RETRACTED_BY", "MERGED_WITH", "REFERS_TO", "SAME_PERSON",
+    "HYPOTHESIZED_BY", "PROMOTED_FROM",
+    "ABSTRACTS", "INSTANTIATES", "ANALOGOUS_TO",
     "ALL_KINDS", "PROVENANCE_EDGES", "TEMPORAL_EDGES",
     "CAUSAL_EDGES", "TRUTH_MAINTENANCE_EDGES", "SEMANTIC_REF_EDGES",
+    "COGNITION_EDGES",
     # helpers
     "is_causal", "is_truth_maintenance", "is_semantic_ref",
     "direction_convention",

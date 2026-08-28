@@ -1,0 +1,671 @@
+     1→"""The Symbolic Trace — bi-temporal fact store on SQLite (WAL).
+     2→
+     3→Implements the Section 1.1 data model: Subject-Relation-Value triples
+     4→with valid/transaction time, contradiction + temporal + provenance
+     5→edges, source chunks, Memory-Git commits (hash-chained) and branches.
+     6→SQLite is the embedded substrate for local/edge operation; the store is
+     7→designed so an ArcadeDB backend can replace it behind the same API
+     8→(the plan's production graph engine).
+     9→"""
+    10→
+    11→from __future__ import annotations
+    12→
+    13→import json
+    14→import sqlite3
+    15→import threading
+    16→from datetime import datetime, timezone
+    17→
+    18→from context_m.errors import BranchError, StoreError
+    19→from context_m.security.hashes import HashProvider
+    20→from context_m.trace.fact import Fact
+    21→from context_m.util import iso, new_id, parse_ts, token_estimate
+    22→
+    23→SCHEMA = """
+    24→CREATE TABLE IF NOT EXISTS facts (
+    25→  id TEXT PRIMARY KEY,
+    26→  subject TEXT NOT NULL, relation TEXT NOT NULL, value TEXT NOT NULL,
+    27→  valid_from TEXT NOT NULL, valid_to TEXT,
+    28→  tx_from TEXT NOT NULL, tx_to TEXT,
+    29→  confidence REAL DEFAULT 0.8,
+    30→  source_hash TEXT DEFAULT '', source_id TEXT DEFAULT '',
+    31→  user_id TEXT DEFAULT 'default', agent_id TEXT, run_id TEXT,
+    32→  memory_type TEXT DEFAULT 'short_term',
+    33→  access_count INTEGER DEFAULT 0, reinforcement INTEGER DEFAULT 1,
+    34→  is_active INTEGER DEFAULT 1, is_derived INTEGER DEFAULT 0,
+    35→  quarantined INTEGER DEFAULT 0,
+    36→  birth_commit TEXT, retired_commit TEXT,
+    37→  provenance TEXT DEFAULT '{}'
+    38→);
+    39→CREATE INDEX IF NOT EXISTS idx_facts_sr ON facts(subject, relation);
+    40→CREATE INDEX IF NOT EXISTS idx_facts_user ON facts(user_id);
+    41→CREATE INDEX IF NOT EXISTS idx_facts_active ON facts(is_active);
+    42→CREATE INDEX IF NOT EXISTS idx_facts_rel ON facts(relation);
+    43→CREATE INDEX IF NOT EXISTS idx_facts_valid ON facts(valid_from);
+    44→CREATE INDEX IF NOT EXISTS idx_facts_birth ON facts(birth_commit);
+    45→-- composite indexes added for the v2 SPARQL + REST query paths
+    46→CREATE INDEX IF NOT EXISTS idx_facts_user_active ON facts(user_id, is_active);
+    47→CREATE INDEX IF NOT EXISTS idx_facts_value ON facts(value);
+    48→CREATE INDEX IF NOT EXISTS idx_facts_subject_value ON facts(subject, value);
+    49→
+    50→CREATE TABLE IF NOT EXISTS edges (
+    51→  src TEXT NOT NULL, dst TEXT NOT NULL, kind TEXT NOT NULL,
+    52→  meta TEXT DEFAULT '{}', created TEXT,
+    53→  PRIMARY KEY (src, dst, kind)
+    54→);
+    55→CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
+    56→CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
+    57→-- kind index — critical for SPARQL `?a edge:CAUSAL ?b` queries that
+    58→-- post-filter on the kind column
+    59→CREATE INDEX IF NOT EXISTS idx_edges_kind ON edges(kind);
+    60→
+    61→CREATE TABLE IF NOT EXISTS chunks (
+    62→  id TEXT PRIMARY KEY, text TEXT NOT NULL,
+    63→  user_id TEXT, agent_id TEXT, run_id TEXT,
+    64→  ts TEXT, source TEXT DEFAULT '', hash TEXT DEFAULT '', tokens INTEGER DEFAULT 0
+    65→);
+    66→CREATE INDEX IF NOT EXISTS idx_chunks_user ON chunks(user_id);
+    67→
+    68→CREATE TABLE IF NOT EXISTS commits (
+    69→  id TEXT PRIMARY KEY, parents TEXT DEFAULT '[]', branch TEXT,
+    70→  message TEXT DEFAULT '', ts TEXT, chain_hash TEXT, n_facts INTEGER DEFAULT 0
+    71→);
+    72→CREATE TABLE IF NOT EXISTS branches (
+    73→  name TEXT PRIMARY KEY, head TEXT NOT NULL, created TEXT
+    74→);
+    75→CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
+    76→"""
+    77→
+    78→FACT_COLUMNS = ("id, subject, relation, value, valid_from, valid_to, tx_from, tx_to, "
+    79→                "confidence, source_hash, source_id, user_id, agent_id, run_id, "
+    80→                "memory_type, access_count, reinforcement, is_active, is_derived, "
+    81→                "quarantined, birth_commit, retired_commit, provenance")
+    82→
+    83→
+    84→class _SafeCursor:
+    85→    """Cursor-like object over eagerly-materialized rows (thread-safe)."""
+    86→
+    87→    def __init__(self, rows, rowcount, lastrowid, description) -> None:
+    88→        self._rows = rows
+    89→        self._iter = iter(rows)
+    90→        self.rowcount = rowcount
+    91→        self.lastrowid = lastrowid
+    92→        self.description = description
+    93→        self.arraysize = 1
+    94→
+    95→    def fetchone(self):
+    96→        try:
+    97→            return next(self._iter)
+    98→        except StopIteration:
+    99→            return None
+   100→
+   101→    def fetchall(self):
+   102→        rest = list(self._iter)
+   103→        self._iter = iter([])
+   104→        return rest
+   105→
+   106→    def fetchmany(self, size=None):
+   107→        out = []
+   108→        for _ in range(size or 1):
+   109→            try:
+   110→                out.append(next(self._iter))
+   111→            except StopIteration:
+   112→                break
+   113→        return out
+   114→
+   115→    def __iter__(self):
+   116→        return self
+   117→
+   118→    def __next__(self):
+   119→        return next(self._iter)
+   120→
+   121→    def close(self) -> None:
+   122→        pass
+   123→
+   124→
+   125→class SafeConnection:
+   126→    """Serializes every statement on one SQLite connection.
+   127→
+   128→    SQLite connections are not safe for concurrent cursor use even with
+   129→    ``check_same_thread=False`` — interleaved commit/iterate produces
+   130→    InterfaceError('bad parameter or other API misuse'). This wrapper
+   131→    holds an RLock across execute+materialize and across commit, making
+   132→    the whole TraceStore safe under multi-threaded load (REST server,
+   133→    concurrent writers). Eager materialization keeps semantics: callers
+   134→    only use fetchone/fetchall/iteration/rowcount/lastrowid.
+   135→    """
+   136→
+   137→    def __init__(self, conn) -> None:
+   138→        self._conn = conn
+   139→        self._lock = threading.RLock()
+   140→
+   141→    def execute(self, sql, params=()):
+   142→        with self._lock:
+   143→            cur = self._conn.execute(sql, params)
+   144→            try:
+   145→                rows = cur.fetchall()
+   146→            except Exception:
+   147→                rows = []
+   148→            rc, lrid, desc = cur.rowcount, cur.lastrowid, cur.description
+   149→            cur.close()
+   150→            return _SafeCursor(rows, rc, lrid, desc)
+   151→
+   152→    def executemany(self, sql, seq):
+   153→        with self._lock:
+   154→            cur = self._conn.executemany(sql, seq)
+   155→            rc = cur.rowcount
+   156→            cur.close()
+   157→            return _SafeCursor([], rc, None, None)
+   158→
+   159→    def executescript(self, script):
+   160→        with self._lock:
+   161→            return self._conn.executescript(script)
+   162→
+   163→    def commit(self):
+   164→        with self._lock:
+   165→            self._conn.commit()
+   166→
+   167→    def rollback(self):
+   168→        with self._lock:
+   169→            self._conn.rollback()
+   170→
+   171→    def close(self):
+   172→        with self._lock:
+   173→            self._conn.close()
+   174→
+   175→    @property
+   176→    def row_factory(self):
+   177→        return self._conn.row_factory
+   178→
+   179→    @row_factory.setter
+   180→    def row_factory(self, v):
+   181→        with self._lock:
+   182→            self._conn.row_factory = v
+   183→
+   184→    @property
+   185→    def in_transaction(self):
+   186→        return self._conn.in_transaction
+   187→
+   188→
+   189→class TraceStore:
+   190→    def __init__(self, db_path: str = ":memory:", provider: HashProvider | None = None,
+   191→                 wal_sync: str = "normal") -> None:
+   192→        self.db_path = db_path
+   193→        self.hasher = provider or HashProvider()
+   194→        mem = db_path in (":memory:", None, "")
+   195→        self.conn = SafeConnection(
+   196→            sqlite3.connect(db_path or ":memory:", check_same_thread=False))
+   197→        if not mem:
+   198→            # Aeon-inspired crash-recoverable write path:
+   199→            #   journal_mode=WAL — readers never block the writer, and a
+   200→            #                       torn write rolls back cleanly on reopen.
+   201→            #   synchronous      — NORMAL: commits survive process crash
+   202→            #                       (SIGKILL) at full speed; FULL additionally
+   203→            #                       survives OS/power loss at fsync cost.
+   204→            self.conn.execute("PRAGMA journal_mode=WAL")
+   205→            self.conn.execute(
+   206→                "PRAGMA synchronous="
+   207→                + ("FULL" if str(wal_sync).lower() == "full" else "NORMAL"))
+   208→        self.conn.row_factory = sqlite3.Row
+   209→        self.conn.executescript(SCHEMA)
+   210→        self._ancestry_cache: dict[str, frozenset[str]] = {}
+   211→        self._active_cache: dict[str, frozenset[str]] = {}
+   212→        self._batching = False
+   213→        self._ensure_genesis()
+   214→
+   215→    def checkpoint(self, mode: str = "TRUNCATE") -> None:
+   216→        """Fold the WAL back into the main db file (shrink + fast reopen)."""
+   217→        if self.db_path in (":memory:", None, ""):
+   218→            return
+   219→        try:
+   220→            self.conn.execute(f"PRAGMA wal_checkpoint({mode})")
+   221→        except Exception:
+   222→            pass
+   223→
+   224→    def begin_batch(self) -> None:
+   225→        self._batching = True
+   226→
+   227→    def end_batch(self) -> None:
+   228→        self._batching = False
+   229→        self.conn.commit()
+   230→
+   231→    def _maybe_commit(self) -> None:
+   232→        if not self._batching:
+   233→            self.conn.commit()
+   234→
+   235→    @property
+   236→    def batching(self) -> bool:
+   237→        return self._batching
+   238→
+   239→    # ------------------------------------------------------------------ kv
+   240→    def kv_get(self, key: str, default: str | None = None) -> str | None:
+   241→        row = self.conn.execute("SELECT v FROM kv WHERE k=?", (key,)).fetchone()
+   242→        return row["v"] if row else default
+   243→
+   244→    def kv_set(self, key: str, value: str) -> None:
+   245→        self.conn.execute(
+   246→            "INSERT INTO kv(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+   247→            (key, value))
+   248→        self.conn.commit()
+   249→
+   250→    def iter_kv(self, prefix: str = ""):
+   251→        """Yield (key, value) pairs whose key starts with ``prefix``."""
+   252→        cur = self.conn.execute(
+   253→            "SELECT k, v FROM kv WHERE k LIKE ? ORDER BY k",
+   254→            (prefix + "%",))
+   255→        for row in cur:
+   256→            yield row["k"], row["v"]
+   257→
+   258→    def kv_delete(self, key: str) -> None:
+   259→        self.conn.execute("DELETE FROM kv WHERE k=?", (key,))
+   260→        self.conn.commit()
+   261→
+   262→    # -------------------------------------------------------------- genesis
+   263→    def _ensure_genesis(self) -> None:
+   264→        if not self.conn.execute("SELECT 1 FROM branches LIMIT 1").fetchone():
+   265→            cid = new_id()
+   266→            now = iso(datetime.utcnow().__class__.now() if False else datetime.utcnow()) if False else iso(datetime.now())  # noqa
+   267→            chain = self.hasher.hash_text("genesis:" + cid)
+   268→            self.conn.execute(
+   269→                "INSERT INTO commits(id, parents, branch, message, ts, chain_hash) VALUES(?,?,?,?,?,?)",
+   270→                (cid, "[]", "main", "genesis", now, chain))
+   271→            self.conn.execute(
+   272→                "INSERT INTO branches(name, head, created) VALUES(?,?,?)", ("main", cid, now))
+   273→            self.kv_set("HEAD_BRANCH", "main")
+   274→            self.kv_set("SCHEMA_VERSION", "1")
+   275→
+   276→    # -------------------------------------------------------------- chunks
+   277→    def add_chunk(self, text: str, *, user_id: str = "default", agent_id: str | None = None,
+   278→                  run_id: str | None = None, ts: datetime | str | None = None,
+   279→                  source: str = "", chunk_id: str | None = None) -> str:
+   280→        cid = chunk_id or new_id()
+   281→        ts_s = iso(parse_ts(ts) or datetime.now(timezone.utc)) if ts else iso(datetime.now(timezone.utc))
+   282→        self.conn.execute(
+   283→            "INSERT OR REPLACE INTO chunks(id, text, user_id, agent_id, run_id, ts, source, hash, tokens) "
+   284→            "VALUES(?,?,?,?,?,?,?,?,?)",
+   285→            (cid, text, user_id, agent_id, run_id, ts_s, source,
+   286→             self.hasher.hash_text(text), token_estimate(text)))
+   287→        self._maybe_commit()
+   288→        return cid
+   289→
+   290→    def get_chunk(self, chunk_id: str) -> dict | None:
+   291→        row = self.conn.execute("SELECT * FROM chunks WHERE id=?", (chunk_id,)).fetchone()
+   292→        return dict(row) if row else None
+   293→
+   294→    def all_chunks(self, user_id: str | None = None) -> list[dict]:
+   295→        if user_id:
+   296→            rows = self.conn.execute("SELECT * FROM chunks WHERE user_id=? ORDER BY ts", (user_id,)).fetchall()
+   297→        else:
+   298→            rows = self.conn.execute("SELECT * FROM chunks ORDER BY ts").fetchall()
+   299→        return [dict(r) for r in rows]
+   300→
+   301→    def quarantined_chunk_texts(self, user_id: str | None = None) -> list[str]:
+   302→        """Source texts of every quarantined fact (the tainted corpus used
+   303→        by the MINJA contagion guard on the write path)."""
+   304→        sql = ("SELECT DISTINCT c.text FROM chunks c "
+   305→               "JOIN facts f ON f.source_id = c.id WHERE f.quarantined = 1")
+   306→        args: tuple = ()
+   307→        if user_id is not None:
+   308→            sql += " AND c.user_id = ?"
+   309→            args = (user_id,)
+   310→        return [r[0] for r in self.conn.execute(sql, args).fetchall()]
+   311→
+   312→    # ------------------------------------------------------------- commits
+   313→    def create_commit(self, message: str = "", branch: str | None = None,
+   314→                      parents: list[str] | None = None, n_facts: int = 0) -> str:
+   315→        branch = branch or self.current_branch()
+   316→        head = self.head(branch)
+   317→        parents = parents if parents is not None else ([head] if head else [])
+   318→        cid = new_id()
+   319→        now = iso(datetime.now(timezone.utc))
+   320→        parent_chains = [self.conn.execute(
+   321→            "SELECT chain_hash FROM commits WHERE id=?", (p,)).fetchone() for p in parents]
+   322→        chain = self.hasher.hash_json({
+   323→            "commit": cid, "parents": parents, "message": message,
+   324→            "ts": now,
+   325→            "parent_chains": [r["chain_hash"] if r else "" for r in parent_chains],
+   326→        })
+   327→        self.conn.execute(
+   328→            "INSERT INTO commits(id, parents, branch, message, ts, chain_hash, n_facts) VALUES(?,?,?,?,?,?,?)",
+   329→            (cid, json.dumps(parents), branch, message, now, chain, n_facts))
+   330→        if not parents:
+   331→            self.conn.execute(
+   332→                "INSERT OR REPLACE INTO branches(name, head, created) VALUES(?,?,?)",
+   333→                (branch, cid, now))
+   334→        else:
+   335→            self.conn.execute("UPDATE branches SET head=? WHERE name=?", (cid, branch))
+   336→        self._invalidate(branch)
+   337→        self._maybe_commit()
+   338→        return cid
+   339→
+   340→    def head(self, branch: str | None = None) -> str | None:
+   341→        branch = branch or self.current_branch()
+   342→        row = self.conn.execute("SELECT head FROM branches WHERE name=?", (branch,)).fetchone()
+   343→        return row["head"] if row else None
+   344→
+   345→    def current_branch(self) -> str:
+   346→        return self.kv_get("HEAD_BRANCH", "main") or "main"
+   347→
+   348→    def checkout(self, branch: str) -> None:
+   349→        if not self.conn.execute("SELECT 1 FROM branches WHERE name=?", (branch,)).fetchone():
+   350→            raise BranchError(f"unknown branch {branch!r}")
+   351→        self.kv_set("HEAD_BRANCH", branch)
+   352→
+   353→    def create_branch(self, name: str, from_commit: str | None = None,
+   354→                      switch: bool = True) -> str:
+   355→        if self.conn.execute("SELECT 1 FROM branches WHERE name=?", (name,)).fetchone():
+   356→            raise BranchError(f"branch {name!r} already exists")
+   357→        base = from_commit or self.head() or self.head(self.current_branch())
+   358→        if base is None:
+   359→            raise BranchError("cannot branch from empty history")
+   360→        self.conn.execute(
+   361→            "INSERT INTO branches(name, head, created) VALUES(?,?,?)",
+   362→            (name, base, iso(datetime.now(timezone.utc))))
+   363→        if switch:
+   364→            self.kv_set("HEAD_BRANCH", name)
+   365→        self._maybe_commit()
+   366→        return base
+   367→
+   368→    def branches(self) -> list[dict]:
+   369→        rows = self.conn.execute(
+   370→            "SELECT b.name, b.head, b.created, c.ts AS head_ts, c.message "
+   371→            "FROM branches b LEFT JOIN commits c ON c.id=b.head ORDER BY b.created").fetchall()
+   372→        return [dict(r) for r in rows]
+   373→
+   374→    def log(self, branch: str | None = None, limit: int = 50) -> list[dict]:
+   375→        cid = self.head(branch or self.current_branch())
+   376→        out: list[dict] = []
+   377→        seen = set()
+   378→        queue = [cid] if cid else []
+   379→        while queue and len(out) < limit:
+   380→            cur = queue.pop(0)
+   381→            if not cur or cur in seen:
+   382→                continue
+   383→            seen.add(cur)
+   384→            row = self.conn.execute("SELECT * FROM commits WHERE id=?", (cur,)).fetchone()
+   385→            if not row:
+   386→                continue
+   387→            out.append(dict(row))
+   388→            queue.extend(json.loads(row["parents"]))
+   389→        return out
+   390→
+   391→    def ancestry(self, commit_id: str) -> frozenset[str]:
+   392→        cached = self._ancestry_cache.get(commit_id)
+   393→        if cached is not None:
+   394→            return cached
+   395→        seen: set[str] = set()
+   396→        queue = [commit_id]
+   397→        while queue:
+   398→            cur = queue.pop()
+   399→            if cur in seen:
+   400→                continue
+   401→            seen.add(cur)
+   402→            row = self.conn.execute("SELECT parents FROM commits WHERE id=?", (cur,)).fetchone()
+   403→            if row:
+   404→                queue.extend(json.loads(row["parents"]))
+   405→        result = frozenset(seen)
+   406→        if len(self._ancestry_cache) < 64:
+   407→            self._ancestry_cache[commit_id] = result
+   408→        return result
+   409→
+   410→    def commit(self, commit_id: str) -> dict | None:
+   411→        row = self.conn.execute("SELECT * FROM commits WHERE id=?", (commit_id,)).fetchone()
+   412→        return dict(row) if row else None
+   413→
+   414→    # ---------------------------------------------------------------- facts
+   415→    def insert_fact(self, fact: Fact, commit_id: str | None = None) -> Fact:
+   416→        if commit_id:
+   417→            fact.birth_commit = commit_id
+   418→        row = fact.to_row()
+   419→        cols = ", ".join(row.keys())
+   420→        ph = ", ".join("?" for _ in row)
+   421→        self.conn.execute(f"INSERT INTO facts({cols}) VALUES({ph})", tuple(row.values()))
+   422→        return fact
+   423→
+   424→    def insert_facts_bulk(self, facts: list[Fact], commit_id: str | None = None) -> int:
+   425→        for f in facts:
+   426→            if commit_id:
+   427→                f.birth_commit = commit_id
+   428→        rows = [f.to_row() for f in facts]
+   429→        if not rows:
+   430→            return 0
+   431→        cols = ", ".join(rows[0].keys())
+   432→        ph = ", ".join("?" for _ in rows[0])
+   433→        self.conn.executemany(f"INSERT INTO facts({cols}) VALUES({ph})",
+   434→                              [tuple(r.values()) for r in rows])
+   435→        return len(rows)
+   436→
+   437→    def get_fact(self, fact_id: str) -> Fact | None:
+   438→        row = self.conn.execute(f"SELECT {FACT_COLUMNS} FROM facts WHERE id=?", (fact_id,)).fetchone()
+   439→        return Fact.from_row(dict(row)) if row else None
+   440→
+   441→    def get_facts(self, ids: list[str]) -> list[Fact]:
+   442→        if not ids:
+   443→            return []
+   444→        out = []
+   445→        for i in range(0, len(ids), 500):
+   446→            batch = ids[i:i + 500]
+   447→            q = f"SELECT {FACT_COLUMNS} FROM facts WHERE id IN ({','.join('?' * len(batch))})"
+   448→            out.extend(Fact.from_row(dict(r)) for r in self.conn.execute(q, batch))
+   449→        return out
+   450→
+   451→    def update_fact(self, fact_id: str, **fields) -> None:
+   452→        if not fields:
+   453→            return
+   454→        if "provenance" in fields and isinstance(fields["provenance"], dict):
+   455→            fields["provenance"] = json.dumps(fields["provenance"], default=str)
+   456→        sets = ", ".join(f"{k}=?" for k in fields)
+   457→        self.conn.execute(f"UPDATE facts SET {sets} WHERE id=?", (*fields.values(), fact_id))
+   458→        self._maybe_commit()
+   459→
+   460→    def bump_access(self, fact_ids: list[str]) -> None:
+   461→        for fid in fact_ids:
+   462→            self.conn.execute("UPDATE facts SET access_count=access_count+1 WHERE id=?", (fid,))
+   463→        self._maybe_commit()
+   464→
+   465→    def _fact_filters(self, user_id=None, agent_id=None, run_id=None, branch=None,
+   466→                      active=True, include_quarantined=False, subject=None,
+   467→                      relation=None, value=None, derived=None):
+   468→        clauses, params = [], []
+   469→        if active:
+   470→            clauses.append("is_active=1")
+   471→        if not include_quarantined:
+   472→            clauses.append("quarantined=0")
+   473→        if user_id is not None:
+   474→            clauses.append("user_id=?"); params.append(user_id)
+   475→        if agent_id is not None:
+   476→            clauses.append("agent_id=?"); params.append(agent_id)
+   477→        if run_id is not None:
+   478→            clauses.append("run_id=?"); params.append(run_id)
+   479→        if subject is not None:
+   480→            clauses.append("subject=?"); params.append(subject)
+   481→        if relation is not None:
+   482→            clauses.append("relation=?"); params.append(relation)
+   483→        if value is not None:
+   484→            clauses.append("value=?"); params.append(value)
+   485→        if derived is not None:
+   486→            clauses.append("is_derived=?"); params.append(int(derived))
+   487→        if branch is not None:
+   488→            ids = self.active_ids(branch)
+   489→            if not ids:
+   490→                clauses.append("1=0")
+   491→            else:
+   492→                # membership filtering applied post-hoc for large sets
+   493→                pass
+   494→        return clauses, params, (branch if branch is not None else None)
+   495→
+   496→    def query_facts(self, *, subject=None, relation=None, value=None, user_id=None,
+   497→                    agent_id=None, run_id=None, branch=None, active=True,
+   498→                    include_quarantined=False, derived=None, order="valid_from",
+   499→                    limit=None) -> list[Fact]:
+   500→        clauses, params, branch_filter = self._fact_filters(
+   501→            user_id, agent_id, run_id, branch, active, include_quarantined,
+   502→            subject, relation, value, derived)
+   503→        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+   504→        q = f"SELECT {FACT_COLUMNS} FROM facts{where} ORDER BY {order}"
+   505→        if limit:
+   506→            q += f" LIMIT {int(limit)}"
+   507→        rows = self.conn.execute(q, params).fetchall()
+   508→        facts = [Fact.from_row(dict(r)) for r in rows]
+   509→        if branch_filter is not None:
+   510→            ids = self.active_ids(branch_filter)
+   511→            facts = [f for f in facts if f.id in ids]
+   512→        return facts
+   513→
+   514→    def active_facts(self, **kw) -> list[Fact]:
+   515→        return self.query_facts(**kw)
+   516→
+   517→    def history_of(self, subject: str, relation: str, user_id: str | None = None,
+   518→                   include_inactive=True) -> list[Fact]:
+   519→        clauses, params, _ = self._fact_filters(
+   520→            user_id=user_id, active=not include_inactive)
+   521→        extra = "subject=? AND relation=?" + ((" AND " + " AND ".join(clauses)) if clauses else "")
+   522→        q = f"SELECT {FACT_COLUMNS} FROM facts WHERE {extra} ORDER BY valid_from, tx_from"
+   523→        rows = self.conn.execute(q, (subject, relation, *params)).fetchall()
+   524→        return [Fact.from_row(dict(r)) for r in rows]
+   525→
+   526→    def facts_about(self, entity: str, user_id: str | None = None,
+   527→                    active: bool = True) -> list[Fact]:
+   528→        """Facts where entity is subject OR value (1-hop associative recall)."""
+   529→        clauses, params, _ = self._fact_filters(user_id=user_id, active=active)
+   530→        extra = "(subject=? OR value=?)" + ((" AND " + " AND ".join(clauses)) if clauses else "")
+   531→        q = f"SELECT {FACT_COLUMNS} FROM facts WHERE {extra}"
+   532→        rows = self.conn.execute(q, (entity, entity, *params)).fetchall()
+   533→        return [Fact.from_row(dict(r)) for r in rows]
+   534→
+   535→    def temporal_window(self, start: str | None, end: str | None,
+   536→                        user_id: str | None = None, field: str = "valid",
+   537→                        active: bool = True) -> list[Fact]:
+   538→        """Zep-compatible temporal queries. field: 'valid' (reality) or 'tx' (recorded).
+   539→
+   540→        Valid-time uses interval-overlap semantics: a fact matches if its
+   541→        [valid_from, valid_to] window intersects [start, end] — so asking
+   542→        "where did Alice work in 2025?" retrieves an employment that began
+   543→        in 2024 and ended in 2026. Transaction-time uses point semantics.
+   544→        """
+   545→        clauses, fparams, _ = self._fact_filters(user_id=user_id, active=active)
+   546→        cond: list[str] = []
+   547→        cparams: list = []
+   548→        if field == "valid":
+   549→            if start:
+   550→                cond.append("(valid_to IS NULL OR valid_to>=?)")
+   551→                cparams.append(start[:10])
+   552→            if end:
+   553→                cond.append("valid_from<=?")
+   554→                cparams.append(end[:10])
+   555→            order = "valid_from"
+   556→        else:
+   557→            if start:
+   558→                cond.append("tx_from>=?"); cparams.append(start[:10])
+   559→            if end:
+   560→                cond.append("tx_from<=?"); cparams.append(end[:10])
+   561→            order = "tx_from"
+   562→        params = cparams + fparams
+   563→        where = " AND ".join(cond + clauses) if (cond + clauses) else ""
+   564→        q = f"SELECT {FACT_COLUMNS} FROM facts{' WHERE ' + where if where else ''} ORDER BY {order}"
+   565→        rows = self.conn.execute(q, params).fetchall()
+   566→        return [Fact.from_row(dict(r)) for r in rows]
+   567→
+   568→    def count_facts(self, user_id: str | None = None, active_only: bool = True) -> int:
+   569→        clauses, params, _ = self._fact_filters(user_id=user_id, active=active_only)
+   570→        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+   571→        row = self.conn.execute(f"SELECT COUNT(*) c FROM facts{where}", params).fetchone()
+   572→        return int(row["c"])
+   573→
+   574→    # ---------------------------------------------------------- active set
+   575→    def active_ids(self, branch: str) -> frozenset[str]:
+   576→        cached = self._active_cache.get(branch)
+   577→        if cached is not None:
+   578→            return cached
+   579→        head = self.head(branch)
+   580→        if head is None:
+   581→            return frozenset()
+   582→        anc = self.ancestry(head)
+   583→        rows = self.conn.execute(
+   584→            "SELECT id, birth_commit, retired_commit FROM facts "
+   585→            "WHERE birth_commit IS NOT NULL").fetchall()
+   586→        ids = frozenset(
+   587→            r["id"] for r in rows
+   588→            if r["birth_commit"] in anc and (
+   589→                not r["retired_commit"] or r["retired_commit"] not in anc))
+   590→        if len(self._active_cache) < 16:
+   591→            self._active_cache[branch] = ids
+   592→        return ids
+   593→
+   594→    def _invalidate(self, branch: str | None = None) -> None:
+   595→        if branch:
+   596→            self._active_cache.pop(branch, None)
+   597→        else:
+   598→            self._active_cache.clear()
+   599→        self._ancestry_cache.clear()
+   600→
+   601→    # ---------------------------------------------------------------- edges
+   602→    def add_edge(self, src: str, dst: str, kind: str, meta: dict | None = None) -> None:
+   603→        self.conn.execute(
+   604→            "INSERT OR REPLACE INTO edges(src, dst, kind, meta, created) VALUES(?,?,?,?,?)",
+   605→            (src, dst, kind, json.dumps(meta or {}), iso(datetime.now(timezone.utc))))
+   606→        self._maybe_commit()
+   607→
+   608→    def edges_of(self, fact_id: str, kind: str | None = None, direction: str = "out") -> list[dict]:
+   609→        outs, ins = [], []
+   610→        if direction in ("out", "both"):
+   611→            q = "SELECT * FROM edges WHERE src=?" + (" AND kind=?" if kind else "")
+   612→            rows = self.conn.execute(q, (fact_id, kind) if kind else (fact_id,)).fetchall()
+   613→            outs = [dict(r, dir="out") for r in rows]
+   614→        if direction in ("in", "both"):
+   615→            q = "SELECT * FROM edges WHERE dst=?" + (" AND kind=?" if kind else "")
+   616→            rows = self.conn.execute(q, (fact_id, kind) if kind else (fact_id,)).fetchall()
+   617→            ins = [dict(r, dir="in") for r in rows]
+   618→        return outs + ins
+   619→
+   620→    def edges_of_many(self, fact_ids: list[str], kind: str | None = None) -> list[dict]:
+   621→        """Edges among a set of fact ids (both directions), batched."""
+   622→        if not fact_ids:
+   623→            return []
+   624→        out: list[dict] = []
+   625→        B = 200
+   626→        for i in range(0, len(fact_ids), B):
+   627→            chunk = fact_ids[i:i + B]
+   628→            qm = ",".join("?" * len(chunk))
+   629→            q = (f"SELECT * FROM edges WHERE src IN ({qm}) AND dst IN ({qm})"
+   630→                 + (f" AND kind=?" if kind else ""))
+   631→            rows = self.conn.execute(q, chunk + chunk + ([kind] if kind else []))
+   632→            out.extend(dict(r) for r in rows)
+   633→        return out
+   634→
+   635→    # ------------------------------------------------------------ integrity
+   636→    def active_fact_hashes(self, user_id: str | None = None) -> list[tuple[str, str]]:
+   637→        clauses, params, _ = self._fact_filters(user_id=user_id, active=True)
+   638→        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+   639→        rows = self.conn.execute(
+   640→            f"SELECT id, source_hash FROM facts{where} ORDER BY id", params).fetchall()
+   641→        return [(r["id"], r["source_hash"] or "") for r in rows]
+   642→
+   643→    def stats(self) -> dict:
+   644→        def one(q, *p):
+   645→            return int(self.conn.execute(q, p).fetchone()[0])
+   646→        return {
+   647→            "facts": one("SELECT COUNT(*) FROM facts"),
+   648→            "active_facts": one("SELECT COUNT(*) FROM facts WHERE is_active=1 AND quarantined=0"),
+   649→            "quarantined": one("SELECT COUNT(*) FROM facts WHERE quarantined=1"),
+   650→            "derived": one("SELECT COUNT(*) FROM facts WHERE is_derived=1"),
+   651→            "chunks": one("SELECT COUNT(*) FROM chunks"),
+   652→            "edges": one("SELECT COUNT(*) FROM edges"),
+   653→            "commits": one("SELECT COUNT(*) FROM commits"),
+   654→            "branches": one("SELECT COUNT(*) FROM branches"),
+   655→            "long_term": one("SELECT COUNT(*) FROM facts WHERE memory_type='long_term'"),
+   656→        }
+   657→
+   658→    def close(self) -> None:
+   659→        try:
+   660→            self.conn.commit()
+   661→            self.checkpoint("TRUNCATE")
+   662→            self.conn.close()
+   663→        except Exception:
+   664→            pass
+   665→
+   666→    def __enter__(self) -> "TraceStore":
+   667→        return self
+   668→
+   669→    def __exit__(self, *exc) -> None:
+   670→        self.close()
+   671→

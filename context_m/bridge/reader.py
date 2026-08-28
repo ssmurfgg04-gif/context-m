@@ -246,6 +246,26 @@ class MemoryReader:
                 resolved = c
             if resolved is None and name and c.lower() == name.split()[0].lower():
                 resolved = name
+            # FALL-THROUGH: if no alias/lexicon/name resolution found,
+            # use the candidate as-is. This is correct for cases where
+            # the user is asking about an entity that's already a fact
+            # subject in the trace — "Where does Alice work?" with
+            # (Alice, works_at, Google) in the trace should resolve
+            # "Alice" → "Alice" without requiring a separate alias
+            # fact. (The previous behavior dropped the candidate,
+            # which silently broke recall.)
+            if resolved is None:
+                # check if the candidate matches a known fact subject
+                # in this user's scope — if so, use it
+                for f in self.store.query_facts(subject=c, user_id=user_id,
+                                                  active=True, limit=1):
+                    resolved = c
+                    break
+            if resolved is None:
+                # last resort: use the candidate as-is. This is the
+                # correct default for capitalized entity mentions in
+                # natural language queries.
+                resolved = c
             if resolved and resolved.lower() not in seen_out:
                 canonical.append(resolved)
                 seen_out.add(resolved.lower())

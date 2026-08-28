@@ -423,28 +423,39 @@ class Memory:
             facts past valid_to + grace, defrag palace, retrain
             MBTB prefetcher. Slower, idempotent, safe.
 
+        (3) trace.cognition — HMS-style self-organization:
+            PatternScanner + AbstractionEngine + GapDetector +
+            HypothesisEngine + AnalogyDetector. Emits HYPOTHESIZED_BY
+            edges with confidence < 0.5 — never promoted to active
+            retrieval unless explicitly confirmed by user input.
+
         Returns a combined report. Either pass may be skipped via
-        kwargs lifecycle=False / dreaming=False.
+        kwargs lifecycle=False / dreaming=False / cognition=False.
         """
         out = {"lifecycle": {}, "dreaming": {}}
         if kwargs.get("lifecycle", True):
             out["lifecycle"] = lifecycle.consolidate(self.store, now)
         if kwargs.get("dreaming", True):
             from context_m.trace.consolidate import consolidate as _dream
-            # Respect the Config's fade_enabled / tmt_enabled flags by
-            # default so `cortexm consolidate` runs the full production
-            # pass without requiring CLI flag plumbing. CLI / env can
-            # still turn them off via kwargs.
+            # Respect the Config's fade_enabled / tmt_enabled /
+            # cognition_enabled flags by default so `cortexm
+            # consolidate` runs the full production pass without
+            # requiring CLI flag plumbing. CLI / env can still turn
+            # them off via kwargs.
             run_fade = kwargs.get("run_fade",
                                    getattr(self.config, "fade_enabled", True))
             run_tmt = kwargs.get("run_tmt",
                                   getattr(self.config, "tmt_enabled", False))
+            run_cognition = kwargs.get(
+                "run_cognition",
+                getattr(self.config, "cognition_enabled", False))
             out["dreaming"] = _dream(self.store, palace=self.palace,
                                        prefetcher=self.prefetcher,
                                        user_id=kwargs.get("user_id"),
                                        dry_run=kwargs.get("dry_run", False),
                                        run_fade=run_fade,
-                                       run_tmt=run_tmt)
+                                       run_tmt=run_tmt,
+                                       run_cognition=run_cognition)
         return out
 
     def export_schema_report(self, user_id: str | None = None) -> dict:

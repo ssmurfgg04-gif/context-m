@@ -1,0 +1,176 @@
+{
+  "summary": {
+    "n_questions": 10,
+    "det_judge_accuracy": 0.6,
+    "gemini_judge_accuracy": 0.6,
+    "by_subtask": {
+      "single_hop": 1.0,
+      "knowledge_update": 0.3333,
+      "multi_session": 0.5,
+      "temporal_reasoning": 0.5
+    },
+    "judged_by": "deterministic_nugget"
+  },
+  "results": [
+    {
+      "session_id": 1,
+      "question": "What is Bob's name?",
+      "expected_answer": "Bob",
+      "subtask": "single_hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left S...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | speaks | German",
+        "Bob | prefers | Python",
+        "Bob | left | Stripe",
+        "Bob | lives_in | Berlin"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "Where does Bob work?",
+      "expected_answer": "Stripe",
+      "subtask": "single_hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live ...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | prefers | Python",
+        "Bob | left | Stripe",
+        "Bob | lives_in | Berlin",
+        "Bob | speaks | German"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "Where does Bob live?",
+      "expected_answer": "Berlin",
+      "subtask": "single_hop",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I pref...",
+      "top5": [
+        "Bob | lives_in | Berlin",
+        "Bob | name | Bob",
+        "Bob | left | Stripe",
+        "Bob | prefers | Python",
+        "Bob | speaks | German"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "Where does Bob currently work?",
+      "expected_answer": "OpenAI",
+      "subtask": "knowledge_update",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I li...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | prefers | Python",
+        "Bob | speaks | German",
+        "Bob | lives_in | Berlin",
+        "Bob | left | Stripe"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    },
+    {
+      "session_id": 2,
+      "question": "Where did Bob work before OpenAI?",
+      "expected_answer": "Stripe",
+      "subtask": "knowledge_update",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I li...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | speaks | German",
+        "Bob | prefers | Python",
+        "Bob | lives_in | Berlin",
+        "Bob | left | Stripe"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "List all the places Bob has worked.",
+      "expected_answer": "Stripe and OpenAI",
+      "subtask": "multi_session",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left...",
+      "top5": [
+        "Bob | lives_in | Berlin",
+        "Bob | name | Bob",
+        "Bob | speaks | German",
+        "Bob | left | Stripe",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    },
+    {
+      "session_id": 3,
+      "question": "What programming language does Bob prefer?",
+      "expected_answer": "Python",
+      "subtask": "multi_session",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I li...",
+      "top5": [
+        "Bob | prefers | Python",
+        "Bob | name | Bob",
+        "Bob | speaks | German",
+        "Bob | lives_in | Berlin",
+        "Bob | left | Stripe"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Where did Bob live when he was at Stripe?",
+      "expected_answer": "Berlin",
+      "subtask": "temporal_reasoning",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in...",
+      "top5": [
+        "Bob | left | Stripe",
+        "Bob | name | Bob",
+        "Bob | speaks | German",
+        "Bob | lives_in | Berlin",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Did Bob move between sessions?",
+      "expected_answer": "Yes, Bob moved between sessions.",
+      "subtask": "temporal_reasoning",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.92; id 23df4d8f; src #a192fb16; \"I live in Berlin.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | lives_in | Berlin",
+        "Bob | left | Stripe",
+        "Bob | speaks | German",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    },
+    {
+      "session_id": 3,
+      "question": "What is Bob's current role?",
+      "expected_answer": "ML engineer",
+      "subtask": "knowledge_update",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, speaks, German) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.85; id 68572d72; src #410055ba; \"I speak German.\"]\n- (Bob, name, Bob) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.95; id f1a09d54; src #e79174d2; \"My name is Bob.\"]\n- (Bob, prefers, Python) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 73ecf1ec; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, left, Stripe) [valid 2026-08-28\u2192\u221e; learned 2026-08-28; conf 0.90; id 34444a43; src #a2e3bdd2; \"I left S...",
+      "top5": [
+        "Bob | speaks | German",
+        "Bob | name | Bob",
+        "Bob | prefers | Python",
+        "Bob | left | Stripe",
+        "Bob | lives_in | Berlin"
+      ],
+      "det_correct": false,
+      "gemini_correct": false
+    }
+  ]
+}

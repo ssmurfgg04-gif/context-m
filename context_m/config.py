@@ -10,9 +10,18 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field, asdict
+from typing import Final
 
 CODECS = ("int8", "binary", "rabitq", "pq")
 VSA_MODES = ("perm", "conv", "bag")
+# Index backends — alternative storage/search paths for the VSA palace.
+#   * "quadrant" — default page-clustered log-depth 2-means tree (Rust wheel
+#     at rust/quadrant/). INT8-quantized leaves, best-first tree descent.
+#   * "nsg"     — Navigating Spreading-out Graph (proximity graph). Lower
+#     query latency at high recall on high-dim vectors; build is slower.
+#   * "flat"    — exact brute-force dot product. Reference; O(N) per query.
+# Used by Config.index_backend (validated in __post_init__).
+INDEX_BACKENDS: Final[tuple[str, ...]] = ("quadrant", "nsg", "flat")
 
 # Storage tiers from the compression appendix (bytes per 1M memories).
 STORAGE_TIERS = {
@@ -96,6 +105,22 @@ class Config:
     # bench_config_overrides() so the fallback's lift is visible in isolation.
     tiny_fallback_enabled: bool = True
 
+    # --- LaBSE-inspired polyglot encoder (non-English ingest fix) ----------
+    # docs/BENCHMARKS.md Tier-1 shows non-English extraction recall =
+    # 0.000 ± 0.000 — the regex tokenizer + HashingEmbedder drops non-ASCII
+    # letters entirely, so every non-English sentence embeds to the same
+    # constant vector [1, 0, 0, ...] and retrieval is broken.
+    # When True, HashingEmbedder delegates text with >30% non-ASCII chars
+    # to PolyglotEncoder (context_m.text.labse) — a LaBSE-inspired Unicode
+    # n-gram hasher that handles CJK / Devanagari / Arabic / Cyrillic /
+    # Thai / Hangul / Hiragana / Katakana via script-aware tokenization +
+    # char n-grams + signed feature hashing. Pure numpy + stdlib
+    # unicodedata, no model download (3GB LaBSE weights would violate the
+    # μ=0 + no-GPU rules), bit-identical across runs. Default OFF so the
+    # existing English path stays untouched; opt-in for deployments that
+    # ingest non-English text. See context_m/text/labse.py for the algorithm.
+    labse_enabled: bool = False
+
     # --- Query-aware triple pre-filter (HippoRAG 2 lineage) ----------------
     # When True, the reader drops candidate facts with low
     # lexical+semantic+relation overlap with the query BEFORE fusion.
@@ -127,6 +152,48 @@ class Config:
     tmt_enabled: bool = False
     tmt_session_cluster_mins: int = 5   # facts needed before a session summary
     tmt_persona_min_sessions: int = 3   # sessions before persona abstraction
+
+    # --- HMS Cognition Engine (self-organizing memory) ---------------------
+    # When True, the consolidate() pass also runs the 5-stage cognition
+    # pipeline: PatternScanner (surface regularities) + AbstractionEngine
+    # (build prototype categories) + GapDetector (find missing relations)
+    # + HypothesisEngine (propose fillers) + AnalogyDetector (find
+    # isomorphic domains). Output is HYPOTHESIZED_BY edges with confidence
+    # < 0.5 — never promoted to active retrieval unless explicitly
+    # confirmed by user input. Default OFF — opt-in for use cases that
+    # want self-organization (e.g. agent memory that should infer
+    # `grandparent` from two `father` facts).
+    cognition_enabled: bool = False
+    cognition_min_support: int = 2   # min facts for a pattern to be significant
+    cognition_max_hyp_confidence: float = 0.45  # cap on hypothesis confidence
+
+    # --- Provenance standards stack (enterprise-grade) ---------------------
+    # When True, every memory commit is wrapped in a COSE Sign1 envelope
+    # (RFC 9052) signed with an Ed25519 agent key, and memory ranges can
+    # be exported as W3C Verifiable Credentials / SCITT-signed statements.
+    # BLAKE3 source hashing stays as the internal integrity mechanism;
+    # this layer sits on top for external interoperability (enterprise
+    # security reviews ask "does it support W3C VC? C2PA? SCITT?" — yes).
+    provenance_enabled: bool = False
+    provenance_agent_key_path: str | None = None  # Ed25519 PEM (else generate)
+    provenance_agent_did: str | None = None        # did:key identifier
+
+    # --- Structural multi-hop query (deterministic symbolic chains) --------
+    # When True, the reader exposes `structural_query(start_entity,
+    # relation_chain)` that walks exact relation chains via Trace lookups
+    # + VSA unbinding as fallback. Complementary to PPR (probabilistic)
+    # — PPR answers "what else might be relevant?", structural query
+    # answers "exactly follow this chain."
+    structural_query_enabled: bool = True
+
+    # --- Hopfield sparse-softmax cleanup (modernized cleanup memory) -----
+    # When True, the VSA cleanup memory uses sparse-softmax attention
+    # instead of plain softmax for noise recovery. Sparse softmax keeps
+    # only the top-k highest attention weights per recall step, which is
+    # more robust to outlier codebook entries (HMS-style improvement
+    # over Ramsauer 2020's plain softmax).
+    hopfield_sparse_softmax: bool = True
+    hopfield_sparse_topk: int = 16   # top-k weights kept per recall step
 
     # --- Active reconstruction (MRAgent ICML 2026) ---------------------------
     # When True, the reader exposes a `reconstruct()` method that runs an
@@ -162,6 +229,14 @@ class Config:
     prf_topn: int = 3                   # how many top hits for PRF mean
 
     # --- index ----------------------------------------------------------
+    # Which proximity-index backend the memory palace uses for ANN search
+    # over hologram vectors. See INDEX_BACKENDS at the top of this file
+    # for the full menu. Default "quadrant" — the existing page-clustered
+    # log-depth 2-means tree. "nsg" switches to the Navigating Spreading-
+    # out Graph (Fu et al. VLDB 2019) — sparser edges, lower query latency
+    # at high recall, slower build. "flat" is the exact brute-force
+    # reference path (no approximation).
+    index_backend: str = "quadrant"
     index_threshold: int = 2048        # build tree when N >= this
     index_leaf_size: int = 512
     index_branch: int = 8
@@ -206,6 +281,17 @@ class Config:
     rate_limit_rps: float = 50.0        # REST server, requests/second/key
     rate_limit_burst: int = 100
 
+    # --- ZK-SQL proofs (Halo2/PLONKish-inspired, pure-Python) ----------------
+    # When True, the MCP server exposes `contextm_zk_sql_proof` (membership /
+    # count / sum / avg / min / max proofs over the Trace without revealing
+    # the underlying facts). Default OFF — proof generation is O(N) in trace
+    # size, opt-in. The verifier is sublinear (commitment check is O(1) hash
+    # equality + O(1) HMAC). The prover holds an HMAC key (ZK_SQL_KEY in the
+    # trace kv store) and signs each transcript; this is NOT a cryptographic
+    # SNARK (BLAKE3 commitments are not homomorphic), but it demonstrates the
+    # API surface that a production Halo2/KZG backend would expose.
+    zk_sql_enabled: bool = False
+
     def __post_init__(self) -> None:
         if self.codec not in CODECS:
             raise ValueError(f"codec must be one of {CODECS}, got {self.codec!r}")
@@ -213,6 +299,10 @@ class Config:
             raise ValueError(f"vsa_mode must be one of {VSA_MODES}, got {self.vsa_mode!r}")
         if self.dims <= 0 or self.dims % 8:
             raise ValueError("dims must be a positive multiple of 8")
+        if self.index_backend not in INDEX_BACKENDS:
+            raise ValueError(
+                f"index_backend must be one of {INDEX_BACKENDS}, "
+                f"got {self.index_backend!r}")
 
     # Environment overrides (12-factor friendly for MCP server / edge daemon)
     @classmethod
@@ -237,6 +327,10 @@ class Config:
                                                cfg.encryption_at_rest)
         if aa := os.environ.get("CONTEXT_M_AUDIT"):
             cfg.audit_actions = aa
+        # Allow flipping the index backend via env (e.g. CONTEXT_M_INDEX_BACKEND=nsg
+        # for high-recall cloud deployments where the build cost is amortized).
+        if ib := os.environ.get("CONTEXT_M_INDEX_BACKEND"):
+            cfg.index_backend = ib
         # Production nightly-cron flips. The helm CronJob template sets
         # CONTEXT_M_FADE=true and CONTEXT_M_TMT=true so the batch process
         # runs the FadeMem sweep + TiMem TMT hierarchy build on top of the
@@ -250,6 +344,31 @@ class Config:
         if os.environ.get("CONTEXT_M_RECONSTRUCT") is not None:
             cfg.reconstruct_enabled = _env_bool(
                 "CONTEXT_M_RECONSTRUCT", cfg.reconstruct_enabled)
+        # HMS Cognition Engine — opt-in self-organization. The helm
+        # CronJob template sets CONTEXT_M_COGNITION=true so the batch
+        # process also runs PatternScanner + AbstractionEngine +
+        # GapDetector + HypothesisEngine + AnalogyDetector on top of
+        # the standard consolidate pass.
+        if os.environ.get("CONTEXT_M_COGNITION") is not None:
+            cfg.cognition_enabled = _env_bool(
+                "CONTEXT_M_COGNITION", cfg.cognition_enabled)
+        # Enterprise provenance standards. Opt-in — when true, every
+        # commit is wrapped in a COSE Sign1 envelope (RFC 9052) and
+        # ranges can be exported as W3C VC / SCITT statements.
+        if os.environ.get("CONTEXT_M_PROVENANCE") is not None:
+            cfg.provenance_enabled = _env_bool(
+                "CONTEXT_M_PROVENANCE", cfg.provenance_enabled)
+        # ZK-SQL proofs (PoneglyphDB-style PLONKish). Opt-in.
+        if os.environ.get("CONTEXT_M_ZK_SQL") is not None:
+            cfg.zk_sql_enabled = _env_bool(
+                "CONTEXT_M_ZK_SQL", cfg.zk_sql_enabled)
+        # Polyglot encoder for non-English text. Opt-in — production
+        # deployments that ingest CJK / Indic / Arabic / Cyrillic text
+        # flip this on so HashingEmbedder falls back to PolyglotEncoder
+        # for >30% non-ASCII text instead of emitting a constant
+        # [1,0,0,...] vector that breaks retrieval (Tier-1 bug).
+        if os.environ.get("CONTEXT_M_LABSE") is not None:
+            cfg.labse_enabled = _env_bool("CONTEXT_M_LABSE", cfg.labse_enabled)
         return cfg
 
     def to_dict(self) -> dict:

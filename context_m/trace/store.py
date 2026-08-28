@@ -434,6 +434,16 @@ class TraceStore:
                               [tuple(r.values()) for r in rows])
         return len(rows)
 
+    def update_commit_n_facts(self, commit_id: str, n_facts: int) -> None:
+        """Update the n_facts counter on a commit (after cognition engine
+        appends derived facts post-creation)."""
+        if not commit_id:
+            return
+        self.conn.execute(
+            "UPDATE commits SET n_facts = n_facts + ? WHERE id=?",
+            (n_facts, commit_id))
+        self._maybe_commit()
+
     def get_fact(self, fact_id: str) -> Fact | None:
         row = self.conn.execute(f"SELECT {FACT_COLUMNS} FROM facts WHERE id=?", (fact_id,)).fetchone()
         return Fact.from_row(dict(row)) if row else None

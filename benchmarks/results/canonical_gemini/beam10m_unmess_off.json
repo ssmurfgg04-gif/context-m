@@ -1,0 +1,1128 @@
+{
+  "summary": {
+    "n_personas": 10,
+    "n_queries": 40,
+    "n_facts": 60,
+    "det_judge_prec_at_5": 0.165,
+    "gemini_judge_prec_at_5": 0.165,
+    "agreement_within_half": 1.0,
+    "gemini_model": "none (fallback to det)",
+    "judged_by": "deterministic_nugget",
+    "duration_s": 0.0
+  },
+  "results": [
+    {
+      "user_id": "alice",
+      "query": "Where does Alice work?",
+      "nuggets": [
+        "Google"
+      ],
+      "top5": [
+        "Alice | works_at | Google",
+        "Alice | name | Alice",
+        "Alice | prefers | Python",
+        "Alice | lives_in | Toronto",
+        "Alice | moved_to | Mountain View"
+      ]
+    },
+    {
+      "user_id": "alice",
+      "query": "What is Alice's role?",
+      "nuggets": [
+        "senior engineer"
+      ],
+      "top5": [
+        "Alice | name | Alice",
+        "Alice | works_at | Google",
+        "Alice | prefers | Python",
+        "Alice | lives_in | Toronto",
+        "Alice | moved_to | Mountain View"
+      ]
+    },
+    {
+      "user_id": "alice",
+      "query": "Where does Alice live?",
+      "nuggets": [
+        "Toronto",
+        "Mountain View"
+      ],
+      "top5": [
+        "Alice | lives_in | Toronto",
+        "Alice | name | Alice",
+        "Alice | works_at | Google",
+        "Alice | moved_to | Mountain View",
+        "Alice | prefers | Python"
+      ]
+    },
+    {
+      "user_id": "alice",
+      "query": "What programming language does Alice prefer?",
+      "nuggets": [
+        "Python"
+      ],
+      "top5": [
+        "Alice | prefers | Python",
+        "Alice | name | Alice",
+        "Alice | works_at | Google",
+        "Alice | lives_in | Toronto",
+        "Alice | moved_to | Mountain View"
+      ]
+    },
+    {
+      "user_id": "bob",
+      "query": "Where does Bob work?",
+      "nuggets": [
+        "Stripe"
+      ],
+      "top5": [
+        "Bob | works_at | Stripe",
+        "Bob | name | Bob",
+        "Bob | lives_in | Berlin",
+        "Bob | speaks | German"
+      ]
+    },
+    {
+      "user_id": "bob",
+      "query": "What is Bob's role?",
+      "nuggets": [
+        "product manager"
+      ],
+      "top5": [
+        "Bob | speaks | German",
+        "Bob | lives_in | Berlin",
+        "Bob | name | Bob",
+        "Bob | works_at | Stripe"
+      ]
+    },
+    {
+      "user_id": "bob",
+      "query": "Where does Bob live?",
+      "nuggets": [
+        "Berlin"
+      ],
+      "top5": [
+        "Bob | lives_in | Berlin",
+        "Bob | name | Bob",
+        "Bob | works_at | Stripe",
+        "Bob | speaks | German"
+      ]
+    },
+    {
+      "user_id": "bob",
+      "query": "What languages does Bob speak?",
+      "nuggets": [
+        "German"
+      ],
+      "top5": [
+        "Bob | speaks | German",
+        "Bob | name | Bob",
+        "Bob | lives_in | Berlin",
+        "Bob | works_at | Stripe"
+      ]
+    },
+    {
+      "user_id": "carol",
+      "query": "Where does Carol work?",
+      "nuggets": [
+        "Anthropic"
+      ],
+      "top5": [
+        "Carol | works_at | Anthropic",
+        "Carol | name | Carol",
+        "Carol | prefers | Rust",
+        "Carol | lives_in | San Francisco",
+        "San Francisco | mentioned | San Francisco"
+      ]
+    },
+    {
+      "user_id": "carol",
+      "query": "What is Carol's role?",
+      "nuggets": [
+        "research scientist"
+      ],
+      "top5": [
+        "Carol | name | Carol",
+        "Carol | works_at | Anthropic",
+        "Carol | prefers | Rust",
+        "Carol | lives_in | San Francisco",
+        "San Francisco | mentioned | San Francisco"
+      ]
+    },
+    {
+      "user_id": "carol",
+      "query": "Where does Carol live?",
+      "nuggets": [
+        "San Francisco"
+      ],
+      "top5": [
+        "Carol | name | Carol",
+        "Carol | prefers | Rust",
+        "Carol | works_at | Anthropic",
+        "Carol | lives_in | San Francisco",
+        "San Francisco | mentioned | San Francisco"
+      ]
+    },
+    {
+      "user_id": "carol",
+      "query": "What programming language does Carol prefer?",
+      "nuggets": [
+        "Rust"
+      ],
+      "top5": [
+        "Carol | prefers | Rust",
+        "Carol | name | Carol",
+        "Carol | works_at | Anthropic",
+        "Carol | lives_in | San Francisco",
+        "San Francisco | mentioned | San Francisco"
+      ]
+    },
+    {
+      "user_id": "dave",
+      "query": "Where does Dave work?",
+      "nuggets": [
+        "OpenAI"
+      ],
+      "top5": [
+        "Dave | works_at | OpenAI",
+        "Dave | name | Dave",
+        "Dave | lives_in | Seattle",
+        "Dave | speaks | Japanese",
+        "Dave | likes | hiking"
+      ]
+    },
+    {
+      "user_id": "dave",
+      "query": "What is Dave's role?",
+      "nuggets": [
+        "ML engineer"
+      ],
+      "top5": [
+        "Dave | name | Dave",
+        "Dave | works_at | OpenAI",
+        "Dave | likes | hiking",
+        "Dave | speaks | Japanese",
+        "Dave | lives_in | Seattle"
+      ]
+    },
+    {
+      "user_id": "dave",
+      "query": "Where does Dave live?",
+      "nuggets": [
+        "Seattle"
+      ],
+      "top5": [
+        "Dave | lives_in | Seattle",
+        "Dave | name | Dave",
+        "Dave | likes | hiking",
+        "Dave | works_at | OpenAI",
+        "Dave | speaks | Japanese"
+      ]
+    },
+    {
+      "user_id": "dave",
+      "query": "What does Dave like to do?",
+      "nuggets": [
+        "hiking"
+      ],
+      "top5": [
+        "Dave | likes | hiking",
+        "Dave | works_at | OpenAI",
+        "Dave | name | Dave",
+        "Dave | lives_in | Seattle",
+        "Dave | speaks | Japanese"
+      ]
+    },
+    {
+      "user_id": "eve",
+      "query": "Where does Eve work?",
+      "nuggets": [
+        "DeepMind"
+      ],
+      "top5": [
+        "Eve | works_at | DeepMind",
+        "Eve | name | Eve",
+        "Eve | prefers | TypeScript",
+        "Eve | lives_in | London"
+      ]
+    },
+    {
+      "user_id": "eve",
+      "query": "What is Eve's role?",
+      "nuggets": [
+        "research lead"
+      ],
+      "top5": [
+        "Eve | prefers | TypeScript",
+        "Eve | works_at | DeepMind",
+        "Eve | lives_in | London",
+        "Eve | name | Eve"
+      ]
+    },
+    {
+      "user_id": "eve",
+      "query": "Where does Eve live?",
+      "nuggets": [
+        "London"
+      ],
+      "top5": [
+        "Eve | lives_in | London",
+        "Eve | name | Eve",
+        "Eve | prefers | TypeScript",
+        "Eve | works_at | DeepMind"
+      ]
+    },
+    {
+      "user_id": "eve",
+      "query": "What programming language does Eve prefer?",
+      "nuggets": [
+        "TypeScript"
+      ],
+      "top5": [
+        "Eve | prefers | TypeScript",
+        "Eve | name | Eve",
+        "Eve | lives_in | London",
+        "Eve | works_at | DeepMind"
+      ]
+    },
+    {
+      "user_id": "frank",
+      "query": "Where does Frank work?",
+      "nuggets": [
+        "Hugging Face"
+      ],
+      "top5": [
+        "Frank | works_at | Hugging Face",
+        "Frank | name | Frank",
+        "Frank | speaks | French",
+        "Frank | lives_in | Paris",
+        "Frank | likes | open source"
+      ]
+    },
+    {
+      "user_id": "frank",
+      "query": "What is Frank's role?",
+      "nuggets": [
+        "developer advocate"
+      ],
+      "top5": [
+        "Frank | name | Frank",
+        "Frank | lives_in | Paris",
+        "Frank | speaks | French",
+        "Frank | works_at | Hugging Face",
+        "Frank | likes | open source"
+      ]
+    },
+    {
+      "user_id": "frank",
+      "query": "Where does Frank live?",
+      "nuggets": [
+        "Paris"
+      ],
+      "top5": [
+        "Frank | lives_in | Paris",
+        "Frank | name | Frank",
+        "Frank | speaks | French",
+        "Frank | works_at | Hugging Face",
+        "Frank | likes | open source"
+      ]
+    },
+    {
+      "user_id": "frank",
+      "query": "What does Frank like?",
+      "nuggets": [
+        "open source"
+      ],
+      "top5": [
+        "Frank | name | Frank",
+        "Frank | likes | open source",
+        "Frank | speaks | French",
+        "Frank | works_at | Hugging Face",
+        "Frank | lives_in | Paris"
+      ]
+    },
+    {
+      "user_id": "grace",
+      "query": "Where does Grace work?",
+      "nuggets": [
+        "Mistral"
+      ],
+      "top5": [
+        "Grace | works_at | Mistral",
+        "Grace | name | Grace",
+        "Grace | prefers | C++",
+        "Grace | lives_in | Paris"
+      ]
+    },
+    {
+      "user_id": "grace",
+      "query": "What is Grace's role?",
+      "nuggets": [
+        "research engineer"
+      ],
+      "top5": [
+        "Grace | name | Grace",
+        "Grace | works_at | Mistral",
+        "Grace | lives_in | Paris",
+        "Grace | prefers | C++"
+      ]
+    },
+    {
+      "user_id": "grace",
+      "query": "Where does Grace live?",
+      "nuggets": [
+        "Paris"
+      ],
+      "top5": [
+        "Grace | lives_in | Paris",
+        "Grace | name | Grace",
+        "Grace | prefers | C++",
+        "Grace | works_at | Mistral"
+      ]
+    },
+    {
+      "user_id": "grace",
+      "query": "What programming language does Grace prefer?",
+      "nuggets": [
+        "C++"
+      ],
+      "top5": [
+        "Grace | prefers | C++",
+        "Grace | name | Grace",
+        "Grace | works_at | Mistral",
+        "Grace | lives_in | Paris"
+      ]
+    },
+    {
+      "user_id": "heidi",
+      "query": "Where does Heidi work?",
+      "nuggets": [
+        "Cohere"
+      ],
+      "top5": [
+        "Heidi | works_at | Cohere",
+        "Heidi | name | Heidi",
+        "Heidi | speaks | Mandarin",
+        "Heidi | lives_in | Toronto",
+        "Heidi | likes | machine learning"
+      ]
+    },
+    {
+      "user_id": "heidi",
+      "query": "What is Heidi's role?",
+      "nuggets": [
+        "data scientist"
+      ],
+      "top5": [
+        "Heidi | name | Heidi",
+        "Heidi | works_at | Cohere",
+        "Heidi | speaks | Mandarin",
+        "Heidi | lives_in | Toronto",
+        "Heidi | likes | machine learning"
+      ]
+    },
+    {
+      "user_id": "heidi",
+      "query": "Where does Heidi live?",
+      "nuggets": [
+        "Toronto"
+      ],
+      "top5": [
+        "Heidi | lives_in | Toronto",
+        "Heidi | name | Heidi",
+        "Heidi | speaks | Mandarin",
+        "Heidi | works_at | Cohere",
+        "Heidi | likes | machine learning"
+      ]
+    },
+    {
+      "user_id": "heidi",
+      "query": "What does Heidi like?",
+      "nuggets": [
+        "machine learning"
+      ],
+      "top5": [
+        "Heidi | likes | machine learning",
+        "Heidi | name | Heidi",
+        "Heidi | speaks | Mandarin",
+        "Heidi | works_at | Cohere",
+        "Heidi | lives_in | Toronto"
+      ]
+    },
+    {
+      "user_id": "ivan",
+      "query": "Where does Ivan work?",
+      "nuggets": [
+        "Stability AI"
+      ],
+      "top5": [
+        "Ivan | name | Ivan",
+        "Ivan | works_at | Stability AI",
+        "Ivan | prefers | Go",
+        "Ivan | lives_in | Amsterdam",
+        "Stability AI | mentioned | Stability AI"
+      ]
+    },
+    {
+      "user_id": "ivan",
+      "query": "What is Ivan's role?",
+      "nuggets": [
+        "infrastructure engineer"
+      ],
+      "top5": [
+        "Ivan | name | Ivan",
+        "Ivan | lives_in | Amsterdam",
+        "Ivan | works_at | Stability AI",
+        "Ivan | prefers | Go",
+        "Stability AI | mentioned | Stability AI"
+      ]
+    },
+    {
+      "user_id": "ivan",
+      "query": "Where does Ivan live?",
+      "nuggets": [
+        "Amsterdam"
+      ],
+      "top5": [
+        "Ivan | name | Ivan",
+        "Ivan | lives_in | Amsterdam",
+        "Ivan | prefers | Go",
+        "Ivan | works_at | Stability AI",
+        "Stability AI | mentioned | Stability AI"
+      ]
+    },
+    {
+      "user_id": "ivan",
+      "query": "What programming language does Ivan prefer?",
+      "nuggets": [
+        "Go"
+      ],
+      "top5": [
+        "Ivan | prefers | Go",
+        "Ivan | name | Ivan",
+        "Ivan | lives_in | Amsterdam",
+        "Ivan | works_at | Stability AI",
+        "Stability AI | mentioned | Stability AI"
+      ]
+    },
+    {
+      "user_id": "judy",
+      "query": "Where does Judy work?",
+      "nuggets": [
+        "Meta"
+      ],
+      "top5": [
+        "Judy | works_at | Meta",
+        "Judy | name | Judy",
+        "Judy | likes | mentoring",
+        "Judy | lives_in | Menlo Park",
+        "Judy | speaks | Spanish"
+      ]
+    },
+    {
+      "user_id": "judy",
+      "query": "What is Judy's role?",
+      "nuggets": [
+        "engineering manager"
+      ],
+      "top5": [
+        "Judy | name | Judy",
+        "Judy | speaks | Spanish",
+        "Judy | works_at | Meta",
+        "Judy | likes | mentoring",
+        "Judy | lives_in | Menlo Park"
+      ]
+    },
+    {
+      "user_id": "judy",
+      "query": "Where does Judy live?",
+      "nuggets": [
+        "Menlo Park"
+      ],
+      "top5": [
+        "Judy | name | Judy",
+        "Judy | lives_in | Menlo Park",
+        "Judy | works_at | Meta",
+        "Judy | likes | mentoring",
+        "Judy | speaks | Spanish"
+      ]
+    },
+    {
+      "user_id": "judy",
+      "query": "What does Judy like?",
+      "nuggets": [
+        "mentoring"
+      ],
+      "top5": [
+        "Judy | likes | mentoring",
+        "Judy | name | Judy",
+        "Judy | works_at | Meta",
+        "Judy | lives_in | Menlo Park",
+        "Judy | speaks | Spanish"
+      ]
+    }
+  ],
+  "det_scores": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ],
+  "gemini_scores": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  ]
+}
