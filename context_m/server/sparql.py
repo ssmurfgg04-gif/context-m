@@ -913,8 +913,9 @@ class SparqlServer:
         self._server.daemon_threads = True
         print(f"[sparql] listening on http://{self.host}:{self.port}/"
               f"  (SPARQL 1.1 Protocol; thread-per-request)")
-        print(f"[sparql]   auth: {'on (Bearer + sparql.query)'
-                              if self.require_auth else 'OFF (loopback only)'}")
+        auth_msg = ("on (Bearer + sparql.query)" if self.require_auth
+                    else "OFF (loopback only)")
+        print(f"[sparql]   auth: {auth_msg}")
         print(f"[sparql]   user_id: {self.user_id or '(all users)'}")
         print(f"[sparql]   try: curl 'http://{self.host}:{self.port}/"
               f"?query=SELECT%20%3Fs%20%3Fp%20%3Fo%20WHERE%20%7B%20%3Fs%20"
