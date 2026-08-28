@@ -46,12 +46,16 @@ def consolidate(store, palace=None, prefetcher=None, *,
                 retire_grace_days: int = 365,
                 defrag_palace: bool = True,
                 retrain_prefetcher: bool = True,
-                dry_run: bool = False) -> dict:
+                run_fade: bool = True,
+                run_tmt: bool = False,
+                dry_run: bool = False,
+                fade_cfg: dict | None = None,
+                tmt_cfg: dict | None = None) -> dict:
     """Run a single consolidation pass.
 
     Returns a stats dict:
         {merged_pairs, retired_facts, palace_defragged,
-         prefetcher_retrained, commit_id, dry_run}
+         prefetcher_retrained, fade_stats, tmt_stats, commit_id, dry_run}
 
     Parameters:
         store           — TraceStore
@@ -64,6 +68,10 @@ def consolidate(store, palace=None, prefetcher=None, *,
                             days are retired (deactivated)
         defrag_palace   — rebuild the palace packed matrix from active facts
         retrain_prefetcher — rebuild the MBTB from access_count stats
+        run_fade        — also run FadeMem sweep (decay + deactivate + merge)
+        run_tmt         — also run TiMem TMT hierarchy build
+        fade_cfg        — kwargs for fade_sweep (lambda_, thresholds, etc.)
+        tmt_cfg         — kwargs for tmt_build (cluster mins, etc.)
         dry_run         — compute the changes but don't apply them
     """
     stats = {
@@ -71,6 +79,8 @@ def consolidate(store, palace=None, prefetcher=None, *,
         "retired_facts": 0,
         "palace_defragged": False,
         "prefetcher_retrained": False,
+        "fade_stats": None,
+        "tmt_stats": None,
         "commit_id": None,
         "dry_run": dry_run,
     }
@@ -191,6 +201,50 @@ def consolidate(store, palace=None, prefetcher=None, *,
             stats["prefetcher_retrained"] = True
         except Exception:
             pass
+
+    # ---------- 5. FadeMem sweep (decay + deactivate + cluster merge) ----
+    # Biologically-inspired forgetting: exponential decay on retention
+    # scores, with access-driven reconsolidation (frequently-retrieved
+    # facts resist decay). Deactivates facts whose retention_score drops
+    # below fade_deactivate_threshold; merges clusters of low-retention
+    # siblings. Bi-temporal safe: only is_active flips.
+    if run_fade and not dry_run:
+        try:
+            from context_m.trace.fade import fade_sweep
+            fade_kwargs = dict(
+                lambda_=0.05,
+                access_boost=0.5,
+                contradiction_penalty=0.25,
+                deactivate_threshold=0.10,
+                merge_threshold=0.30,
+                merge_similarity=merge_threshold,
+                user_id=user_id,
+                dry_run=dry_run,
+            )
+            if fade_cfg:
+                fade_kwargs.update(fade_cfg)
+            stats["fade_stats"] = fade_sweep(store, palace, **fade_kwargs)
+        except Exception as e:
+            stats["fade_stats"] = {"error": str(e)}
+
+    # ---------- 6. TiMem TMT hierarchy build -----------------------------
+    # Episodic → session → day → persona abstraction. Each higher level
+    # is a derived fact with DERIVED_FROM edges back to its constituents.
+    # Retrieval can short-circuit to the appropriate level based on
+    # query complexity.
+    if run_tmt and not dry_run:
+        try:
+            from context_m.trace.tmt import tmt_build
+            tmt_kwargs = dict(
+                session_cluster_mins=5,
+                persona_min_sessions=3,
+                user_id=user_id,
+            )
+            if tmt_cfg:
+                tmt_kwargs.update(tmt_cfg)
+            stats["tmt_stats"] = tmt_build(store, palace, **tmt_kwargs)
+        except Exception as e:
+            stats["tmt_stats"] = {"error": str(e)}
 
     if not dry_run:
         store.end_batch()

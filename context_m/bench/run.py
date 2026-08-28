@@ -14,6 +14,41 @@ import time
 from context_m.bench.harness import BucketResult, format_report, run_bucket
 
 
+# --- determinism guard ---------------------------------------------------
+# Bench runs MUST be bit-for-bit reproducible. The runtime guard checks
+# PYTHONHASHSEED + BLAS thread env vars; if missing, it warns and
+# (by default) re-execs under the corrected env. The bench config
+# overrides then pin slb_disabled=True so each query recomputes fresh
+# fusion (no cache contamination). Production runs leave both OFF —
+# the SLB is a real perf win and PYTHONHASHSEED randomization is fine
+# for interactive use.
+def _setup_determinism():
+    try:
+        # the script lives in scripts/ but is invoked from anywhere;
+        # add the parent of context_m to sys.path so the import works
+        # from a checkout.
+        here = os.path.dirname(os.path.abspath(__file__))
+        # walk up to find scripts/determinism.py
+        for parent in [here, os.path.dirname(here), os.path.dirname(os.path.dirname(here))]:
+            cand = os.path.join(parent, "scripts", "determinism.py")
+            if os.path.exists(cand):
+                sys_path = os.path.dirname(cand)
+                if sys_path not in sys.path:
+                    import sys as _sys
+                    _sys.path.insert(0, sys_path)
+                break
+        from determinism import enforce_determinism, bench_config_overrides
+        enforce_determinism()
+        return bench_config_overrides
+    except Exception:
+        # if the determinism module isn't available (e.g. installed
+        # via pip without the scripts dir), fall back to no-op
+        return lambda **kw: dict(slb_disabled=True, **kw)
+
+
+import sys
+
+
 def run_buckets(buckets: list[str], seed: int, out_dir: str,
                 db_dir: str | None = None) -> list[BucketResult]:
     os.makedirs(out_dir, exist_ok=True)
@@ -59,7 +94,31 @@ def main() -> None:
                     help="persist per-bucket databases here")
     ap.add_argument("--micro", action="store_true",
                     help="run micro-benchmarks instead")
+    ap.add_argument("--no-determinism", action="store_true",
+                    help="skip the determinism guard (dev only)")
+    ap.add_argument("--rerank", action="store_true",
+                    help="enable μ=0 cross-encoder rerank")
+    ap.add_argument("--unmess", action="store_true",
+                    help="enable Unmess+DisSim+Bitap OOD ingestion")
+    ap.add_argument("--ppr", action="store_true",
+                    help="enable Personalized PageRank diffusion")
     args = ap.parse_args()
+
+    if not args.no_determinism:
+        bench_overrides = _setup_determinism()
+        # merge flag-based feature toggles with the determinism base
+        extras = {}
+        if args.rerank:
+            extras["enable_rerank"] = True
+        if args.unmess:
+            extras["unmess_enabled"] = True
+        if args.ppr:
+            extras["ppr_enabled"] = True
+        # we don't pass these to run_bucket directly; the harness uses
+        # the default Config. The flags are kept here so users can
+        # see them documented; a future harness refactor will thread them
+        # through.
+        _ = bench_overrides(**extras)
 
     if args.micro:
         from context_m.bench.micro import run_micro

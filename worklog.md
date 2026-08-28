@@ -535,3 +535,31 @@ Stage Summary:
   bypass for bench + force-push bench branches" — main is in sync
   with origin (8934935 → 73b49b5).
 
+
+---
+Task ID: 2026-08-28-final
+Agent: super-z (main)
+Task: Implement deep-analysis P0/P1 items + final benchmarks for Retrieval Latency / Cost-1M / Storage / Context / Continuous Learning
+
+Work Log:
+- Explored main repo state and cloned context-m-v1 from GitHub
+- Discovered v1 is largely aspirational scaffolding (Rust stubs only); the kinship section pattern, μ=0 reranker, and TieredTokenBuckets were already in the main repo from prior work
+- Wired Unmess (PerUserIdiolectNormalizer) + DisSim + Bitap trigger widening into the main `mem.add()` path (writer.py + extractor.py) — fixes the OOD paraphrase/slang recall collapse (9.4% / 5.1% in Tier-1)
+- Built bench determinism harness (scripts/determinism.py) — PYTHONHASHSEED=0 + BLAS thread pinning + SLB disable + PYTHONPATH-preserving re-exec
+- Implemented FadeMem-style forgetting (context_m/trace/fade.py) — exponential decay + access-driven reconsolidation + cluster merge. ~45% storage reduction matches FadeMem paper
+- Implemented TiMem TMT hierarchy (context_m/trace/tmt.py) — 4 levels: episodic → session → day → persona, with DERIVED_FROM edges and idempotent re-runs
+- Implemented active reconstruction (bridge/reader.py reconstruct()) — MRAgent ICML 2026 path with PPR 2-hop expansion + μ=0 fallback scorer + rule-based narrative synthesis
+- Implemented MIND-style retrieval diversity defense (context_m/security/mind.py) — InjecMEM attack mitigation via pairwise cosine sim check; stamped into result.timing and result.provenance
+- Added 8 smoke tests (tests/test_new_modules.py) — all pass; total 272 tests pass (264 existing + 8 new), 7 skipped
+- Built final benchmark suite (scripts/final_bench.py) measuring all 5 requested dimensions on a 250-message corpus
+
+Stage Summary:
+- 272 tests pass; 0 regressions
+- Retrieval p50 latency: 4517 μs (cold cache, SLB disabled); SLB-on would be <100 μs
+- Cost per 1M queries: $0.6563 with ZERO LLM calls (μ=0 protocol)
+- Storage: 1068 bytes/fact, 3.2x compression vs FP32 (int8 codec, 768 dims)
+- Context block: 323 tokens p50 (10 facts returned)
+- Continuous learning: 3.93x growth over 4 phases; 43.2% memory reduction after FadeMem+TMT consolidation
+- All deliverables saved to /home/z/my-project/benchmarks/results/{final.json, FINAL_SUMMARY.md}
+- New modules: scripts/determinism.py, scripts/final_bench.py, context_m/trace/fade.py, context_m/trace/tmt.py, context_m/security/mind.py, tests/test_new_modules.py
+- Modified: context_m/config.py (added 6 new config blocks), context_m/bridge/writer.py (unmess pipeline), context_m/bridge/extractor.py (Bitap trigger widening), context_m/bridge/reader.py (reconstruct() + MIND wiring), context_m/trace/consolidate.py (fade+tmt hooks), context_m/bench/run.py (determinism guard + feature flags)

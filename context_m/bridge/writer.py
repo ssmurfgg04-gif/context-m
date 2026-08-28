@@ -107,6 +107,45 @@ class MemoryWriter:
             corpus.append(text)
 
     # ------------------------------------------------------------------
+    def _unmess_cache(self) -> dict:
+        """Lazy-init the unmess (idiolect + dissim) cache on this writer.
+        Reuses the chaos-mode pattern so production and chaos paths share
+        the same slang dictionary — observations accumulate across both."""
+        if not hasattr(self, "_unmess"):
+            from context_m.text.dissim import DisSimSplitter
+            from context_m.text.embedder import HashingEmbedder
+            from context_m.text.idiolect import PerUserIdiolectNormalizer
+            embedder = HashingEmbedder(self.palace.dims, self.palace.cfg.seed)
+            self._unmess = {
+                "idiolect": PerUserIdiolectNormalizer(embedder),
+                "dissim": DisSimSplitter(max_depth=self.cfg.unmess_max_depth),
+                "embedder": embedder,
+            }
+        return self._unmess
+
+    def _unmess_text(self, text: str, user_id: str) -> list[str]:
+        """Run the Unmess pipeline on a single message, returning clauses.
+
+        1. observe idiolect (slang dictionary grows)
+        2. normalize text-speak + kNN slang replacement
+        3. DisSim recursive syntactic split into simple clauses
+        Returns a list of clause strings (>=1). Falls back to the raw
+        text on any error so the path never blocks ingest.
+        """
+        if not self.cfg.unmess_enabled:
+            return [text]
+        try:
+            cache = self._unmess_cache()
+            idiolect = cache["idiolect"]
+            dissim = cache["dissim"]
+            idiolect.observe(user_id, text)
+            norm = idiolect.normalize(user_id, text)
+            clauses = [c.text for c in (dissim.simplify_text(norm) or [norm])]
+            return clauses if clauses else [norm]
+        except Exception:
+            return [text]
+
+    # ------------------------------------------------------------------
     def add(self, messages, *, user_id: str = "default",
             agent_id: str | None = None, run_id: str | None = None,
             ts: datetime | None = None, source: str = "",
@@ -139,7 +178,25 @@ class MemoryWriter:
                 subject_name=self._name_of(user_id),
                 lexicon=self._lexicon(user_id))
 
-            candidates = self.extractor.extract(text, ctx)
+            # --- OOD ingestion: Unmess + DisSim + Bitap ----------------
+            # Pre-process the raw text through the unmess pipeline before
+            # running the deterministic extractor. This is the fix for the
+            # Tier-1 OOD catastrophe (paraphrase 9.4%, slang 5.1% recall):
+            #   * idiolect normalizer: "u"→"you", "bruh"→"friend" if user
+            #     co-occurred, "wrks"→"works" via kNN over vocab
+            #   * DisSim splits compound sentences so each clause matches
+            #     its own pattern instead of the regex missing all of them
+            # The extractor's internal Bitap trigger widening handles
+            # misspelled trigger words. When unmess is OFF (bench baseline
+            # config), we run the raw text through the extractor unchanged.
+            clauses = self._unmess_text(text, user_id) \
+                if self.cfg.unmess_enabled else [text]
+
+            candidates = []
+            for clause in clauses:
+                if not clause or not clause.strip():
+                    continue
+                candidates.extend(self.extractor.extract(clause, ctx))
 
             for cand in candidates:
                 if cand.confidence < self.cfg.min_confidence:

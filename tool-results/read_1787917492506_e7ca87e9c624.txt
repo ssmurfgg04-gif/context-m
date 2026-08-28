@@ -1,0 +1,748 @@
+     1→"""The μ=0 extraction pattern library.
+     2→
+     3→High-precision syntactic patterns over Subject-Relation-Value triples:
+     4→first-person (user), third-person (entities), and assistant-turn
+     5→(second-person) forms, with temporal anchors resolved by bridge.dates.
+     6→Zero LLM calls — this is the deterministic perception layer that makes
+     7→BEAM-honest μ=0 ingest possible while competitors burn LLM extraction
+     8→at write time.
+     9→"""
+    10→
+    11→from __future__ import annotations
+    12→
+    13→import re
+    14→from dataclasses import dataclass, field
+    15→from datetime import datetime
+    16→
+    17→from context_m.bridge.dates import find_dates
+    18→
+    19→# ---------------------------------------------------------------- helpers
+    20→
+    21→# Case-sensitive (scoped — patterns compile with re.I for verbs, but
+    22→# entity values must keep their capitalization semantics): first word
+    23→# capitalized, subsequent words capitalized or internal to the name.
+    24→ORG = r"(?-i:[A-Z][\w&'.,-]*)(?:\s+(?-i:[A-Z])[\w&'.,-]*)*"
+    25→NAME = r"(?-i:[A-Z][a-zA-Z'-]+)(?:\s+(?-i:[A-Z])[a-zA-Z'-]+)?"
+    26→LOWERPH = r"[a-zA-Z][\w' +#.-]{1,44}"
+    27→
+    28→PRONOUNS = {"she", "he", "they", "it", "her", "him", "them"}
+    29→FIRST_PRONOUNS = {"i", "we", "me", "us", "my", "our"}
+    30→
+    31→ROLE_BLOCK = {
+    32→    "tired", "happy", "sad", "sorry", "sure", "okay", "ok", "fine",
+    33→    "glad", "ready", "here", "back", "busy", "excited", "curious",
+    34→    "confused", "hungry", "free", "done", "good", "great", "well",
+    35→    "not", "just", "still", "new", "all", "so", "very", "really",
+    36→}
+    37→
+    38→FAMILY_MAP = {
+    39→    "sister": "sibling", "brother": "sibling", "twin": "sibling",
+    40→    "mother": "parent", "mom": "parent", "father": "parent", "dad": "parent",
+    41→    "wife": "spouse", "husband": "spouse", "partner": "spouse",
+    42→    "daughter": "child", "son": "child", "cousin": "friend",
+    43→}
+    44→
+    45→IS_MY_MAP = {
+    46→    "sister": "sibling", "brother": "sibling", "mother": "parent",
+    47→    "mom": "parent", "father": "parent", "dad": "parent", "wife": "spouse",
+    48→    "husband": "spouse", "partner": "spouse", "friend": "friend",
+    49→    "colleague": "friend", "teammate": "friend", "cousin": "friend",
+    50→    "manager": "reports_to", "boss": "reports_to",
+    51→}
+    52→
+    53→
+    54→@dataclass
+    55→class Candidate:
+    56→    subject: str
+    57→    relation: str
+    58→    value: str
+    59→    confidence: float
+    60→    pattern: str
+    61→    span: tuple[int, int] = (0, 0)
+    62→    valid_from: str | None = None
+    63→    valid_to: str | None = None
+    64→    retraction: bool = False
+    65→    note: str = ""
+    66→
+    67→
+    68→@dataclass
+    69→class ExtractionContext:
+    70→    user_id: str = "default"
+    71→    agent_id: str | None = None
+    72→    run_id: str | None = None
+    73→    ts: datetime | None = None
+    74→    speaker: str = "user"          # user | assistant | system
+    75→    subject_name: str | None = None  # learned canonical name of the user
+    76→    lexicon: set[str] = field(default_factory=set)
+    77→
+    78→    @property
+    79→    def subject(self) -> str:
+    80→        return self.subject_name or f"user:{self.user_id}"
+    81→
+    82→
+    83→def clean_value(v: str) -> str:
+    84→    v = v.strip().strip('"\',.!?;:')
+    85→    v = re.sub(r"^(?:the|a|an)\s+", "", v, flags=re.I)
+    86→    v = re.sub(r"\s+", " ", v)
+    87→    v = v.strip().rstrip(".,!?;:")
+    88→    return v.strip()
+    89→
+    90→
+    91→def date_in(text: str, ts: datetime | None) -> str | None:
+    92→    if ts is None:
+    93→        return None
+    94→    ds = find_dates(text, ts)
+    95→    return ds[0]["iso"] if ds else None
+    96→
+    97→
+    98→# ---------------------------------------------------------------- patterns
+    99→# Each entry: (name, regex, handler(match, ctx, sent_span) -> list[Candidate])
+   100→# m.group("val") etc. Handlers return candidates with subject placeholder
+   101→# "SELF" resolved by the extractor to ctx.subject.
+   102→
+   103→PATTERNS: list[tuple[str, re.Pattern, object]] = []
+   104→
+   105→
+   106→def pattern(name: str, rx: str):
+   107→    compiled = re.compile(rx, re.I | re.M)
+   108→
+   109→    def deco(fn):
+   110→        PATTERNS.append((name, compiled, fn))
+   111→        return fn
+   112→
+   113→    return deco
+   114→
+   115→
+   116→# --- identity -------------------------------------------------------------
+   117→@pattern("name_intro", rf"\bmy name is\s+(?P<val>{NAME})")
+   118→def _name(m, ctx, sp, ts, sent):
+   119→    full = clean_value(m.group("val"))
+   120→    out = []
+   121→    if ctx.subject_name is None or ctx.subject_name.lower() != full.lower():
+   122→        out.append(Candidate("SELF", "name", full, 0.95, "name_intro", (sp[0] + m.start(), sp[0] + m.end())))
+   123→    parts = full.split()
+   124→    if len(parts) > 1 and len(parts[0]) > 2:
+   125→        out.append(Candidate(full, "alias", parts[0], 0.9, "name_intro_alias"))
+   126→    return out
+   127→
+   128→
+   129→@pattern("called", rf"\b(?:i am called|i'm called|call me|i go by|you can call me)\s+(?P<val>{NAME})")
+   130→def _called(m, ctx, sp, ts, sent):
+   131→    v = clean_value(m.group("val"))
+   132→    rel = "name" if ctx.subject_name is None else "alias"
+   133→    target = ctx.subject_name or "SELF"
+   134→    return [Candidate(target, rel, v, 0.9, "called")]
+   135→
+   136→
+   137→# --- employment ------------------------------------------------------------
+   138→WORK_AT = rf"(?P<val>{ORG})"
+   139→@pattern("works_at",
+   140→         rf"\bi\s+(?:(?:now|currently|these days)\s+)?(?:work|worked|working|'m working|am working)\s+(?:at|for)\s+(?:the\s+)?{WORK_AT}")
+   141→def _works(m, ctx, sp, ts, sent):
+   142→    v = clean_value(m.group("val"))
+   143→    vf = date_in(sent, ts) if re.search(r"\b(joined|started|got a job)\b", sent, re.I) else None
+   144→    return [Candidate("SELF", "works_at", v, 0.92, "works_at", valid_from=vf)]
+   145→
+   146→
+   147→@pattern("joined_org",
+   148→         rf"\bi\s+(?:joined|started(?:\s+working)?\s+at|got a job at|moved to a job at)\s+{WORK_AT}")
+   149→def _joined(m, ctx, sp, ts, sent):
+   150→    v = clean_value(m.group("val"))
+   151→    return [Candidate("SELF", "works_at", v, 0.92, "joined_org",
+   152→                      valid_from=date_in(sent, ts))]
+   153→
+   154→
+   155→@pattern("at_org", rf"\bi'?m\s+(?:now\s+|currently\s+|these days\s+)?at\s+(?P<val>{ORG})")
+   156→def _at_org(m, ctx, sp, ts, sent):
+   157→    v = clean_value(m.group("val"))
+   158→    return [Candidate("SELF", "works_at", v, 0.85, "at_org")]
+   159→
+   160→
+   161→@pattern("left_org",
+   162→         rf"\bi\s+(?:left|quit|resigned from|was laid off from|departed)\s+(?P<val>{ORG})")
+   163→def _left(m, ctx, sp, ts, sent):
+   164→    v = clean_value(m.group("val"))
+   165→    vf = date_in(sent, ts)
+   166→    return [Candidate("SELF", "left", v, 0.9, "left_org", valid_from=vf,
+   167→                      retraction=True)]
+   168→
+   169→
+   170→@pattern("no_longer", rf"\bi\s+(?:no longer|don'?t|do not)\s+work\s+(?:at|for)\s+(?P<val>{ORG})")
+   171→def _no_longer(m, ctx, sp, ts, sent):
+   172→    v = clean_value(m.group("val"))
+   173→    return [Candidate("SELF", "left", v, 0.88, "no_longer", retraction=True)]
+   174→
+   175→
+   176→@pattern("no_longer_at", rf"\bi'?m\s+no longer\s+(?:at|with)\s+(?P<val>{ORG})")
+   177→def _no_longer_at(m, ctx, sp, ts, sent):
+   178→    v = clean_value(m.group("val"))
+   179→    return [Candidate("SELF", "left", v, 0.88, "no_longer_at", retraction=True)]
+   180→
+   181→
+   182→@pattern("role", rf"\bi\s+(?:work\s+as|am|'m)\s+(?:a|an|the)\s+(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for|and|but|where)\b)")
+   183→def _role(m, ctx, sp, ts, sent):
+   184→    v = clean_value(m.group("val"))
+   185→    if v.lower() in ROLE_BLOCK:
+   186→        return []
+   187→    return [Candidate("SELF", "role", v, 0.85, "role")]
+   188→
+   189→
+   190→@pattern("role_as", rf"\bas\s+(?:a|an)\s+(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for)\b)")
+   191→def _role_as(m, ctx, sp, ts, sent):
+   192→    v = clean_value(m.group("val"))
+   193→    if v.lower() in ROLE_BLOCK:
+   194→        return []
+   195→    return [Candidate("SELF", "role", v, 0.8, "role_as")]
+   196→
+   197→
+   198→@pattern("role_my", rf"\bmy\s+(?:job|role|title|position)\s+is\s+(?:a|an|the)?\s*(?P<val>[a-z][a-z /-]{{2,40}}?)(?=[,.!?]|\s+(?:at|in|on|with|for)\b)")
+   199→def _role_my(m, ctx, sp, ts, sent):
+   200→    v = clean_value(m.group("val"))
+   201→    return [Candidate("SELF", "role", v, 0.9, "role_my")]
+   202→
+   203→
+   204→@pattern("reports_to", rf"\bmy\s+(?:manager|boss|lead|supervisor|team lead)\s+is\s+(?P<val>{NAME})")
+   205→def _mgr(m, ctx, sp, ts, sent):
+   206→    return [Candidate("SELF", "reports_to", clean_value(m.group("val")), 0.9, "reports_to")]
+   207→
+   208→
+   209→@pattern("i_report", rf"\bi\s+report\s+to\s+(?P<val>{NAME})")
+   210→def _i_report(m, ctx, sp, ts, sent):
+   211→    return [Candidate("SELF", "reports_to", clean_value(m.group("val")), 0.9, "i_report")]
+   212→
+   213→
+   214→@pattern("member_of", rf"\bi'?m\s+(?:now\s+)?(?:on|part of)\s+the\s+(?P<val>[A-Z][\w-]*(?:\s+[\w-]+)*?)\s*(?:team|group|squad|org)?\b")
+   215→def _member(m, ctx, sp, ts, sent):
+   216→    v = clean_value(m.group("val"))
+   217→    if not v:
+   218→        return []
+   219→    team = v if v.lower().endswith(("team", "group", "squad")) else f"{v} team"
+   220→    return [Candidate("SELF", "member_of", team, 0.88, "member_of")]
+   221→
+   222→
+   223→@pattern("joined_team", rf"\bi\s+joined\s+the\s+(?P<val>[A-Z][\w-]*(?:\s+[\w-]+)*?)\s+(?:team|group|squad)\b")
+   224→def _joined_team(m, ctx, sp, ts, sent):
+   225→    v = clean_value(m.group("val"))
+   226→    return [Candidate("SELF", "member_of", f"{v} team", 0.9, "joined_team",
+   227→                      valid_from=date_in(sent, ts))]
+   228→
+   229→
+   230→# --- residence -------------------------------------------------------------
+   231→@pattern("lives_in", rf"\bi\s+(?:live|lived|'m living|am living|'m based|am based|reside)\s+in\s+(?P<val>{ORG})")
+   232→def _lives(m, ctx, sp, ts, sent):
+   233→    return [Candidate("SELF", "lives_in", clean_value(m.group("val")), 0.92, "lives_in")]
+   234→
+   235→
+   236→@pattern("im_in", rf"\bi'?m\s+(?:currently\s+|now\s+)?in\s+(?P<val>{ORG})")
+   237→def _im_in(m, ctx, sp, ts, sent):
+   238→    v = clean_value(m.group("val"))
+   239→    if v.lower() in ("fact", "love", "trouble", "debt", "charge", "love with"):
+   240→        return []
+   241→    return [Candidate("SELF", "lives_in", v, 0.7, "im_in")]
+   242→
+   243→
+   244→@pattern("moved_to", rf"\b(?:i|we)\s+(?:moved|relocated)\s+to\s+(?P<val>{ORG})")
+   245→def _moved(m, ctx, sp, ts, sent):
+   246→    v = clean_value(m.group("val"))
+   247→    return [Candidate("SELF", "moved_to", v, 0.92, "moved_to",
+   248→                      valid_from=date_in(sent, ts))]
+   249→
+   250→
+   251→# --- preferences -----------------------------------------------------------
+   252→LIKE_TAIL = r"(?=[,.!?]|\s+(?:but|though|when|because|and|so|especially)\b|$)"
+   253→@pattern("likes", rf"\bi\s+(?:(?:really|absolutely|totally)\s+)?(?:love|loved|like|liked|enjoy|enjoyed)\s+(?P<val>[a-zA-Z][\w' +#.-]{{1,44}}?){LIKE_TAIL}")
+   254→def _likes(m, ctx, sp, ts, sent):
+   255→    v = clean_value(m.group("val"))
+   256→    if v.lower() in ("it", "that", "this", "them", "you"):
+   257→        return []
+   258→    return [Candidate("SELF", "likes", v, 0.85, "likes")]
+   259→
+   260→
+   261→@pattern("fan_of", rf"\bi'?m\s+(?:a|an)\s+(?:big\s+)?fan\s+of\s+(?P<val>{LOWERPH})")
+   262→def _fan(m, ctx, sp, ts, sent):
+   263→    return [Candidate("SELF", "likes", clean_value(m.group("val")), 0.85, "fan_of")]
+   264→
+   265→
+   266→@pattern("favorite", rf"\bmy favorite\s+[\w ]{{2,24}}\s+is\s+(?P<val>{LOWERPH})")
+   267→def _favorite(m, ctx, sp, ts, sent):
+   268→    return [Candidate("SELF", "likes", clean_value(m.group("val")), 0.88, "favorite")]
+   269→
+   270→
+   271→@pattern("dislikes", rf"\bi\s+(?:hate|hated|dislike|can'?t stand|don'?t like|do not like)\s+(?P<val>[a-zA-Z][\w' +#.-]{{1,44}}?){LIKE_TAIL}")
+   272→def _dislikes(m, ctx, sp, ts, sent):
+   273→    return [Candidate("SELF", "dislikes", clean_value(m.group("val")), 0.85, "dislikes")]
+   274→
+   275→
+   276→@pattern("prefers", rf"\bi\s+(?:'d\s+)?(?:prefer|preferre?d)\s+(?P<val>[a-zA-Z][\w' +#.-]{{1,44}}?)(?:\s+(?:over|to|than)\s+[\w' -]+)?{LIKE_TAIL}")
+   277→def _prefers(m, ctx, sp, ts, sent):
+   278→    v = clean_value(m.group("val"))
+   279→    cat = re.search(r"\bfor\s+([a-z][a-z ]{2,20})", sent[m.start():])
+   280→    if cat:
+   281→        v = f"{v} (for {clean_value(cat.group(1))})"
+   282→    return [Candidate("SELF", "prefers", v, 0.9, "prefers")]
+   283→
+   284→
+   285→@pattern("pref_change", rf"\b(?:actually|these days|nowadays|lately|recently)[,.]?\s*(?:i\s+)?(?:prefer|like|love|drink|use|order)\s+(?P<val>[a-zA-Z][\w' +#.-]{{1,44}}?)(?=[,.!?]|$|\s+(?:but|though|and)\b)")
+   286→def _pref_change(m, ctx, sp, ts, sent):
+   287→    return [Candidate("SELF", "prefers", clean_value(m.group("val")), 0.88, "pref_change")]
+   288→
+   289→
+   290→@pattern("switched_to", rf"\b(?:i'?ve|i have)\s+(?:switched|moved)\s+to\s+(?P<val>[a-zA-Z][\w' +#.-]{{1,44}}?)(?=[,.!?]|$|\s+(?:but|though|and)\b)")
+   291→def _switched(m, ctx, sp, ts, sent):
+   292→    return [Candidate("SELF", "prefers", clean_value(m.group("val")), 0.88, "switched_to")]
+   293→
+   294→
+   295→@pattern("more_of_a", rf"\bi'?m\s+more\s+of\s+a\s+(?P<val>{LOWERPH})\s+(?:person|guy|girl|fan|drinker|person\s+now)")
+   296→def _more_of(m, ctx, sp, ts, sent):
+   297→    return [Candidate("SELF", "prefers", clean_value(m.group("val")), 0.82, "more_of_a")]
+   298→
+   299→
+   300→# --- skills & education ----------------------------------------------------
+   301→@pattern("skill_know", rf"\bi\s+(?:know|code in|write|program in|build with)\s+(?P<val>[A-Za-z+#.][\w+#.]*(?:\s+(?:and|&)\s+[A-Za-z+#.][\w+#.]*)*)")
+   302→def _skill(m, ctx, sp, ts, sent):
+   303→    out = []
+   304→    for part in re.split(r"\s+(?:and|&)\s+", clean_value(m.group("val"))):
+   305→        if len(part) > 1 and part.lower() not in ("it", "that", "this", "them"):
+   306→            out.append(Candidate("SELF", "has_skill", part, 0.85, "skill_know"))
+   307→    return out
+   308→
+   309→
+   310→@pattern("skill_learning", rf"\bi(?:'ve|\s+have)\s+been\s+learning\s+(?P<val>[A-Za-z+#.][\w+#.]*)|\bi'?m\s+learning\s+(?P<val2>[A-Za-z+#.][\w+#.]*)")
+   311→def _skill_learn(m, ctx, sp, ts, sent):
+   312→    v = clean_value(m.group("val") or m.group("val2") or "")
+   313→    return [Candidate("SELF", "has_skill", v, 0.8, "skill_learning")] if v else []
+   314→
+   315→
+   316→@pattern("skill_prof", rf"\bi'?m\s+(?:proficient|skilled|experienced)\s+in\s+(?P<val>[\w+#. ]{{2,40}})")
+   317→def _skill_prof(m, ctx, sp, ts, sent):
+   318→    return [Candidate("SELF", "has_skill", clean_value(m.group("val")), 0.85, "skill_prof")]
+   319→
+   320→
+   321→@pattern("studied_at", rf"\bi\s+studied\s+(?P<major>[a-z][a-z ]{{2,40}}?)\s+at\s+(?P<val>{ORG})")
+   322→def _studied(m, ctx, sp, ts, sent):
+   323→    major = clean_value(m.group("major"))
+   324→    org = clean_value(m.group("val"))
+   325→    return [Candidate("SELF", "studied", f"{major} at {org}", 0.88, "studied_at")]
+   326→
+   327→
+   328→@pattern("majored", rf"\bi\s+majored\s+in\s+(?P<val>[a-z][a-z ]{{2,40}})|\bmy degree is in\s+(?P<val2>[a-z][a-z ]{{2,40}})")
+   329→def _majored(m, ctx, sp, ts, sent):
+   330→    v = clean_value(m.group("val") or m.group("val2") or "")
+   331→    return [Candidate("SELF", "studied", v, 0.85, "majored")] if v else []
+   332→
+   333→
+   334→@pattern("speaks", rf"\bi\s+speak\s+(?P<val>[A-Za-z]+(?:\s+and\s+[A-Za-z]+)*)")
+   335→def _speaks(m, ctx, sp, ts, sent):
+   336→    out = []
+   337→    for part in re.split(r"\s+and\s+", clean_value(m.group("val"))):
+   338→        out.append(Candidate("SELF", "speaks", part, 0.85, "speaks"))
+   339→    return out
+   340→
+   341→
+   342→# --- personal ---------------------------------------------------------------
+   343→@pattern("birthday", rf"\bmy birthday is\s+(?P<val>[^,.!?]{{3,30}})|\bi was born on\s+(?P<val2>[^,.!?]{{3,30}})")
+   344→def _birthday(m, ctx, sp, ts, sent):
+   345→    raw = m.group("val") or m.group("val2") or ""
+   346→    v = clean_value(raw)
+   347→    return [Candidate("SELF", "birthday", v, 0.9, "birthday")]
+   348→
+   349→
+   350→@pattern("age", r"\bi'?m\s+(\d{1,2})\s+years?\s+old")
+   351→def _age(m, ctx, sp, ts, sent):
+   352→    return [Candidate("SELF", "age", m.group(1), 0.9, "age")]
+   353→
+   354→
+   355→@pattern("family", rf"\bmy\s+(?P<rel>sister|brother|mother|mom|father|dad|wife|husband|partner|daughter|son|cousin|twin)(?:'s name)?\s+(?:is|is called)\s+(?P<val>{NAME})")
+   356→def _family(m, ctx, sp, ts, sent):
+   357→    rel = FAMILY_MAP.get(m.group("rel").lower(), "friend")
+   358→    return [Candidate("SELF", rel, clean_value(m.group("val")), 0.9, "family")]
+   359→
+   360→
+   361→@pattern("family2", rf"\bmy\s+(?P<rel>sister|brother|mother|mom|father|dad|wife|husband|partner|daughter|son|cousin|twin)\s+(?P<val>{NAME})\b")
+   362→def _family2(m, ctx, sp, ts, sent):
+   363→    rel = FAMILY_MAP.get(m.group("rel").lower(), "friend")
+   364→    return [Candidate("SELF", rel, clean_value(m.group("val")), 0.88, "family2")]
+   365→
+   366→
+   367→@pattern("is_my", rf"\b(?P<val>{NAME})\s+is\s+my\s+(?P<rel>sister|brother|mother|mom|father|dad|wife|husband|partner|friend|colleague|teammate|cousin|manager|boss)")
+   368→def _is_my(m, ctx, sp, ts, sent):
+   369→    rel = IS_MY_MAP.get(m.group("rel").lower(), "friend")
+   370→    return [Candidate("SELF", rel, clean_value(m.group("val")), 0.88, "is_my")]
+   371→
+   372→
+   373→@pattern("pet", rf"\bmy\s+(?P<kind>dog|cat|bird|rabbit)\s+is\s+(?:named\s+|called\s+)?(?P<val>{NAME})")
+   374→def _pet(m, ctx, sp, ts, sent):
+   375→    return [Candidate("SELF", "has_pet", f"{m.group('kind')} named {clean_value(m.group('val'))}",
+   376→                      0.88, "pet")]
+   377→
+   378→
+   379→@pattern("hobby", rf"\bmy hobby is\s+(?P<val>[a-z][a-z ]{{2,40}})|\bin my free time\s+i\s+(?P<val2>[a-z][a-z ]{{2,40}})")
+   380→def _hobby(m, ctx, sp, ts, sent):
+   381→    v = clean_value(m.group("val") or m.group("val2") or "")
+   382→    return [Candidate("SELF", "hobby", v, 0.8, "hobby")] if v else []
+   383→
+   384→
+   385→@pattern("goal", rf"\bmy goal is to\s+(?P<val>[a-z][a-z ]{{2,50}})|\bi'?m planning to\s+(?P<val2>[a-z][a-z ]{{2,50}})")
+   386→def _goal(m, ctx, sp, ts, sent):
+   387→    v = clean_value(m.group("val") or m.group("val2") or "")
+   388→    return [Candidate("SELF", "goal", v, 0.75, "goal")] if v else []
+   389→
+   390→
+   391→# --- projects & events -------------------------------------------------------
+   392→@pattern("works_on", rf"\bi'?m\s+(?:currently\s+)?working\s+on\s+(?P<val>{ORG})|\bi\s+work\s+on\s+(?P<val2>{ORG})")
+   393→def _works_on(m, ctx, sp, ts, sent):
+   394→    v = clean_value(m.group("val") or m.group("val2") or "")
+   395→    return [Candidate("SELF", "works_on", v, 0.88, "works_on")] if v else []
+   396→
+   397→
+   398→@pattern("building", rf"\b(?:we'?re|we are|i'?m|i am)\s+(?:currently\s+)?building\s+(?P<val>{ORG})")
+   399→def _building(m, ctx, sp, ts, sent):
+   400→    return [Candidate("SELF", "works_on", clean_value(m.group("val")), 0.85, "building")]
+   401→
+   402→
+   403→@pattern("completed", rf"\b(?:we|i)\s+(?:shipped|launched|finished|completed|released|deployed)\s+(?:the\s+)?(?P<val>{ORG})")
+   404→def _completed(m, ctx, sp, ts, sent):
+   405→    v = clean_value(m.group("val"))
+   406→    return [Candidate("SELF", "completed", v, 0.88, "completed",
+   407→                      valid_to=date_in(sent, ts))]
+   408→
+   409→
+   410→@pattern("used_to_work", rf"\bi used to\s+(?:work|working)\s+(?:at|for)\s+(?P<val>{ORG})")
+   411→def _used_work(m, ctx, sp, ts, sent):
+   412→    v = clean_value(m.group("val"))
+   413→    return [Candidate("SELF", "works_at", v, 0.7, "used_to_work",
+   414→                      valid_to=date_in(sent, ts) or None)]
+   415→
+   416→
+   417→@pattern("used_to_live", rf"\bi used to\s+live\s+in\s+(?P<val>{ORG})")
+   418→def _used_live(m, ctx, sp, ts, sent):
+   419→    v = clean_value(m.group("val"))
+   420→    return [Candidate("SELF", "lives_in", v, 0.7, "used_to_live",
+   421→                      valid_to=date_in(sent, ts) or None)]
+   422→
+   423→
+   424→# --- third person -------------------------------------------------------------
+   425→TP_VERBS = {
+   426→    "works at": "works_at", "work at": "works_at", "worked at": "works_at",
+   427→    "joined": "works_at", "left": "left", "quit": "left",
+   428→    "lives in": "lives_in", "live in": "lives_in", "moved to": "moved_to",
+   429→    "manages": "manages", "manage": "manages", "managing": "manages",
+   430→    "uses": "uses", "use": "uses", "using": "uses",
+   431→    "prefers": "prefers", "prefer": "prefers",
+   432→    "likes": "likes", "like": "likes",
+   433→    "studied at": "studied_at", "reports to": "reports_to",
+   434→    "leads": "manages", "lead": "manages",
+   435→}
+   436→TP_RX = (rf"\b(?P<subj>{NAME})\s+(?P<verb>"
+   437→         + "|".join(re.escape(k) for k in sorted(TP_VERBS, key=len, reverse=True))
+   438→         + rf")\s+(?:the\s+)?(?P<val>{ORG}(?:\s+(?:team|group|squad|org|department|division))?)")
+   439→PATTERNS.append(("third_person", re.compile(TP_RX, re.I),
+   440→                 lambda m, ctx, sp, ts, sent: [
+   441→                     Candidate(clean_value(m.group("subj")),
+   442→                               TP_VERBS[m.group("verb").lower()],
+   443→                               clean_value(m.group("val")), 0.85, "third_person",
+   444→                               retraction=TP_VERBS[m.group("verb").lower()] == "left")]))
+   445→
+   446→
+   447→# Mem0/Zep-style migrated summaries: "User prefers oat milk lattes.",
+   448→# "User knows Rust." — competitor exports state facts in exactly this
+   449→# third-person shape, so the migration path needs to catch them.
+   450→SUMMARY_VERBS = {
+   451→    "prefers": "prefers", "likes": "likes", "knows": "knows",
+   452→    "uses": "uses", "lives in": "lives_in", "works at": "works_at",
+   453→    "speaks": "speaks", "owns": "owns", "enjoys": "likes",
+   454→    "hates": "dislikes", "dislikes": "dislikes",
+   455→    "studied": "studied", "plays": "plays",
+   456→}
+   457→_SUMMARY_RX = (rf"\b(?P<subj>User|[A-Z][a-z]{{2,}})\s+(?P<verb>"
+   458→               + "|".join(re.escape(k) for k in
+   459→                          sorted(SUMMARY_VERBS, key=len, reverse=True))
+   460→               + rf")\s+(?P<val>[a-zA-Z][\w' +#.-]{{1,44}}?)"
+   461→               + rf"(?=[.!?]|$|,|\s+(?:but|and|however|so)\b)")
+   462→PATTERNS.append(("user_summary", re.compile(_SUMMARY_RX),
+   463→                 lambda m, ctx, sp, ts, sent: [
+   464→                     Candidate(clean_value(m.group("subj")),
+   465→                               SUMMARY_VERBS[m.group("verb").lower()],
+   466→                               clean_value(m.group("val")), 0.80,
+   467→                               "user_summary")]))
+   468→
+   469→
+   470→@pattern("team_uses", rf"\bthe\s+(?P<val>[A-Z][\w-]*(?:\s+[\w-]+)*?)\s+team\s+uses?\s+(?P<tech>[A-Za-z+#.][\w+#.]*)")
+   471→def _team_uses(m, ctx, sp, ts, sent):
+   472→    team = f"{clean_value(m.group('val'))} team"
+   473→    return [Candidate(team, "uses", clean_value(m.group("tech")), 0.88, "team_uses")]
+   474→
+   475→
+   476→@pattern("possessive", rf"\b(?P<subj>{NAME})'s\s+(?P<rel>sister|brother|manager|boss|team|birthday|role|job|dog|cat|wife|husband)\s+is\s+(?P<val>[^,.!?]{{2,40}})")
+   477→def _possessive(m, ctx, sp, ts, sent):
+   478→    subj = clean_value(m.group("subj"))
+   479→    rel = m.group("rel").lower()
+   480→    raw = m.group("val")
+   481→    rel_map = {"sister": "sibling", "brother": "sibling", "manager": "reports_to",
+   482→               "boss": "reports_to", "team": "member_of", "birthday": "birthday",
+   483→               "role": "role", "job": "role", "dog": "has_pet", "cat": "has_pet",
+   484→               "wife": "spouse", "husband": "spouse"}
+   485→    val = date_in(raw, ts) if rel == "birthday" and ts else clean_value(raw)
+   486→    return [Candidate(subj, rel_map.get(rel, "mentioned"), val, 0.85, "possessive")]
+   487→
+   488→
+   489→
+   490→
+   491→@pattern("role_at_org",
+   492→         rf"\bi'?m\s+(?:a|an)\s+(?P<role>[a-z][a-z /-]{{2,40}}?)\s+at\s+(?P<val>{ORG})")
+   493→def _role_at_org(m, ctx, sp, ts, sent):
+   494→    out = [Candidate("SELF", "works_at", clean_value(m.group("val")), 0.9,
+   495→                     "role_at_org")]
+   496→    # "I'm a software engineer at Netflix" carries BOTH the org and the
+   497→    # occupation — the role must not be silently dropped, or "what does
+   498→    # X do for a living?" becomes unanswerable.
+   499→    rv = clean_value(m.group("role"))
+   500→    if rv.lower() not in ROLE_BLOCK:
+   501→        out.append(Candidate("SELF", "role", rv, 0.85, "role_at_org"))
+   502→    return out
+   503→
+   504→
+   505→@pattern("been_working", rf"\bi'?ve\s+been\s+(?:working\s+)?at\s+(?P<val>{ORG})")
+   506→def _been_working(m, ctx, sp, ts, sent):
+   507→    # "I've been working at X since March 2024" — the since-clause dates
+   508→    # the START of the employment interval (not the session date).
+   509→    vf = date_in(sent, ts) if re.search(r"\bsince\b", sent, re.I) else None
+   510→    return [Candidate("SELF", "works_at", clean_value(m.group("val")), 0.9,
+   511→                      "been_working", valid_from=vf)]
+   512→
+   513→
+   514→@pattern("instruction", rf"\b(?:please\s+)?(?:always|never)\s+(?P<val>[a-z][a-z ]{{3,60}}?)(?=[.!?]|$)")
+   515→def _instruction(m, ctx, sp, ts, sent):
+   516→    v = clean_value(m.group("val"))
+   517→    if v.lower() in ROLE_BLOCK:
+   518→        return []
+   519→    return [Candidate("SELF", "instruction", m.group(0).strip().rstrip(".!").lower(),
+   520→                      0.78, "instruction")]
+   521→
+   522→
+   523→@pattern("from_now_on", rf"\bfrom now on[,.]?\s*(?:please\s+)?(?P<val>[a-z][a-z ]{{3,60}}?)(?=[.!?]|$)")
+   524→def _from_now_on(m, ctx, sp, ts, sent):
+   525→    return [Candidate("SELF", "instruction", "from now on " + clean_value(m.group("val")),
+   526→                      0.78, "from_now_on")]
+   527→
+   528→
+   529→# --- assistant (second person about the user) --------------------------------
+   530→@pattern("you_work", rf"\byou\s+(?:mentioned\s+)?(?:work|worked|working)\s+(?:at|for)\s+(?P<val>{ORG})")
+   531→def _you_work(m, ctx, sp, ts, sent):
+   532→    return [Candidate("SELF", "works_at", clean_value(m.group("val")), 0.75, "you_work")]
+   533→
+   534→
+   535→@pattern("you_live", rf"\byou\s+(?:live|lived)\s+in\s+(?P<val>{ORG})")
+   536→def _you_live(m, ctx, sp, ts, sent):
+   537→    return [Candidate("SELF", "lives_in", clean_value(m.group("val")), 0.75, "you_live")]
+   538→
+   539→
+   540→# --- generic event with date --------------------------------------------------
+   541→EVENT_START = re.compile(r"\b(?:i|we)\s+(?P<vp>[a-z][a-z' -]{2,60})", re.I)
+   542→
+   543→
+   544→import re as _re2
+   545→_DATE_GATE = _re2.compile(
+   546→    r"\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|yesterday|today|"
+   547→    r"tomorrow|last|ago", _re2.I)
+   548→
+   549→
+   550→def extract_events(sent: str, sp: tuple[int, int], ts: datetime | None,
+   551→                   ctx: ExtractionContext) -> list[Candidate]:
+   552→    if ts is None or not _DATE_GATE.search(sent):
+   553→        return []
+   554→    dates = find_dates(sent, ts)
+   555→    if not dates:
+   556→        return []
+   557→    m = EVENT_START.search(sent)
+   558→    if not m:
+   559→        return []
+   560→    vp = m.group("vp").strip()
+   561→    # strip a trailing date surface from the verb phrase
+   562→    for d in dates:
+   563→        surf = d["surface"].strip()
+   564→        if surf and surf.lower() in vp.lower():
+   565→            vp = re.sub(re.escape(surf), "", vp, flags=re.I).strip()
+   566→    _MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
+   567→    for _ in range(3):
+   568→        vp = re.sub(r"\s+(?:on|in|at|since|ago|back|last|this|next)\s*$", "", vp, flags=re.I).strip()
+   569→        vp = re.sub(rf"\s+(?:{_MONTHS})\s*$", "", vp, flags=re.I).strip()
+   570→        vp = re.sub(r"\s+\d{1,4}(?:st|nd|rd|th)?\s*$", "", vp).strip()
+   571→        vp = re.sub(r"\s+(?:week|month|year|day)s?\s*$", "", vp, flags=re.I).strip()
+   572→    vp = re.sub(r"\s+", " ", vp)
+   573→    if len(vp) < 4 or vp.split()[0] in ("will", "would", "hope", "want", "plan"):
+   574→        return []
+   575→    # conversational fluff is not a memorable life event
+   576→    _JUNK = re.compile(
+   577→        r"^(?:read|reads|watch|watches|watched|see|saw|seen|hear|heard|"
+   578→        r"think|thinks|thought|look|looked|talk|talked|remember|"
+   579→        r"was|were|am|be|been)\b", re.I)
+   580→    if _JUNK.match(vp):
+   581→        return []
+   582→    return [Candidate("SELF", "event", vp, 0.7, "event",
+   583→                      valid_from=dates[0]["iso"],
+   584→                      span=(sp[0] + m.start(), sp[0] + m.end()))]
+   585→
+   586→
+   587→# --- label-value form (BEAM-10M user_profile bullets) ---------------------
+   588→# BEAM-10M's user_profile uses "Name: X / Age: Y / Location: Z / Profession: P"
+   589→# form (label-value pairs separated by a colon). This is a different surface
+   590→# than the conversational "My name is X" form — the user_profile section is
+   591→# a structured profile, not a chat message. The patterns below extract facts
+   592→# from that structured form so the μ=0 extractor can score on BEAM-10M
+   593→# ground-truth facts.
+   594→#
+   595→# Confidence is 0.90 (vs 0.95 for "my name is X") because the profile
+   596→# form doesn't establish first-person attribution as strongly as a
+   597→# user saying "my name is X" in their own chat turn — the profile
+   598→# could be metadata about another user. The writer's quarantine /
+   599→# sandbox layer still applies.
+   600→@pattern("profile_name",
+   601→         rf"^\s*•?\s*Name:\s+(?P<val>{NAME})\s*$")
+   602→def _profile_name(m, ctx, sp, ts, sent):
+   603→    v = clean_value(m.group("val"))
+   604→    target = ctx.subject_name or "SELF"
+   605→    rel = "name" if ctx.subject_name is None else "alias"
+   606→    return [Candidate(target, rel, v, 0.90, "profile_name")]
+   607→
+   608→
+   609→@pattern("profile_age",
+   610→         rf"^\s*•?\s*Age:\s+(?P<val>\d+)\s*(?:years?\s*old)?\s*$")
+   611→def _profile_age(m, ctx, sp, ts, sent):
+   612→    v = clean_value(m.group("val"))
+   613→    target = ctx.subject_name or "SELF"
+   614→    return [Candidate(target, "age", v, 0.88, "profile_age")]
+   615→
+   616→
+   617→@pattern("profile_gender",
+   618→         rf"^\s*•?\s*Gender:\s+(?P<val>male|female|non-binary|other)\s*$")
+   619→def _profile_gender(m, ctx, sp, ts, sent):
+   620→    v = clean_value(m.group("val"))
+   621→    target = ctx.subject_name or "SELF"
+   622→    return [Candidate(target, "gender", v, 0.88, "profile_gender")]
+   623→
+   624→
+   625→@pattern("profile_location",
+   626→         rf"^\s*•?\s*Location:\s+(?P<val>[^\n]+?)\s*$")
+   627→def _profile_location(m, ctx, sp, ts, sent):
+   628→    v = clean_value(m.group("val"))
+   629→    target = ctx.subject_name or "SELF"
+   630→    return [Candidate(target, "location", v, 0.88, "profile_location")]
+   631→
+   632→
+   633→@pattern("profile_profession",
+   634→         rf"^\s*•?\s*Profession:\s+(?P<val>[^\n]+?)\s*$")
+   635→def _profile_profession(m, ctx, sp, ts, sent):
+   636→    v = clean_value(m.group("val"))
+   637→    target = ctx.subject_name or "SELF"
+   638→    return [Candidate(target, "profession", v, 0.88, "profile_profession")]
+   639→
+   640→
+   641→# --- relationship bullets (BEAM-10M user_relationships) ------------------
+   642→# The user_relationships section uses bullet form like:
+   643→#   • Alicia (female, age 80)
+   644→# under a header like "PARENTS & GUARDIANS:" — we match the bullet+name
+   645→# but the section header sets the relation. Since we don't track state
+   646→# across matches in the pattern layer (the ExtractionContext doesn't
+   647→# see the section header), we emit these as "related_to" with the name
+   648→# as the value. A post-process pass (in the writer) could resolve
+   649→# section→relation by re-reading the user_relationships text.
+   650→@pattern("profile_relative",
+   651→         rf"^\s*•\s+(?P<val>{NAME})\s*\(.*?\)\s*$")
+   652→def _profile_relative(m, ctx, sp, ts, sent):
+   653→    v = clean_value(m.group("val"))
+   654→    target = ctx.subject_name or "SELF"
+   655→    # we don't know the section here; emit as 'related_to' so the
+   656→    # fact is stored and the relation can be re-classified later.
+   657→    return [Candidate(target, "related_to", v, 0.75,
+   658→                       "profile_relative")]
+   659→
+   660→
+   661→# --- section-aware kinship extraction (BEAM-10M user_relationships) -----------
+   662→# The previous `profile_relative` pattern emitted every kinship bullet as
+   663→# `related_to` because it didn't know which section header the bullet was
+   664→# under. The fix is a multi-line pattern that captures the section header
+   665→# + bullet as one regex, so the relation can be derived from the header
+   666→# in the same pass.
+   667→#
+   668→# BEAM-10M user_relationships section looks like:
+   669→#   PARENTS & GUARDIANS:
+   670→#   • Alicia (female, age 80)
+   671→#   • John (male, age 82)
+   672→#   ROMANTIC PARTNER:
+   673→#   • Chris (35, software engineer)
+   674→#   CHILDREN:
+   675→#   • Brittany (12)
+   676→#   • Maria (8)
+   677→#   SIBLINGS:
+   678→#   • Sam (28, lawyer)
+   679→#   FRIENDS:
+   680→#   • Bob (40, teacher)
+   681→#
+   682→# Section→relation map (BEAM-10M canonical headers):
+   683→_KINSHIP_SECTIONS = {
+   684→    "PARENTS & GUARDIANS": "parent",
+   685→    "PARENTS": "parent",
+   686→    "GUARDIANS": "parent",
+   687→    "ROMANTIC PARTNER": "partner",
+   688→    "ROMANTIC PARTNERS": "partner",
+   689→    "PARTNER": "partner",
+   690→    "PARTNERS": "partner",
+   691→    "SPOUSE": "spouse",
+   692→    "CHILDREN": "child",
+   693→    "CHILD": "child",
+   694→    "SIBLINGS": "sibling",
+   695→    "SIBLING": "sibling",
+   696→    "FRIENDS": "friend",
+   697→    "FRIEND": "friend",
+   698→    "COLLEAGUES": "colleague",
+   699→    "COLLEAGUE": "colleague",
+   700→    "COWORKERS": "colleague",
+   701→    "EXTENDED FAMILY": "family",
+   702→    "GRANDPARENTS": "parent",  # grandparent is a parent role
+   703→    "GRANDCHILDREN": "child",
+   704→    "NEPHEWS & NIECES": "sibling",  # sibling lineage
+   705→    "IN-LAWS": "family",
+   706→}
+   707→# Build one big alternation of section headers (longest first so
+   708→# "PARENTS & GUARDIANS" beats "PARENTS")
+   709→_KINSHIP_HEADERS = sorted(_KINSHIP_SECTIONS.keys(), key=len, reverse=True)
+   710→_KINSHIP_HEADERS_RE = "|".join(
+   711→    re.escape(h).replace(r"\ ", r"\s+") for h in _KINSHIP_HEADERS)
+   712→
+   713→
+   714→@pattern("profile_kinship_section",
+   715→         rf"(?P<section>{_KINSHIP_HEADERS_RE})\s*:\s*\n"
+   716→         rf"(?P<bullets>(?:\s*•\s+{NAME}\s*\([^)]*\)\s*\n?)+)")
+   717→def _profile_kinship_section(m, ctx, sp, ts, sent):
+   718→    """Section-aware kinship extraction.
+   719→
+   720→    Matches a whole section header + bullet block, emits one Candidate
+   721→    per bullet with the section-derived relation. This replaces the
+   722→    lossy `related_to` fallback that the single-line `profile_relative`
+   723→    pattern was emitting.
+   724→    """
+   725→    section_raw = m.group("section")
+   726→    # normalize header to canonical form (collapse whitespace, uppercase)
+   727→    section_key = re.sub(r"\s+", " ", section_raw).strip().upper()
+   728→    relation = _KINSHIP_SECTIONS.get(section_key)
+   729→    if relation is None:
+   730→        # try matching by prefix (e.g. "PARENTS & GUARDIANS" might have
+   731→        # spacing differences)
+   732→        for h in _KINSHIP_HEADERS:
+   733→            if h in section_key:
+   734→                relation = _KINSHIP_SECTIONS[h]
+   735→                break
+   736→    if relation is None:
+   737→        return []  # unknown section — leave to single-line pattern
+   738→    bullets = m.group("bullets")
+   739→    target = ctx.subject_name or "SELF"
+   740→    out: list[Candidate] = []
+   741→    # iterate bullets within the section
+   742→    for bm in re.finditer(rf"•\s+(?P<val>{NAME})\s*\([^)]*\)", bullets):
+   743→        v = clean_value(bm.group("val"))
+   744→        if v and len(v) >= 2:
+   745→            out.append(Candidate(target, relation, v, 0.85,
+   746→                                 "profile_kinship_section"))
+   747→    return out
+   748→

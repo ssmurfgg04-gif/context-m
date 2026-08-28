@@ -50,6 +50,66 @@ _DATE_TRIGGER = _re.compile(
     r"\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|yesterday|today|"
     r"tomorrow|last|ago|since", _re.I)
 
+# --- Bitap trigger widening (μ=0) -----------------------------------------
+# A curated set of trigger words extracted from _TRIGGER above. We use
+# Wu-Manber k-error Bitap (context_m.text.fuzzy.bitap_levenshtein) to
+# fuzzy-match each against the sentence when the strict regex fails.
+# This catches typos like "wrks" → "works", "livs" → "lives",
+# "prfrs" → "prefers" without bloating the regex alternation. We
+# deliberately pick high-recall roots — the pattern library does the
+# precision work; the trigger only decides WHETHER to scan.
+#
+# IMPORTANT: only include words >= 4 chars. Shorter triggers (pet, age,
+# mom, dad, son) cause too many false positives — Bitap with k=2 edits
+# matches "pet" against "plugh" (l→e, u→t), "age" against "plugh"
+# (u→a, h→e), etc. The longer roots ("work", "live", "prefer") don't
+# have this problem and still catch the misspellings we care about.
+_BITAP_TRIGGERS = (
+    "work", "works", "worked", "working",
+    "live", "lives", "lived", "living",
+    "moved", "relocated", "based",
+    "prefer", "prefers", "preferred",
+    "like", "likes", "liked",
+    "love", "loves", "enjoy",
+    "hate", "dislike",
+    "know", "knows", "learning",
+    "manager", "boss",
+    "lead", "team", "project",
+    "birthday", "born",
+    "sister", "brother", "mother", "father",
+    "wife", "husband", "partner",
+    "daughter", "cousin",
+    "shipped", "launched", "finished",
+    "completed", "building", "joined",
+    "always", "never", "studied",
+    "majored", "degree", "hobby",
+    "favorite", "skill", "goal",
+    "planning", "speak",
+    "profession", "gender", "location",
+    "name",  # exception: 4 chars, common, no false-positive issues
+)
+
+
+def _bitap_trigger_match(sent: str, max_edits: int = 2) -> bool:
+    """True if any trigger word fuzzy-matches the sentence within max_edits.
+
+    Uses Wu-Manber Bitap (substring matching with k errors) from
+    context_m.text.fuzzy. Stays μ=0 — bitwise, no learned weights, O(n*k)
+    per trigger word. The full set is ~60 words; on a 20-word sentence this
+    is ~1200 word-comparisons, well under 100μs.
+    """
+    try:
+        from context_m.text.fuzzy import bitap_levenshtein
+        sent_l = sent.lower()
+        for trig in _BITAP_TRIGGERS:
+            if bitap_levenshtein(sent_l, trig, max_edits) is not None:
+                return True
+        return False
+    except Exception:
+        # if fuzzy module fails to import, fall back to the strict regex
+        # behavior (no widening) — never block the extractor.
+        return False
+
 
 class Extractor:
     def __init__(self, config) -> None:
@@ -115,8 +175,21 @@ class Extractor:
                              ctx: ExtractionContext, ts: datetime,
                              last_entity: str | None = None) -> list[Candidate]:
         out: list[Candidate] = []
+        # --- Bitap trigger widening (μ=0) ----------------------------------
+        # The strict _TRIGGER regex requires exact trigger words ("works",
+        # "lives", "prefers", etc.). Misspellings ("wrks", "livs", "prfrs")
+        # fail the regex and the pattern library is skipped entirely. That's
+        # the #1 cause of slang/paraphrase recall collapse: the trigger
+        # never fires so no pattern can match. When bitap_trigger_enabled
+        # is on (default), we Bitap-fuzzy-match each trigger alternation
+        # against the sentence with up to N edits. This stays deterministic
+        # (Wu-Manber is bitwise, no learned weights) and <50μs on a typical
+        # sentence — same order as the regex itself.
         if not _TRIGGER.search(sent):
-            return out
+            if (not getattr(self.cfg, "bitap_trigger_enabled", True)
+                    or not _bitap_trigger_match(sent,
+                                                self.cfg.bitap_trigger_max_edits)):
+                return out
         for name, rx, handler in PATTERNS:
             for m in rx.finditer(sent):
                 try:

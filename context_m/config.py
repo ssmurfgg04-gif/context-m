@@ -65,6 +65,68 @@ class Config:
     fusion_vsa_weight: float = 0.6
     fusion_symbolic_weight: float = 0.4
 
+    # --- OOD ingestion (Unmess + DisSim + Bitap trigger widening) -----------
+    # When True, the main `mem.add()` path runs the chaos-mode pipeline
+    # before the deterministic extractor:
+    #   1. PerUserIdiolectNormalizer.observe() — accumulate slang
+    #   2. PerUserIdiolectNormalizer.normalize() — text-speak + kNN slang
+    #      replacement ("u" → "you", "bruh" → "friend" if user-co-occurred)
+    #   3. DisSim recursive split — compound sentences become simple clauses
+    #      so each one matches its own pattern ("Although Alice works at X,
+    #      she quit yesterday" → 3 clauses, 3 patterns fire)
+    #   4. Bitap fuzzy-trigger widening in extractor._sentence_candidates
+    #      so "wrks at" / "livs in" still fires the works_at/lives_in pattern
+    # Default ON — the OOD paraphrase/slang recall catastrophe (9.4% / 5.1%
+    # in Tier-1) is exactly what this layer fixes, and it stays μ=0.
+    unmess_enabled: bool = True
+    unmess_max_depth: int = 2          # DisSim recursion limit
+    # Bitap trigger widening: if a known trigger word (works, lives, etc.)
+    # is NOT found in the sentence, try fuzzy match within max_edits. This
+    # catches "wrks", "livs", "prfrs" without bloating the regex set.
+    bitap_trigger_enabled: bool = True
+    bitap_trigger_max_edits: int = 2   # 2 edits = "wrks"→"works", "livs"→"lives"
+
+    # --- FadeMem-style forgetting (retention decay + sleep sweeps) ----------
+    # When True, the consolidate() pass also runs a FadeMem sweep that
+    # decays retention scores, marks low-retention facts for deactivation,
+    # and consolidates clusters of related facts into summary holograms.
+    # Default OFF in benchmarks (so numbers don't shift); ON in production.
+    fade_enabled: bool = False
+    fade_lambda: float = 0.05          # exponential decay rate per day
+    fade_access_boost: float = 0.5     # each access multiplies retention
+    fade_contradiction_penalty: float = 0.25  # supersession pressure
+    fade_deactivate_threshold: float = 0.10  # below this → deactivate
+
+    # --- TiMem Temporal Memory Tree (4-level consolidation hierarchy) -------
+    # When True, the consolidate() pass also builds hierarchical summaries:
+    #   L1 raw chunks → L2 session summaries → L3 daily patterns → L4 persona
+    # Each higher level is a derived fact that links down to its constituents
+    # via DERIVED_FROM edges. Retrieval can short-circuit to the appropriate
+    # level based on query complexity (complex queries hit L3/L4).
+    tmt_enabled: bool = False
+    tmt_session_cluster_mins: int = 5   # facts needed before a session summary
+    tmt_persona_min_sessions: int = 3   # sessions before persona abstraction
+
+    # --- Active reconstruction (MRAgent ICML 2026) ---------------------------
+    # When True, the reader exposes a `reconstruct()` method that runs an
+    # iterative PPR+LLM-scoring loop: expand seed nodes via 2-hop PPR, score
+    # each hop's relevance to the query, prune low-scoring branches, return
+    # a synthesized narrative. Default OFF — it's an LLM-assisted path that
+    # breaks strict μ=0; opt-in for use cases that need it.
+    reconstruct_enabled: bool = False
+    reconstruct_max_hops: int = 3
+    reconstruct_prune_threshold: float = 0.25
+
+    # --- MIND defense (InjecMEM attack mitigation) -----------------------------
+    # When True, retrieval runs a diversity check on the top-k results.
+    # InjecMEM relies on centroid anchors that cluster in embedding space —
+    # if the top-k results are too similar (low intra-result diversity),
+    # that's a signature of anchor-based poisoning, and the results are
+    # flagged for audit. This is μ=0 compatible (pure embedding math).
+    mind_diversity_check: bool = True
+    mind_diversity_threshold: float = 0.85  # mean pairwise cosine above this → flag
+    mind_flag_on_low_diversity: bool = True   # mark results as suspect, don't drop
+
     # --- cross-encoder rerank (μ=0, web search SOTA 2026-08) -------------
     # Cross-encoder-style reranking: re-score top-K candidates by cosine
     # sim between query embedding and a natural-language rendering of
