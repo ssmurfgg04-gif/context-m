@@ -130,6 +130,12 @@ jobs:
           set -eu
           git config user.name "bench-bot"
           git config user.email "bench-bot@users.noreply.github.com"
+          # bench/llm-eval is a pure artifact branch — each run produces a
+          # canonical snapshot. Shallow checkout depth=1 means we can't
+          # fast-forward the previous bench/llm-eval commit, so force-with-lease
+          # replaces it. The full history lives on main; this branch is just
+          # the latest graded JSONs.
+          git fetch origin bench/llm-eval || true
           git checkout -B bench/llm-eval
           git add benchmarks/ood/judge_items_scored_gemini.jsonl \
                   benchmarks/real_github benchmarks/results
@@ -137,7 +143,7 @@ jobs:
             echo "no new results to commit"
           else
             git commit -m "bench(llm): canonical judge run — ${LLM_MODEL} ($(date -u +%Y-%m-%dT%H:%MZ))"
-            git push origin bench/llm-eval
+            git push --force-with-lease origin bench/llm-eval
           fi
 
       - name: Save judge cache (survives timeout cancels)

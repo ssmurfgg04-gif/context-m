@@ -26,9 +26,24 @@ Usage:
 """
 from __future__ import annotations
 
+# --- determinism lockdown ----------------------------------------------
+# BEAM-10M bench variance was 43-49% across identical runs because:
+#   (a) PYTHONHASHSEED randomizes set/dict iteration order per process,
+#       so any tie-break on id (or set-keyed candidate_ids iteration)
+#       shuffles results across runs
+#   (b) OpenBLAS uses non-deterministic summation order for matmul,
+#       so `qv @ centroid` differs at the ULP level across processes,
+#       and argsort breaks the ULP-level ties differently
+# Force them both OFF before importing anything that touches numpy/dicts.
+import os
+os.environ.setdefault("PYTHONHASHSEED", "0")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
 import argparse
 import json
-import os
 import sys
 import tempfile
 import time
@@ -64,7 +79,18 @@ def main():
                     help="output JSON path")
     args = ap.parse_args()
 
+    # Re-exec ourselves with PYTHONHASHSEED=0 if the parent didn't set it.
+    # PYTHONHASHSEED is read at interpreter startup, so setting it from
+    # inside Python has no effect on the running process — but re-exec'ing
+    # with a fresh env DOES, and is a no-op if already set.
+    if os.environ.get("PYTHONHASHSEED", "") != "0":
+        print("[beam10m-bench] PYTHONHASHSEED not set; re-exec'ing with seed=0 "
+              "for stable prec@5 numbers...")
+        os.environ["PYTHONHASHSEED"] = "0"
+        os.execve(sys.executable, [sys.executable, *sys.argv], os.environ)
+
     print(f"\n[beam10m-bench] === Real BEAM-10M Benchmark ===")
+    print(f"[beam10m-bench] PYTHONHASHSEED={os.environ.get('PYTHONHASHSEED')}")
     print(f"[beam10m-bench] personas: {args.n_personas}")
     print(f"[beam10m-bench] max turns/persona: {args.max_turns}")
     print(f"[beam10m-bench] config: {args.config}\n")
@@ -141,6 +167,11 @@ def run_single_config(personas, config_name, args):
     # NEW: enable cross-encoder rerank for configs that include "+rerank"
     if "rerank" in config_name:
         cfg.enable_rerank = True
+    # Bench determinism: SLB bypassed so templated near-duplicate queries
+    # (cosine ≈ 0.97 against the threshold) don't flip hit/miss on BLAS
+    # ULP drift. Every query recomputes fresh fusion — the bench measures
+    # the FUSION quality, not SLB cache locality.
+    cfg.slb_disabled = True
     mem = Memory(cfg)
 
     # optional feature stacks

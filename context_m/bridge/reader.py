@@ -321,7 +321,8 @@ class MemoryReader:
         # intents that emit procedural notes (ORDERING: ..., temporal windows,
         # counts) cannot be served from the SLB: a cache hit would silently
         # drop the note and return the wrong fact set for the query shape.
-        slb_ok = plan.intent not in ("ordering", "temporal", "count")
+        slb_ok = (plan.intent not in ("ordering", "temporal", "count")
+                  and not getattr(self.cfg, "slb_disabled", False))
         scope_key = (user_id, agent_id, run_id, branch)
         cached = self.slb.lookup(q_vec, scope_key) if slb_ok else None
         if cached is not None:
@@ -470,7 +471,8 @@ class MemoryReader:
         self.store.bump_access([f.id for f in facts])
         t1 = time.perf_counter()
         self.slb.record_latency(False, t1 - t0)
-        self.slb.store(q_vec, [(f.id, candidates.get(f.id, 0.0)) for f in facts],
+        if not getattr(self.cfg, "slb_disabled", False):
+            self.slb.store(q_vec, [(f.id, candidates.get(f.id, 0.0)) for f in facts],
                        query=query, scope=scope_key if slb_ok else ("__no_cache__",))
 
         block = self._context_block(query, plan.intent, facts, candidates,

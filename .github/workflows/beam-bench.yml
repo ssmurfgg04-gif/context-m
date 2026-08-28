@@ -74,6 +74,15 @@ jobs:
           N_PERSONAS: ${{ github.event.inputs.n_personas || '10' }}
           MAX_TURNS: ${{ github.event.inputs.max_turns || '100' }}
           CONFIG: ${{ github.event.inputs.config || 'all' }}
+          # Determinism lockdown — same env across runs so identical inputs
+          # produce identical prec@5 numbers. PYTHONHASHSEED=0 must be set
+          # in the parent env (read at interpreter startup); the bench
+          # script also forces it for any subprocess it spawns.
+          PYTHONHASHSEED: "0"
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
         run: |
           python scripts/run_beam10m_benchmark.py \
             --n-personas "$N_PERSONAS" \
@@ -86,10 +95,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b bench/beam10m 2>/dev/null || git checkout bench/beam10m
+          # bench/beam10m is an artifact branch — latest run snapshot wins.
+          # Shallow checkout (depth=1) can't fast-forward prior commits,
+          # so force-with-lease replaces the branch head.
+          git fetch origin bench/beam10m 2>/dev/null || true
+          git checkout -B bench/beam10m
           git add benchmarks/results/beam10m_real_gha.json
           git commit -m "bench(beam10m): real GH-runner run $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]" || echo "nothing to commit"
-          git push origin bench/beam10m
+          git push --force-with-lease origin bench/beam10m
 
       - name: Upload results artifact
         if: always()

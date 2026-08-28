@@ -87,6 +87,14 @@ class Config:
     # --- SLB --------------------------------------------------------------
     slb_entries: int = 64
     slb_threshold: float = 0.97
+    # Bench determinism: when True, the SLB is bypassed entirely so each
+    # query recomputes fresh fusion. Without this, templated near-duplicate
+    # queries (e.g. "What is the name of beam_1?" / "What is the age of
+    # beam_1?") land at cosine ≈ 0.97 against the SLB threshold, and BLAS
+    # ULP drift across processes flips the hit/miss decision — producing
+    # ±5pp prec@5 variance on identical bench runs. Production runs leave
+    # this False (SLB is a real perf win); only the bench script enables it.
+    slb_disabled: bool = False
 
     # --- Personalized PageRank (HippoRAG 2 lineage) --------------------------
     ppr_enabled: bool = True          # graph diffusion read mode
