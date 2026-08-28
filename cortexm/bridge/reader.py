@@ -37,6 +37,76 @@ def _content_key(f: "Fact | None") -> tuple:
     return (f.subject, f.relation, f.value, str(f.valid_from))
 
 
+def _query_relevant_window(text: str, query: str, *,
+                           max_chars: int = 300,
+                           padding: int = 30) -> str:
+    """Return the most query-relevant substring of `text`.
+
+    A μ=0 deterministic snippet selector. The naive approach
+    (`text[:max_chars]`) loses the answer when the chunk text is
+    long and the answer-bearing sentence is in the middle. This
+    function:
+
+      1. Tokenizes the query into content words (lowercased).
+      2. Walks the text word-by-word, scoring each position by the
+         density of query-word hits in a sliding window of ~max_chars.
+      3. Picks the start position with the highest density.
+      4. Returns the substring text[start : start+max_chars] with
+         ellipsis if either side was truncated.
+
+    Falls back to text[:max_chars] when no query words are present
+    (the query and chunk share no lexical signal — surface the start
+    so the LLM judge can decide based on whatever context is there).
+    """
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    try:
+        from cortexm.bridge.prefilter import _content_word_set
+    except ImportError:
+        return text[:max_chars]
+    q_words = _content_word_set(query)
+    if not q_words:
+        return text[:max_chars]
+    # tokenize text into lowercased words with their char offsets
+    import re as _re
+    tokens = [(m.group(0).lower(), m.start(), m.end())
+              for m in _re.finditer(r"\w+", text)]
+    if not tokens:
+        return text[:max_chars]
+    # sliding-window density: for each token i, count query-word hits
+    # in tokens[i : i+W] where W is chosen so the window covers
+    # roughly max_chars. We pick the start token that maximizes the
+    # density.
+    char_pos = 0
+    best_score = -1
+    best_start_char = 0
+    n = len(tokens)
+    for i in range(n):
+        # find the largest j such that tokens[j-1].end - tokens[i].start <= max_chars
+        j = i
+        while j < n and tokens[j - 1][2] - tokens[i][1] <= max_chars:
+            j += 1
+        # window is tokens[i:j]
+        window_words = {tokens[k][0] for k in range(i, j)}
+        hits = len(q_words & window_words)
+        # density = hits / window_size (favor smaller high-hit windows)
+        window_size = max(1, j - i)
+        density = hits / window_size
+        if density > best_score:
+            best_score = density
+            best_start_char = max(0, tokens[i][1] - padding)
+    if best_score <= 0:
+        # no query words found in any window — fall back to start
+        return text[:max_chars] + ("..." if len(text) > max_chars else "")
+    end = min(len(text), best_start_char + max_chars)
+    snippet = text[best_start_char:end]
+    prefix = "..." if best_start_char > 0 else ""
+    suffix = "..." if end < len(text) else ""
+    return f"{prefix}{snippet}{suffix}"
+
+
 RELATION_HINTS = [
     # occupation idioms FIRST: "for a living" contains "living", which the
     # residence hint below would otherwise capture, drowning the `role`
@@ -157,6 +227,19 @@ class RetrievalResult:
         return out
 
 
+@dataclass
+class ChunkRecallStats:
+    """Stats for the chunk-recall parallel path (Tier-4.4.3 fix)."""
+    n_chunks_in_scope: int = 0
+    n_scored: int = 0
+    n_kept: int = 0
+    n_below_threshold: int = 0
+    min_score: float = 1.0
+    max_score: float = 0.0
+    mean_score: float = 0.0
+    skipped: str = ""   # "" = ran; otherwise the reason it skipped
+
+
 class MemoryReader:
     def __init__(self, config: Config, store: TraceStore, palace: MemoryPalace,
                  prefetcher=None) -> None:
@@ -232,6 +315,136 @@ class MemoryReader:
 
     def invalidate_caches(self) -> None:
         self._scope_cache.clear()
+
+    # --------------------------------------------------------- chunk recall
+    # Tier-4.4.3 abstention fix: when the fact-triple VSA path returns
+    # sparse candidates on natural-language queries whose answer lives
+    # in the chunk text (not the triple), scan the chunks in scope and
+    # inject their facts into the candidate pool. The fact triple
+    # ("user:X, event, Possibly fixed by") often doesn't lexically or
+    # semantically match the query ("Which user suggested PR #65353?")
+    # — but the chunk text "[ati865] Possibly fixed by PR #65353 or
+    # #65511" matches strongly.
+    #
+    # μ=0: deterministic lexical+semantic chunk scoring, no LLM. Cost
+    # is O(C) per query where C = # of chunks in scope; gated by
+    # chunk_recall_max_chunks so production deployments with large
+    # scopes aren't penalized.
+    def _chunk_recall(self, query: str, q_vec, scope: set[str],
+                      user_id: str, agent_id, run_id, branch
+                      ) -> tuple[dict[str, float], "ChunkRecallStats"]:
+        """Score chunks in scope against the query, return top-N chunk_ids.
+
+        Returns (chunk_scores, stats) where chunk_scores maps chunk_id
+        to a combined lex+sem score. The caller (search()) injects
+        facts from the top-N chunks into the fusion candidate pool.
+        """
+        stats = ChunkRecallStats()
+        if not getattr(self.cfg, "chunk_recall_enabled", True):
+            stats.skipped = "disabled"
+            return {}, stats
+        if not scope:
+            stats.skipped = "empty_scope"
+            return {}, stats
+
+        # Load all chunks in scope. The (user_id, agent_id, run_id)
+        # scope is the same one _scope_ids filters facts by — same
+        # sandbox guarantee (user-scope query sees only user chunks).
+        chunks = self.store.chunks_for_scope(
+            user_id=user_id,
+            agent_id=None if agent_id is None else agent_id,
+            run_id=run_id,
+        )
+        # InjecMEM scope sandbox parity: a user-scope query
+        # (agent_id=None) sees ONLY user-scoped chunks; agent-written
+        # chunks stay invisible until explicitly promoted.
+        if agent_id is None:
+            if getattr(self.cfg, "sandbox_enabled", True):
+                chunks = [c for c in chunks if c.get("agent_id") is None]
+        else:
+            chunks = [c for c in chunks
+                      if c.get("agent_id") in (None, agent_id)]
+        if branch is not None:
+            # branch filter parity: only chunks whose facts are active
+            # in the branch. We can't filter chunks directly without a
+            # JOIN; do it via the fact scope set.
+            #
+            # NB: chunks with ZERO extracted facts must NOT be filtered
+            # out here — they're exactly the chunks the chunk-recall
+            # path is designed to surface (the answer lives in the
+            # chunk text, but the pattern library didn't extract a
+            # fact). The branch filter is about superseded facts, and
+            # a chunk with no facts can't be superseded.
+            active_fids = self.store.active_ids(branch) & scope
+            kept: list[dict] = []
+            for c in chunks:
+                c_facts = self.store.facts_for_chunk(c["id"],
+                                                    active_only=True)
+                if not c_facts:
+                    kept.append(c)  # no facts → not superseded → keep
+                    continue
+                if any(f.id in active_fids for f in c_facts):
+                    kept.append(c)
+            chunks = kept
+
+        stats.n_chunks_in_scope = len(chunks)
+        if stats.n_chunks_in_scope == 0:
+            stats.skipped = "no_chunks_after_filter"
+            return {}, stats
+        if stats.n_chunks_in_scope > int(getattr(
+                self.cfg, "chunk_recall_max_chunks", 500)):
+            stats.skipped = "scope_too_large"
+            return {}, stats
+
+        try:
+            import numpy as np
+            from cortexm.bridge.prefilter import (
+                _content_word_set, _jaccard)
+        except ImportError:
+            stats.skipped = "import_error"
+            return {}, stats
+
+        q_words = _content_word_set(query)
+        w_lex = float(getattr(self.cfg, "chunk_recall_w_lex", 0.45))
+        w_sem = float(getattr(self.cfg, "chunk_recall_w_sem", 0.55))
+        threshold = float(getattr(self.cfg,
+                                  "chunk_recall_threshold", 0.05))
+        topn = int(getattr(self.cfg, "chunk_recall_topn", 8))
+        max_chars = 2000  # bound the embed cost per chunk
+
+        scored: list[tuple[float, str]] = []
+        for c in chunks:
+            text = (c.get("text") or "")[:max_chars]
+            if not text:
+                continue
+            c_words = _content_word_set(text)
+            lex = _jaccard(q_words, c_words)
+            sem = 0.0
+            if q_vec is not None:
+                try:
+                    c_vec = self.palace.embedder.embed(text)
+                    # cosine sim in [-1,1] → normalize to [0,1]
+                    sem = float(np.dot(q_vec, c_vec))
+                    sem = max(0.0, (sem + 1.0) / 2.0)
+                except Exception:
+                    sem = 0.0
+            score = w_lex * lex + w_sem * sem
+            stats.n_scored += 1
+            if score > stats.max_score:
+                stats.max_score = score
+            if score < stats.min_score:
+                stats.min_score = score
+            if score >= threshold:
+                scored.append((score, c["id"]))
+            else:
+                stats.n_below_threshold += 1
+
+        scored.sort(key=lambda x: -x[0])
+        top = scored[:topn]
+        stats.n_kept = len(top)
+        stats.mean_score = (sum(s for s, _ in top) / len(top)
+                            if top else 0.0)
+        return {cid: s for s, cid in top}, stats
 
     def _canonical_entities(self, query: str, user_id: str) -> list[str]:
         """cap-sequences + lexicon + alias resolution to canonical names."""
@@ -525,6 +738,30 @@ class MemoryReader:
                 # prefilter is best-effort; never let it block retrieval
                 pass
 
+        # --- chunk-recall parallel path (Tier-4.4.3 abstention fix) -------
+        # Scan chunk TEXT (not fact triples) for query-relevant content
+        # the fact-level VSA may have missed. The fact triple
+        # ("user:X, event, Possibly fixed by") often doesn't lexically
+        # or semantically match the query ("Which user suggested
+        # PR #65353?") — but the chunk text "[ati865] Possibly fixed
+        # by PR #65353 or #65511" matches strongly. We inject facts
+        # from the top-N chunks into the fusion candidate pool with
+        # a separate weight so they don't drown out the existing
+        # VSA/symbolic hits, but they DO get a chance to surface.
+        # μ=0: deterministic lex+sem chunk scoring, no LLM.
+        # NB: the INJECTION happens after fusion initializes
+        # `candidates` and `fact_map` below — we only COMPUTE here.
+        chunk_recall_scores: dict[str, float] = {}
+        chunk_recall_stats: "ChunkRecallStats | None" = None
+        if getattr(self.cfg, "chunk_recall_enabled", True):
+            try:
+                chunk_recall_scores, cr_stats = self._chunk_recall(
+                    query, q_vec, scope, user_id, agent_id, run_id, branch)
+                chunk_recall_stats = cr_stats
+            except Exception:
+                # chunk recall is best-effort; never block retrieval
+                chunk_recall_stats = ChunkRecallStats(skipped="exception")
+
         # --- fusion ---------------------------------------------------------
         # 'mentioned' anchors are retrieval scaffolding, not answers: their
         # long snippets inflate lexical similarity, so ONLY their VSA
@@ -545,6 +782,51 @@ class MemoryReader:
             b = boost + (0.2 if hinted else 0.0)
             candidates[f.id] = candidates.get(f.id, 0.0) + \
                 self.cfg.fusion_symbolic_weight * b
+
+        # Inject chunk-recall hits into the candidate pool. We do this
+        # AFTER the VSA/symbolic fusion so chunk-recall facts get an
+        # ADDITIVE boost (not a replace). A fact that's both a VSA hit
+        # and a chunk-recall hit gets the sum, which is what we want —
+        # multiple retrieval paths agree → higher rank.
+        chunk_recall_notes: list[str] = []
+        if chunk_recall_scores:
+            cr_weight = float(getattr(self.cfg,
+                                      "chunk_recall_weight", 0.35))
+            for chunk_id, cscore in chunk_recall_scores.items():
+                chunk_facts = self.store.facts_for_chunk(
+                    chunk_id, active_only=True)
+                # If the chunk has NO extracted facts (the pattern
+                # library didn't match), we still want the chunk's
+                # text surfaced to the LLM judge. Emit a RECALL: note
+                # carrying a query-relevant window of the chunk text
+                # — same channel _symbolic_query uses for ORDERING
+                # / temporal-window notes. Without this, the chunk-
+                # recall path correctly identifies the answer-bearing
+                # chunk but has nothing to inject into the candidate
+                # pool (and the judge never sees the answer).
+                if not chunk_facts:
+                    chunk_row = self.store.get_chunk(chunk_id)
+                    if chunk_row:
+                        snippet = _query_relevant_window(
+                            chunk_row["text"], query,
+                            max_chars=300)
+                        chunk_recall_notes.append(
+                            f"RECALL from thread: {snippet}")
+                    continue
+                for f in chunk_facts:
+                    if f.id not in scope:
+                        continue  # respect the scope filter
+                    # NB: even if a fact was already dropped by the
+                    # prefilter above, we re-inject it here because
+                    # the chunk text was a match. The prefilter judges
+                    # by fact-triple overlap, which is exactly the
+                    # failure mode we're correcting.
+                    add = cr_weight * cscore
+                    candidates[f.id] = candidates.get(f.id, 0.0) + add
+                    if f.id not in fact_map:
+                        fact_map[f.id] = f
+        if chunk_recall_notes:
+            notes = (notes or []) + chunk_recall_notes
 
         # prefetch boost (MBTB) — cache-warming heuristic ONLY for simple
         # recall/current intents: for precision intents (multihop,
@@ -664,6 +946,10 @@ class MemoryReader:
              "prefetch_boosted": len(prefetch_boosted),
              "vsa_candidates": len(vsa_scores),
              "symbolic_candidates": len(sym_facts),
+             "chunk_recall": (
+                 chunk_recall_stats.n_kept if chunk_recall_stats else 0),
+             "chunk_recall_skipped": (
+                 chunk_recall_stats.skipped if chunk_recall_stats else ""),
              "rerank": rerank_used},
             False, {f.id: round(candidates.get(f.id, 0.0), 4) for f in facts})
         # --- MIND diversity check (InjecMEM defense) ----------------------

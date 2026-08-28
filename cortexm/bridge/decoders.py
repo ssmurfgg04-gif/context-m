@@ -56,6 +56,23 @@ class LLMPromptDecoder:
     name = "llm_prompt"
 
     def render(self, *, query, intent, facts, scores, notes, store=None) -> str:
+        # The snippet window is widened to 400 chars (Tier-4.4.3 fix).
+        # The prior 80-char cap truncated BEFORE the speaker name and
+        # answer text were visible to the LLM judge — e.g. on real-
+        # GitHub data, the snippet "[Xanewok] I can't reproduce as of
+        # rustc 1.40.0-nightly (c23a7aa77 2019-10-19) ..." was long
+        # enough to show the version, but shorter snippets cut off
+        # before the answer-bearing sentence. 400 chars gives the
+        # judge enough rope; for chunks longer than 400 chars we use
+        # a query-relevant window (cortexm.bridge.reader._query_relevant_window)
+        # so the snippet starts at the most lexically-overlapping
+        # substring, not always at chunk start.
+        SNIPPET_MAX = 400
+        try:
+            from cortexm.bridge.reader import _query_relevant_window
+            _has_window = True
+        except ImportError:
+            _has_window = False
         lines = ["[Memory — Known facts]"]
         if not facts and not notes:
             lines.append("(no verified facts found for this query)")
@@ -64,9 +81,14 @@ class LLMPromptDecoder:
                 store and f.source_id) else None
             snippet = ""
             if chunk:
-                snippet = chunk["text"].replace("\n", " ")[:80]
-                if len(chunk["text"]) > 80:
-                    snippet += "..."
+                raw = chunk["text"].replace("\n", " ")
+                if len(raw) <= SNIPPET_MAX:
+                    snippet = raw
+                elif _has_window and query:
+                    snippet = _query_relevant_window(
+                        raw, query, max_chars=SNIPPET_MAX)
+                else:
+                    snippet = raw[:SNIPPET_MAX] + "..."
             lines.append(
                 f"- {f.display()} [valid {f.valid_window()}; "
                 f"learned {f.tx_from[:10]}; conf {f.confidence:.2f}; "

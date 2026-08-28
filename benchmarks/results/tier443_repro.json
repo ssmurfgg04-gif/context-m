@@ -1,0 +1,53 @@
+{
+  "before": {
+    "label": "BEFORE fix (chunk_recall OFF, 80-char snippet)",
+    "n_questions": 3,
+    "n_answerable": 1,
+    "results": [
+      {
+        "question": "Which user suggested that the issue might be fixed by pull requests #65353 or #65511?",
+        "gold": "ati865",
+        "gold_in_context_block": false,
+        "context_block": "[Memory \u2014 Known facts]\n- (user:synthetic#demo-1, event, can't reproduce as of rustc) [valid 2019-10-19\u2192\u221e; learned 2026-08-28; conf 0.70; id e1a3b53e; src #8199c84b; \"[Xanewok] I can't reproduce as of rustc 1.40.0-nightly (c23a7aa77 2019-10-19). Could you please update and try again?\"]"
+      },
+      {
+        "question": "What rustc nightly version was tested and confirmed to no longer reproduce the bug after Xanewok's suggestion?",
+        "gold": "rustc 1.40.0-nightly (c23a7aa77 2019-10-19)",
+        "gold_in_context_block": true,
+        "context_block": "[Memory \u2014 Known facts]\n- (user:synthetic#demo-1, event, can't reproduce as of rustc) [valid 2019-10-19\u2192\u221e; learned 2026-08-28; conf 0.70; id e1a3b53e; src #8199c84b; \"[Xanewok] I can't reproduce as of rustc 1.40.0-nightly (c23a7aa77 2019-10-19). Could you please update and try again?\"]"
+      },
+      {
+        "question": "Who closed the issue and what reason was given?",
+        "gold": "jonas-schievink",
+        "gold_in_context_block": false,
+        "context_block": "[Memory \u2014 Known facts]\n- (user:synthetic#demo-1, event, can't reproduce as of rustc) [valid 2019-10-19\u2192\u221e; learned 2026-08-28; conf 0.70; id e1a3b53e; src #8199c84b; \"[Xanewok] I can't reproduce as of rustc 1.40.0-nightly (c23a7aa77 2019-10-19). Could you please update and try again?\"]"
+      }
+    ]
+  },
+  "after": {
+    "label": "AFTER fix (chunk_recall ON, wider snippet)",
+    "n_questions": 3,
+    "n_answerable": 3,
+    "results": [
+      {
+        "question": "Which user suggested that the issue might be fixed by pull requests #65353 or #65511?",
+        "gold": "ati865",
+        "gold_in_context_block": true,
+        "context_block": "[Memory \u2014 Known facts]\n- (user:synthetic#demo-1, event, can't reproduce as of rustc) [valid 2019-10-19\u2192\u221e; learned 2026-08-28; conf 0.70; id 91396142; src #8199c84b; \"[Xanewok] I can't reproduce as of rustc 1.40.0-nightly (c23a7aa77 2019-10-19). Could you please update and try again?\"]\n- RECALL from thread: [ati865] Possibly fixed by https://github.com/example/repo/pull/65353 or https://github.com/example/repo/pull/65511\n- RECALL from thread: [ati865] Possibly fixed by https://github.com/example/repo/pull/65353 or https://github.com/example/repo/pull/65511. Can you test again tomorrow with latest nightly?\n- RECALL from thread: [jonas-schievink] Closing as fixed. Thanks for reporting and testing!\n- RECALL from thread: [Leo1003] Just upgraded to latest nightly and tested. I can confirm that it has been fixed in: rustc 1.40.0-nightly (518deda77 2019-10-18)\n- RECALL from thread: [craterbot] Experiment pr-demo-1 created and queued. Crater is a tool to run experiments across parts of the ecosystem."
+      },
+      {
+        "question": "What rustc nightly version was tested and confirmed to no longer reproduce the bug after Xanewok's suggestion?",
+        "gold": "rustc 1.40.0-nightly (c23a7aa77 2019-10-19)",
+        "gold_in_context_block": true,
+        "context_block": "[Memory \u2014 Known facts]\n- (user:synthetic#demo-1, event, can't reproduce as of rustc) [valid 2019-10-19\u2192\u221e; learned 2026-08-28; conf 0.70; id 91396142; src #8199c84b; \"[Xanewok] I can't reproduce as of rustc 1.40.0-nightly (c23a7aa77 2019-10-19). Could you please update and try again?\"]\n- RECALL from thread: [Leo1003] Just upgraded to latest nightly and tested. I can confirm that it has been fixed in: rustc 1.40.0-nightly (518deda77 2019-10-18)\n- RECALL from thread: [ati865] Possibly fixed by https://github.com/example/repo/pull/65353 or https://github.com/example/repo/pull/65511. Can you test again tomorrow with latest nightly?\n- RECALL from thread: [craterbot] Experiment pr-demo-1 created and queued. Crater is a tool to run experiments across parts of the ecosystem.\n- RECALL from thread: [ati865] Possibly fixed by https://github.com/example/repo/pull/65353 or https://github.com/example/repo/pull/65511\n- RECALL from thread: [jonas-schievink] Closing as fixed. Thanks for reporting and testing!"
+      },
+      {
+        "question": "Who closed the issue and what reason was given?",
+        "gold": "jonas-schievink",
+        "gold_in_context_block": true,
+        "context_block": "[Memory \u2014 Known facts]\n- (user:synthetic#demo-1, event, can't reproduce as of rustc) [valid 2019-10-19\u2192\u221e; learned 2026-08-28; conf 0.70; id 91396142; src #8199c84b; \"[Xanewok] I can't reproduce as of rustc 1.40.0-nightly (c23a7aa77 2019-10-19). Could you please update and try again?\"]\n- RECALL from thread: [jonas-schievink] Closing as fixed. Thanks for reporting and testing!\n- RECALL from thread: [ati865] Possibly fixed by https://github.com/example/repo/pull/65353 or https://github.com/example/repo/pull/65511\n- RECALL from thread: [craterbot] Experiment pr-demo-1 created and queued. Crater is a tool to run experiments across parts of the ecosystem.\n- RECALL from thread: [ati865] Possibly fixed by https://github.com/example/repo/pull/65353 or https://github.com/example/repo/pull/65511. Can you test again tomorrow with latest nightly?\n- RECALL from thread: [Leo1003] Just upgraded to latest nightly and tested. I can confirm that it has been fixed in: rustc 1.40.0-nightly (518deda77 2019-10-18)"
+      }
+    ]
+  },
+  "delta_answerable": 2
+}

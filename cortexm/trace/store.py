@@ -298,6 +298,51 @@ class TraceStore:
             rows = self.conn.execute("SELECT * FROM chunks ORDER BY ts").fetchall()
         return [dict(r) for r in rows]
 
+    def chunks_for_scope(self, *, user_id: str | None = None,
+                         agent_id: str | None = None,
+                         run_id: str | None = None,
+                         limit: int | None = None) -> list[dict]:
+        """Return all chunks in a (user_id, agent_id, run_id) scope.
+
+        This is the chunk-level counterpart to `_scope_ids` (which only
+        returns fact ids). Used by the query-time chunk-recall path in
+        MemoryReader._chunk_recall — it scans chunk TEXT (not fact triples)
+        for query-relevant content the fact-level VSA may have missed.
+
+        Returns chunks in `ts` order so the recall path can attribute a
+        chunk to its position in the conversation.
+        """
+        clauses: list[str] = []
+        params: list = []
+        if user_id is not None:
+            clauses.append("user_id=?")
+            params.append(user_id)
+        if agent_id is not None:
+            clauses.append("agent_id=?")
+            params.append(agent_id)
+        if run_id is not None:
+            clauses.append("run_id=?")
+            params.append(run_id)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        q = f"SELECT * FROM chunks{where} ORDER BY ts"
+        if limit:
+            q += f" LIMIT {int(limit)}"
+        return [dict(r) for r in self.conn.execute(q, params).fetchall()]
+
+    def facts_for_chunk(self, chunk_id: str, *,
+                        active_only: bool = True) -> list[Fact]:
+        """All facts whose `source_id` points at `chunk_id`.
+
+        Used by the chunk-recall path to map a high-scoring chunk back to
+        its fact triples so they can be injected into the fusion candidate
+        pool. Without this, the recall path would surface chunks whose
+        facts the rest of the pipeline doesn't know about.
+        """
+        q = (f"SELECT {FACT_COLUMNS} FROM facts WHERE source_id=?"
+             + (" AND is_active=1" if active_only else ""))
+        rows = self.conn.execute(q, (chunk_id,)).fetchall()
+        return [Fact.from_row(dict(r)) for r in rows]
+
     def quarantined_chunk_texts(self, user_id: str | None = None) -> list[str]:
         """Source texts of every quarantined fact (the tainted corpus used
         by the MINJA contagion guard on the write path)."""

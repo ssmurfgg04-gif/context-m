@@ -228,6 +228,28 @@ class Config:
     prf_beta: float = 0.4               # Rocchio: top-3 mean weight
     prf_topn: int = 3                   # how many top hits for PRF mean
 
+    # --- chunk-recall parallel path (Tier-4.4.3 abstention fix) ----------
+    # When the fact-level VSA returns sparse candidates on natural-language
+    # queries whose answer lives in chunk text (not the fact triple),
+    # scan the chunks in scope and inject their facts into the candidate
+    # pool. The fact triple ("user:X, event, Possibly fixed by") often
+    # doesn't lexically or semantically match the query ("Which user
+    # suggested PR #65353?") — but the chunk text "[ati865] Possibly
+    # fixed by PR #65353 or #65511" matches strongly.
+    # μ=0: deterministic lexical+semantic chunk scoring, no LLM. Cost is
+    # O(C) per query where C = # of chunks in scope; gated by
+    # chunk_recall_max_chunks so production deployments with large scopes
+    # aren't penalized. Default ON — the abstention weak spot on real-
+    # GitHub data (Tier 4.4.3: 0/13 answerable) is exactly what this
+    # fixes, and the cost is bounded.
+    chunk_recall_enabled: bool = True
+    chunk_recall_weight: float = 0.35   # weight on injected chunk-recall score
+    chunk_recall_max_chunks: int = 500  # skip the path above this scope size
+    chunk_recall_topn: int = 8         # inject facts from this many top chunks
+    chunk_recall_threshold: float = 0.05  # min combined score to inject
+    chunk_recall_w_lex: float = 0.45
+    chunk_recall_w_sem: float = 0.55
+
     # --- index ----------------------------------------------------------
     # Which proximity-index backend the memory palace uses for ANN search
     # over hologram vectors. See INDEX_BACKENDS at the top of this file
