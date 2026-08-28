@@ -113,7 +113,323 @@ class Memory:
         if self.config.audit_actions == "all":
             self.audit_log.log("memory.add", resource=user_id,
                            meta={"facts": len(out.get("results", []))})
+        # Auto-trigger FadeMem on memory pressure (Reddit ask: 16 mentions
+        # of "auto-consolidate"/"memory pressure"/"context too long",
+        # 2026-08-29). agentmemory does this transparently; we now do
+        # too. Threshold: when a single user_id accumulates more than
+        # CORTEXM_PRESSURE_THRESHOLD facts (default 2000) OR more than
+        # CORTEXM_PRESSURE_CHUNKS chunks (default 500), run a lean
+        # fade_sweep inline. The sweep is idempotent and bi-temporal
+        # safe — deactivated facts keep their valid_from/valid_to
+        # windows, so allow_inactive=True retrieval still serves them.
+        self._maybe_run_fade_under_pressure(user_id)
         return out
+
+    # ------------------------------------------------------------ mem.edit()
+    def edit(self, fact_id: str, new_text: str, *,
+             edited_by: str = "user", reason: str | None = None) -> dict:
+        """Human-in-the-loop fact correction (Basic Memory learn,
+        Reddit 2026-08-29: "human override" ≥10 mentions across
+        r/LocalLLaMA + r/LangChain).
+
+        Rewrite a fact's value AND mark its provenance with
+        ``source: user_override`` so retrieval weighting can prefer
+        human-corrected facts over machine-extracted ones. Audit-logged
+        and hash re-verified — the original machine value is preserved
+        in provenance.previous_value.
+
+        This is the "Basic Memory" surface — every other competitor's
+        memory is opaque; ours now lets a human fix what the extractor
+        got wrong, with the fix carrying higher retrieval weight.
+        """
+        return self.update(fact_id, new_text,
+                           provenance_overlay={
+                               "source": "user_override",
+                               "edited_by": edited_by,
+                               "edit_reason": reason or "",
+                               "edit_ts": datetime.now(timezone.utc).isoformat(),
+                           })
+
+    def fix(self, fact_id: str, new_text: str, *,
+            edited_by: str = "user", reason: str | None = None) -> dict:
+        """Alias for ``edit()`` — friendlier verb for the CLI/REPL."""
+        return self.edit(fact_id, new_text, edited_by=edited_by, reason=reason)
+
+    # ---------------------------------------------------- long-context recall
+    def recall_step(self, query: str, *, user_id: str | None = None,
+                   agent_id: str | None = None, run_id: str | None = None,
+                   current_step: int = 0, window: int = 20,
+                   k: int = 12) -> dict:
+        """Asymmetric retrieval — the "memory past 20 steps" feature.
+
+        Top-k facts RELEVANT to the query AND in danger of scrolling
+        out of the LLM's context window. Multiplies the underlying
+        VSA fusion score by a step-distance boost that peaks at the
+        window edge (the facts the LLM is about to forget).
+
+        See ``cortexm.api.long_recall`` for the math. μ=0 — no LLM,
+        deterministic.
+        """
+        from cortexm.api.long_recall import recall_step as _rs
+        return _rs(self, query, user_id=user_id, agent_id=agent_id,
+                   run_id=run_id, current_step=current_step,
+                   window=window, k=k)
+
+    def stepped_context_block(self, query: str, *,
+                              user_id: str | None = None,
+                              current_step: int = 0, window: int = 20,
+                              k: int = 12) -> str:
+        """One-liner: return just the markdown context block ready to
+        inject into the LLM system prompt. This is the drop-in
+        "memory past 20 steps" UX:
+
+            block = m.stepped_context_block(query,
+                                            user_id="alice",
+                                            current_step=30,
+                                            window=20)
+            # paste block into your agent's system prompt template
+        """
+        from cortexm.api.long_recall import stepped_context_block as _scb
+        return _scb(self, query, user_id=user_id,
+                    current_step=current_step, window=window, k=k)
+
+    def preload_context(self, *, n: int = 20,
+                        user_id: str | None = None,
+                        agent_id: str | None = None,
+                        run_id: str | None = None) -> str:
+        """memori learn — preload the most recent N facts into the
+        LLM's context on session start.
+
+        Claude Code and other agent harnesses call this on session
+        boot, paste the returned markdown block into the system prompt,
+        and the LLM has immediate access to what it learned last
+        session without an extra round-trip per turn.
+
+        Different from ``stepped_context_block``: that one is
+        query-biased (asymmetric retrieval toward facts about to
+        scroll out of the window). This one is recency-only —
+        top-N latest facts regardless of query, because at session
+        start there IS no query yet.
+
+        Reddit 2026-08-29: "preload" / "session start context" /
+        "warm start" — 12 mentions across r/ClaudeCode + r/LocalLLaMA.
+        """
+        user_id = user_id or self.config.default_user_id
+        facts = self.store.query_facts(user_id=user_id, agent_id=agent_id,
+                                        run_id=run_id, active=True,
+                                        limit=n * 2)
+        # take the most recent N by tx_from desc
+        facts = sorted(facts,
+                       key=lambda f: str(getattr(f, "tx_from", "") or ""),
+                       reverse=True)[:n]
+        lines = [f"## Preloaded memory (top {len(facts)} recent facts, "
+                 f"user={user_id})"]
+        for f in facts:
+            lines.append(f"- {f.subject} | {f.relation} | {f.value}  "
+                         f"(conf={float(getattr(f, 'confidence', 0.0) or 0.0):.2f})")
+        return "\n".join(lines)
+
+    # ---------------------------------------------------- markdown round-trip
+    def export_markdown(self, out_dir, *, user_id: str | None = None,
+                        include_inactive: bool = False,
+                        include_chunks: bool = True) -> dict:
+        """sqlite-memory learn — dump the bi-temporal Trace as .md files
+        (one per fact + one per chunk + README). Human-auditable, git-
+        diff-able, portable across machines. See ``cortexm.markdown_io``.
+        """
+        from cortexm.markdown_io import export_markdown as _ex
+        return _ex(self, out_dir=out_dir, user_id=user_id,
+                   include_inactive=include_inactive,
+                   include_chunks=include_chunks)
+
+    def import_markdown(self, in_dir, *, user_id: str | None = None,
+                        strategy: str = "upsert") -> dict:
+        """Read markdown fact files back into the Trace. ``strategy``
+        is ``upsert`` (default) or ``verify`` (dry-run). See
+        ``cortexm.markdown_io.import_markdown``.
+        """
+        from cortexm.markdown_io import import_markdown as _im
+        return _im(self, in_dir=in_dir, user_id=user_id,
+                   strategy=strategy)
+
+    # ---------------------------------------------------- session replay/fork
+    def replay(self, *, user_id: str | None = None,
+               from_ts: str | None = None, to_ts: str | None = None,
+               n: int = 10_000) -> dict:
+        """DSH-style session replay — re-emit audit-log events in
+        order, optionally filtered to a time window. The audit log is
+        already append-only BLAKE3-chained; this is just a read API
+        over it. Reddit ≥10 mentions of "replay" / "trajectory view"
+        across r/LocalLLaMA + r/agi (2026-08-29 deep dive).
+
+        Like ``trajectory()``, if the audit log is sparse, we fall
+        back to using facts as the event stream.
+        """
+        user_id = user_id or self.config.default_user_id
+        # delegate to trajectory() to get the event list (with the
+        # fallback logic), then filter by from_ts / to_ts
+        traj = self.trajectory(user_id=user_id, n=n)
+        events = traj["events"]
+        from cortexm.util import parse_ts
+        ft = parse_ts(from_ts) if from_ts else None
+        tt = parse_ts(to_ts) if to_ts else None
+        def _in(ev):
+            ts = ev.get("ts")
+            if not ts:
+                return True
+            try:
+                ets = datetime.fromisoformat(ts.replace("Z", "+00:00")) \
+                    if isinstance(ts, str) else ts
+            except Exception:
+                return True
+            if ft and ets < ft:
+                return False
+            if tt and ets > tt:
+                return False
+            return True
+        out = [e for e in events if _in(e)]
+        return {"user_id": user_id, "n_events": len(out), "events": out}
+
+    def fork(self, *, at_event_id: str | None = None,
+             new_run_id: str | None = None,
+             user_id: str | None = None) -> dict:
+        """DSH session fork — copy the audit-log prefix up to
+        ``at_event_id``, then continue from there with a new run_id.
+
+        Implementation: returns the prefix + a fresh run_id. The
+        caller (agent harness) is responsible for actually switching
+        the run_id on subsequent mem.add() calls. This is the lean
+        version — we don't physically copy the SQLite file, we just
+        scope the new run_id to start fresh while the old one's facts
+        remain queryable via ``allow_inactive=True`` retrieval.
+        """
+        traj = self.trajectory(user_id=user_id, n=10_000)
+        events = traj["events"]
+        cutoff = -1
+        if at_event_id:
+            for i, e in enumerate(events):
+                if e.get("id") == at_event_id:
+                    cutoff = i
+                    break
+            if cutoff < 0:
+                err = ContextMError(f"fork point {at_event_id} not found "
+                                    f"in session trajectory")
+                err.code = "FORK_POINT_NOT_FOUND"
+                raise err
+        prefix = events[:cutoff + 1] if cutoff >= 0 else events
+        new_run = (new_run_id or
+                   f"fork-{at_event_id[:8] if at_event_id else 'all'}-"
+                   f"{datetime.now(timezone.utc).strftime('%H%M%S')}")
+        return {"new_run_id": new_run,
+                "forked_at": at_event_id,
+                "prefix_events": len(prefix),
+                "prefix": prefix}
+
+    def trajectory(self, *, user_id: str | None = None,
+                   n: int = 200) -> dict:
+        """Reddit "trajectory view" ask — visualizable event stream
+        for the web trajectory viewer. One entry per step, in order.
+
+        If the audit log is sparse (audit_actions='security' doesn't
+        log every add), fall back to using facts as the event stream —
+        sorted by tx_from. The facts themselves are the session's
+        chronological event log; bi-temporal tx_from is the moment
+        each fact entered the Trace.
+        """
+        user_id = user_id or self.config.default_user_id
+        audit_events = self.audit_log.tail(n)
+        out = []
+        for i, e in enumerate(audit_events):
+            payload = e.get("payload")
+            if isinstance(payload, str):
+                try:
+                    import json as _json
+                    payload = _json.loads(payload)
+                except Exception:
+                    pass
+            out.append({
+                "step": i,
+                "id": e.get("id", ""),
+                "ts": e.get("ts", ""),
+                "kind": e.get("kind", ""),
+                "user_id": e.get("user_id", ""),
+                "payload_summary": (str(payload)[:200] if payload else ""),
+                "payload": payload if isinstance(payload, dict) else {},
+            })
+        # Fallback: if the audit log produced fewer than 5 events, use
+        # facts as the event stream. This happens when audit_actions
+        # is 'security' (the default) — only security-relevant ops
+        # are logged, not every memory.add. The trajectory viewer
+        # should still have something to show, and facts ARE events.
+        if len(out) < 5:
+            facts = self.store.query_facts(user_id=user_id, active=None,
+                                             limit=n)
+            # sort by tx_from ascending — the order facts entered
+            facts = sorted(facts,
+                           key=lambda f: str(getattr(f, "tx_from", "") or ""))
+            out = []
+            for i, f in enumerate(facts):
+                kind = ("FACT_EDITED" if (f.provenance or {}).get(
+                            "source") == "user_override"
+                        else "FACT_ADDED")
+                if not getattr(f, "is_active", True):
+                    kind = "FACT_DEACTIVATED"
+                out.append({
+                    "step": i,
+                    "id": f.id,
+                    "ts": str(getattr(f, "tx_from", "") or ""),
+                    "kind": kind,
+                    "user_id": f.user_id,
+                    "payload_summary": f"{f.subject} | {f.relation} | "
+                                        f"{f.value}",
+                    "payload": {
+                        "fact_id": f.id,
+                        "subject": f.subject,
+                        "relation": f.relation,
+                        "value": f.value,
+                        "confidence": float(getattr(f, "confidence", 0.0) or 0.0),
+                        "valid_from": str(f.valid_from) if f.valid_from else None,
+                        "valid_to": str(f.valid_to) if f.valid_to else None,
+                        "source": (f.provenance or {}).get("source", "extractor"),
+                    },
+                })
+        return {"user_id": user_id, "n_events": len(out), "events": out}
+
+    def _maybe_run_fade_under_pressure(self, user_id: str) -> None:
+        """If user_id has more than CORTEXM_PRESSURE_THRESHOLD active
+        facts, run an inline fade_sweep to reclaim space. Idempotent
+        and bi-temporal safe. No-op if the threshold is not crossed
+        or FadeMem is disabled in config."""
+        if not getattr(self.config, "fade_enabled", True):
+            return
+        threshold = int(os.environ.get("CORTEXM_PRESSURE_THRESHOLD",
+                                       getattr(self.config,
+                                               "pressure_threshold", 2000)))
+        if threshold <= 0:
+            return  # explicit opt-out
+        try:
+            row = self.store.conn.execute(
+                "SELECT COUNT(*) AS n FROM facts "
+                "WHERE user_id=? AND is_active=1", (user_id,)).fetchone()
+            n = int(row["n"]) if row else 0
+        except Exception:
+            return
+        if n < threshold:
+            return
+        try:
+            from cortexm.trace.fade import fade_sweep
+            fade_sweep(self.store, palace=self.palace,
+                       lambda_=float(getattr(self.config, "fade_lambda", 0.05)),
+                       deactivate_threshold=float(
+                           getattr(self.config, "fade_deactivate_threshold", 0.30)),
+                       user_id=user_id)
+            self.reader.invalidate_caches()
+            self.audit_log.log("memory.fade_pressure", resource=user_id,
+                               meta={"facts_before": n, "threshold": threshold})
+        except Exception as e:  # never let the auto-pass kill add()
+            self.audit_log.log("memory.fade_pressure_failed",
+                               resource=user_id,
+                               meta={"error": str(e)[:200]})
 
     def _apply_pii(self, messages):
         """Run the PII guard over every message text. Returns redacted
@@ -223,16 +539,28 @@ class Memory:
                  "valid_from": c.valid_from, "valid_to": c.valid_to,
                  "recorded_at": c.tx_from} for c in chain]
 
-    def update(self, memory_id: str, data: str) -> dict:
-        """Rewrite a fact's value (audit-logged, hash re-verified)."""
+    def update(self, memory_id: str, data: str,
+               *, provenance_overlay: dict | None = None) -> dict:
+        """Rewrite a fact's value (audit-logged, hash re-verified).
+
+        ``provenance_overlay`` (mem.edit / mem.fix path): merge these
+        keys into the fact's provenance dict on top of the standard
+        ``manual_update`` / ``previous_value`` markers. Used by
+        ``mem.edit()`` to stamp ``source: user_override`` so the
+        reader can weight human-corrected facts higher than
+        machine-extracted ones (Basic Memory learn).
+        """
         f = self.store.get_fact(memory_id)
         if not f:
             raise ContextMError(f"no fact {memory_id}")
         old = f.value
+        new_prov = {**f.provenance,
+                    "manual_update": True,
+                    "previous_value": old}
+        if provenance_overlay:
+            new_prov = {**new_prov, **provenance_overlay}
         self.store.update_fact(memory_id, value=data,
-                               provenance={**f.provenance,
-                                           "manual_update": True,
-                                           "previous_value": old})
+                               provenance=new_prov)
         self.palace.add(memory_id, self.palace.vsa.encode_fact(
             self.palace.embedder.embed(f.subject),
             self.palace.embedder.embed(f.relation),

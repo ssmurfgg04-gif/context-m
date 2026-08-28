@@ -15,7 +15,7 @@ Alias (plan naming):      ``from cortexm import Memory``
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.4.0"
 
 # μ=0 protocol counter: number of LLM invocations used by this process.
 # The BEAM-honest protocol requires this to stay 0 during ingest & retrieval.

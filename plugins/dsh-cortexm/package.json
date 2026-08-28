@@ -1,7 +1,7 @@
 {
   "name": "dsh-cortexm",
-  "version": "0.1.0",
-  "description": "DeepSeek Harness (Cordis) plugin — bi-temporal VSA memory + cognition engine + BLAKE3 provenance, exposed as a DSH storage+session plugin.",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness (Cordis) plugin — bi-temporal VSA memory + cognition engine + BLAKE3 provenance, exposed as a DSH storage+session plugin. End-to-end tested with a real Python subprocess.",
   "type": "module",
   "main": "src/index.js",
   "exports": {

@@ -143,6 +143,15 @@ class Config:
     fade_contradiction_penalty: float = 0.25  # supersession pressure
     fade_deactivate_threshold: float = 0.10  # below this → deactivate
 
+    # --- Auto-FadeMem on memory pressure (agentmemory learn) ---------------
+    # When a single user_id accumulates >= pressure_threshold active facts,
+    # the write path (mem.add) runs an inline fade_sweep BEFORE returning.
+    # agentmemory does this transparently; so do we now. Set to 0 to opt
+    # out entirely. Default 2000 — chosen so a typical chat session (50
+    # facts/day for 40 days) never trips the sweep, but a bulk-ingest
+    # scenario (mem0 migration, file ingestion) does.
+    pressure_threshold: int = 2000
+
     # --- TiMem Temporal Memory Tree (4-level consolidation hierarchy) -------
     # When True, the consolidate() pass also builds hierarchical summaries:
     #   L1 raw chunks → L2 session summaries → L3 daily patterns → L4 persona

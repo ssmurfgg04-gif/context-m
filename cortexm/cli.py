@@ -9,6 +9,13 @@
     cortexm bench --buckets 128k,1m  # BEAM-style benchmark
     cortexm export-schema [--db PATH]
     cortexm git log|branches|diff|blame
+    cortexm inspect [--user-id U]    # memory inspection UI (JSON dump)
+    cortexm export --markdown OUT    # human-auditable .md files
+    cortexm import --markdown IN     # re-import markdown fact files
+    cortexm replay [--from-ts T]     # session replay (DSH learn)
+    cortexm fork --at-event-id ID    # session fork → new run_id
+    cortexm creator [--db PATH]     # developer REPL
+    cortexm trajectory-view          # web trajectory viewer (port 8901)
 """
 
 from __future__ import annotations
@@ -153,6 +160,93 @@ def main(argv=None) -> int:
     p.add_argument("--what", choices=["facts", "chunks", "audit", "all"],
                    default="all", help="what to dump (default all)")
 
+    # ---- Reddit-driven P0+P1 surface (2026-08-29 deep dive) ----
+    # export --markdown (sqlite-memory learn) — 46 mentions of "provenance"
+    # / "audit" / "human-readable storage" on Reddit.
+    p = sub.add_parser("export", help="export memory in a portable format")
+    p.add_argument("--db", default=None)
+    p.add_argument("--format", choices=["markdown"], default="markdown")
+    p.add_argument("--out", required=True,
+                   help="output directory (will be created if absent)")
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--include-inactive", action="store_true",
+                   help="also export superseded / faded facts")
+    p.add_argument("--no-chunks", action="store_true",
+                   help="skip the chunks/ subdir (raw source text)")
+
+    # import --markdown (round-trip back into the Trace)
+    p = sub.add_parser("import", help="import memory from a portable format")
+    p.add_argument("--db", default=None)
+    p.add_argument("--format", choices=["markdown"], default="markdown")
+    p.add_argument("--in", dest="in_dir", required=True,
+                   help="input directory (the one `export --markdown` made)")
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--strategy", choices=["upsert", "verify"],
+                   default="upsert",
+                   help="upsert=write; verify=dry-run hash check only")
+
+    # replay (DSH learn — session branching)
+    p = sub.add_parser("replay", help="re-emit audit-log events in order "
+                                       "(DSH session replay)")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--from-ts", default=None,
+                   help="ISO datetime lower bound (inclusive)")
+    p.add_argument("--to-ts", default=None,
+                   help="ISO datetime upper bound (inclusive)")
+    p.add_argument("-n", type=int, default=10_000,
+                   help="cap on events fetched (default 10000)")
+
+    # fork (DSH learn)
+    p = sub.add_parser("fork", help="fork the session at an audit-log event "
+                                     "and continue with a new run_id")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--at-event-id", default=None,
+                   help="audit-log event id to fork at (omit = fork from "
+                        "the beginning)")
+    p.add_argument("--new-run-id", default=None,
+                   help="explicit new run_id (default: auto-generated)")
+
+    # creator REPL (DX ask, 22 Reddit mentions)
+    p = sub.add_parser("creator", help="interactive developer REPL for "
+                                       "inspecting / tweaking memory")
+    p.add_argument("--db", default=":memory:")
+    p.add_argument("--eval", default=None,
+                   help="one-shot: evaluate this Python expression and exit")
+    p.add_argument("--user-id", default="default")
+
+    # trajectory-view (UI/dashboard ask, 40 Reddit mentions)
+    p = sub.add_parser("trajectory-view",
+                       help="web viewer for the audit-log timeline")
+    p.add_argument("--db", default=":memory:")
+    p.add_argument("--host", default="127.0.0.1",
+                   help="bind host (default 127.0.0.1; use 0.0.0.0 for LAN)")
+    p.add_argument("--port", type=int, default=8901)
+
+    # preload (memori learn — Claude Code native adapter)
+    p = sub.add_parser("preload",
+                       help="dump a markdown context block for the most "
+                            "recent N facts (paste into the LLM system "
+                            "prompt at session start)")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("-n", type=int, default=20,
+                   help="how many recent facts to preload (default 20)")
+
+    # recall-step (the killer feature — "memory past 20 steps")
+    p = sub.add_parser("recall-step",
+                       help="asymmetric retrieval — top-k facts RELEVANT to "
+                            "the query AND in danger of scrolling out of "
+                            "the LLM's context window")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("query", nargs="?", default="",
+                   help="the query (positional; defaults to '')")
+    p.add_argument("--current-step", type=int, default=30)
+    p.add_argument("--window", type=int, default=20)
+    p.add_argument("-k", type=int, default=12)
+
     args = ap.parse_args(argv)
     if not args.cmd:
         ap.print_help()
@@ -254,6 +348,88 @@ def main(argv=None) -> int:
 
     if args.cmd == "inspect":
         return _inspect(args)
+
+    if args.cmd == "export":
+        m = _memory(args)
+        try:
+            if args.format == "markdown":
+                out = m.export_markdown(
+                    args.out, user_id=args.user_id,
+                    include_inactive=args.include_inactive,
+                    include_chunks=not args.no_chunks)
+                print(json.dumps(out, indent=2))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "import":
+        m = _memory(args)
+        try:
+            if args.format == "markdown":
+                out = m.import_markdown(
+                    args.in_dir, user_id=args.user_id,
+                    strategy=args.strategy)
+                print(json.dumps(out, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "replay":
+        m = _memory(args)
+        try:
+            out = m.replay(user_id=args.user_id, from_ts=args.from_ts,
+                           to_ts=args.to_ts, n=args.n)
+            print(json.dumps(out, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "fork":
+        m = _memory(args)
+        try:
+            out = m.fork(at_event_id=args.at_event_id,
+                         new_run_id=args.new_run_id,
+                         user_id=args.user_id)
+            print(json.dumps({
+                "new_run_id": out["new_run_id"],
+                "forked_at": out["forked_at"],
+                "prefix_events": out["prefix_events"],
+            }, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "creator":
+        from cortexm.creator import main as creator_main
+        argv = ["--db", args.db, "--user-id", args.user_id]
+        if args.eval:
+            argv += ["--eval", args.eval]
+        return creator_main(argv)
+
+    if args.cmd == "trajectory-view":
+        from cortexm.trajectory_view import main as tv_main
+        return tv_main(["--db", args.db, "--host", args.host,
+                        "--port", str(args.port)])
+
+    if args.cmd == "preload":
+        m = _memory(args)
+        try:
+            block = m.preload_context(n=args.n, user_id=args.user_id)
+            print(block)
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "recall-step":
+        m = _memory(args)
+        try:
+            out = m.recall_step(args.query, user_id=args.user_id,
+                                current_step=args.current_step,
+                                window=args.window, k=args.k)
+            print(json.dumps(out, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
 
     m = _memory(args)
     try:

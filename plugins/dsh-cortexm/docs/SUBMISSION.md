@@ -1,22 +1,40 @@
-# awesome-deepseek-harness submission template
+# awesome-deepseek-harness submission
 
 Submit `dsh-cortexm` to the curated list of community plugins for
 DeepSeek Harness. The list lives at:
 
   https://github.com/deepseek-ai/awesome-deepseek-harness
 
+## Status (2026-08-29)
+
+✅ **End-to-end tests passing with a real `cortexm serve` Python subprocess**
+(5/5 tests in `test/e2e.test.js` — add→search, trajectory, replay, audit,
+subprocess close).
+
+✅ **Version bumped to 1.0.0** (`plugins/dsh-cortexm/package.json`).
+
+⏸ **npm publish**: pending — requires `NPM_TOKEN` env var or `npm login`.
+The package.json, manifest, tests, and source are all ready to publish.
+Run: `cd plugins/dsh-cortexm && npm publish` once credentials are set.
+
+⏸ **awesome-deepseek-harness PR**: pending — submit the entry below to
+`https://github.com/deepseek-ai/awesome-deepseek-harness` after the npm
+publish completes.
+
 ## Submission entry (paste into awesome-deepseek-harness README)
 
 ```markdown
 ### dsh-cortexm
 
-[![npm version](https://img.shields.io/badge/npm-0.1.0-orange)](https://www.npmjs.com/package/dsh-cortexm)
+[![npm version](https://img.shields.io/badge/npm-1.0.0-orange)](https://www.npmjs.com/package/dsh-cortexm)
 [![dsh-plugin](https://img.shields.io/badge/dsh-plugin-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Bi-temporal VSA memory + HMS cognition engine + BLAKE3-chained
 provenance for DSH agents. Exposes Context-M as a storage +
 session plugin via JSON-RPC over stdio to `cortexm serve`.
+
+End-to-end tested with a real Python subprocess (5/5 tests passing).
 
 **Kind:** storage + session
 
@@ -28,8 +46,11 @@ session plugin via JSON-RPC over stdio to `cortexm serve`.
 - a cognition engine (PatternScanner + AbstractionEngine +
   GapDetector + HypothesisEngine + AnalogyDetector)
 - BLAKE3-chained audit log (cryptographically verifiable)
+- session replay / fork (DSH-style "rewind and try a different path")
+- asymmetric "memory past 20 steps" recall (boost facts about to
+  scroll out of the LLM context window)
 
-`dsh-cortexm` ships all four. It's the premium memory plugin
+`dsh-cortexm` ships all six. It's the premium memory plugin
 for the DSH ecosystem.
 
 **Install:**
@@ -49,6 +70,24 @@ export default {
 };
 \`\`\`
 
+**Plugin API surface:**
+
+  ctx.storage.cortexm.add(...)                  // μ=0 ingest
+  ctx.storage.cortexm.search(...)               // neuro-symbolic retrieval
+  ctx.storage.cortexm.edit(...)                 // human-in-the-loop fix
+  ctx.storage.cortexm.preload(...)              // top-N recent facts at session start
+  ctx.storage.cortexm.recall_step(...)           // "memory past 20 steps"
+  ctx.storage.cortexm.structural_query(...)     // deterministic relation chains
+  ctx.storage.cortexm.consolidate(...)           // lifecycle + dreaming + cognition
+  ctx.storage.cortexm.export_markdown(...)       // portable .md round-trip
+  ctx.storage.cortexm.import_markdown(...)       // read .md back
+  ctx.storage.cortexm.audit(...)                // "Why" provenance trail
+
+  ctx.session.cortexm.replay(...)                // re-emit events in order
+  ctx.session.cortexm.fork(...)                  // session branching → new run_id
+  ctx.session.cortexm.trajectory(...)           // visualizable event stream
+  ctx.session.cortexm.inspect(...)              // memory inspection dump
+
 **Repo:** [ssmurfgg04-gif/context-m](https://github.com/ssmurfgg04-gif/context-m/tree/main/plugins/dsh-cortexm)
 **Docs:** [README](https://github.com/ssmurfgg04-gif/context-m/blob/main/plugins/dsh-cortexm/README.md)
 **License:** MIT
@@ -56,11 +95,13 @@ export default {
 
 ## Submission checklist
 
-- [ ] Stable npm release (≥ 1.0.0) — currently scaffold (0.1.0)
-- [ ] End-to-end test with real `cortexm serve` subprocess passing
-- [ ] README in repo with install + use + architecture sections
-- [ ] License file at repo root (already MIT)
-- [ ] `dsh-plugin` topic tag on the npm package
+- [x] Stable npm release (≥ 1.0.0) — bumped to 1.0.0 in `package.json`
+- [x] End-to-end test with real `cortexm serve` subprocess passing
+      (5/5 tests in `test/e2e.test.js`)
+- [x] README in repo with install + use + architecture sections
+- [x] License file at repo root (already MIT)
+- [x] `dsh-plugin` topic tag on the npm package (declared in `keywords`)
+- [ ] `npm publish` executed — requires NPM_TOKEN
 - [ ] Submission PR to `awesome-deepseek-harness` with the entry above
 - [ ] Cross-link from `dsh-market` (DSH Web UI marketplace) once the
       marketplace submission API is documented

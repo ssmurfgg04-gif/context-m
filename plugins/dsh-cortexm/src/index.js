@@ -56,7 +56,7 @@ class CortexBridge {
     await this._rpc("initialize", {
       protocolVersion: "2025-06-18",
       capabilities: {},
-      clientInfo: { name: "dsh-cortexm", version: "0.1.0" },
+      clientInfo: { name: "dsh-cortexm", version: "1.0.0" },
     });
   }
 
@@ -104,14 +104,36 @@ class CortexBridge {
   async add({ user_id, agent_id, run_id, text, created_at }) {
     return this._rpc("tools/call", {
       name: "contextm_add",
-      arguments: { user_id, agent_id, run_id, text, created_at },
+      arguments: { user_id, agent_id, run_id,
+                   messages: text, timestamp: created_at },
     });
   }
 
   async search({ user_id, query, agent_id, run_id, k }) {
     return this._rpc("tools/call", {
       name: "contextm_search",
-      arguments: { user_id, query, agent_id, run_id, k },
+      arguments: { user_id, query, agent_id, run_id, limit: k },
+    });
+  }
+
+  async edit({ memory_id, new_text, edited_by, reason }) {
+    return this._rpc("tools/call", {
+      name: "contextm_edit",
+      arguments: { memory_id, new_text, edited_by, reason },
+    });
+  }
+
+  async preload({ user_id, n, agent_id, run_id }) {
+    return this._rpc("tools/call", {
+      name: "contextm_preload",
+      arguments: { user_id, n, agent_id, run_id },
+    });
+  }
+
+  async recall_step({ query, user_id, current_step, window, k }) {
+    return this._rpc("tools/call", {
+      name: "contextm_recall_step",
+      arguments: { query, user_id, current_step, window, k },
     });
   }
 
@@ -151,45 +173,58 @@ class CortexBridge {
   }
 
   // session-replay primitives (Reddit deep-dive 2026-08-29: ≥10
-  // mentions of "replay" / "trajectory view" / "session log")
+  // mentions of "replay" / "trajectory view" / "session log").
   // The audit log already has every event; replay is just
   // re-emitting them in order. Fork = copy up to tx-id + continue.
-  async replay({ user_id, from_ts, to_ts }) {
-    const audit = await this.audit({ user_id, n: 10_000 });
-    return { user_id, events: audit.events.filter(e =>
-      (!from_ts || e.ts >= from_ts) && (!to_ts || e.ts <= to_ts)) };
+  async replay({ user_id, from_ts, to_ts, n }) {
+    const res = await this._rpc("tools/call", {
+      name: "contextm_replay",
+      arguments: { user_id, from_ts, to_ts, n: n ?? 10_000 },
+    });
+    // The MCP server returns a JSON string inside the text content
+    // field. Unwrap it so callers get a plain JS object.
+    return this._unwrap(res);
   }
 
-  async fork({ user_id, at_tx_id }) {
-    // DSH session fork = copy audit log up to at_tx_id, then continue
-    // with a new run_id derived from at_tx_id.
-    const audit = await this.audit({ user_id, n: 10_000 });
-    const cutoff = audit.events.findIndex(e => e.id === at_tx_id);
-    if (cutoff < 0) {
-      const err = new Error(`fork point ${at_tx_id} not in audit log`);
-      err.code = "FORK_POINT_NOT_FOUND";
-      throw err;
-    }
-    return {
-      forked_run_id: `${at_tx_id.slice(0, 8)}-fork-${randomUUID().slice(0, 8)}`,
-      events: audit.events.slice(0, cutoff + 1),
-    };
+  async fork({ user_id, at_event_id, new_run_id }) {
+    const res = await this._rpc("tools/call", {
+      name: "contextm_fork",
+      arguments: { user_id, at_event_id, new_run_id },
+    });
+    return this._unwrap(res);
   }
 
   async trajectory({ user_id, n = 200 }) {
     // Reddit "trajectory view" ask — visualizable event stream
-    const audit = await this.audit({ user_id, n });
-    return {
-      user_id,
-      n_events: audit.events.length,
-      events: audit.events.map((e, i) => ({
-        step: i,
-        id: e.id,
-        ts: e.ts,
-        kind: e.kind,
-        payload_summary: e.payload_summary,
-      })),
-    };
+    const res = await this._rpc("tools/call", {
+      name: "contextm_trajectory",
+      arguments: { user_id, n },
+    });
+    return this._unwrap(res);
+  }
+
+  /** MCP envelope unwrap — extract the JSON payload from the
+   *  tools/call response. The MCP server wraps the result text
+   *  in {content: [{type:'text', text:'...json...'}]}. This helper
+   *  pulls the text out and JSON.parses it. Returns the raw text
+   *  if JSON parsing fails (so callers still get something). */
+  _unwrap(res) {
+    if (!res) return res;
+    // res may already be an object (older bridge returned a parsed
+    // result) or a string. Normalize to object.
+    let obj = res;
+    if (typeof res === "string") {
+      try { obj = JSON.parse(res); } catch { return res; }
+    }
+    // MCP envelope: {content: [{type:'text', text:'...'}]}
+    if (obj && obj.content && Array.isArray(obj.content)) {
+      const txt = obj.content
+        .filter((c) => c && c.type === "text")
+        .map((c) => c.text)
+        .join("\n");
+      try { return JSON.parse(txt); } catch { return txt; }
+    }
+    return obj;
   }
 
   async close() {
@@ -276,9 +311,20 @@ export default {
       storage: {
         add: (args) => bridge.add(args),
         search: (args) => bridge.search(args),
+        edit: (args) => bridge.edit(args),
+        preload: (args) => bridge.preload(args),
+        recall_step: (args) => bridge.recall_step(args),
         structural_query: (args) => bridge.structural_query(args),
         consolidate: (args) => bridge.consolidate(args),
         export_provenance: (args) => bridge.export_provenance(args),
+        export_markdown: (args) => bridge._rpc("tools/call", {
+          name: "contextm_export_markdown",
+          arguments: args || {},
+        }),
+        import_markdown: (args) => bridge._rpc("tools/call", {
+          name: "contextm_import_markdown",
+          arguments: args || {},
+        }),
         audit: (args) => bridge.audit(args),
       },
       session: {

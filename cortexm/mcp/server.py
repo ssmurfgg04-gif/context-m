@@ -361,6 +361,172 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "contextm_edit",
+        "description": "Human-in-the-loop fact correction (Basic Memory "
+                       "learn). Rewrites the fact's value and tags its "
+                       "provenance with source: user_override so retrieval "
+                       "weights the corrected fact higher than "
+                       "machine-extracted ones. Audit-logged + hash "
+                       "re-verified. Reddit ≥10 mentions of 'human "
+                       "override' (2026-08-29).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "string",
+                              "description": "id of the fact to rewrite"},
+                "new_text": {"type": "string",
+                             "description": "new value text"},
+                "edited_by": {"type": "string", "default": "user"},
+                "reason": {"type": "string"},
+            },
+            "required": ["memory_id", "new_text"],
+        },
+    },
+    {
+        "name": "contextm_preload",
+        "description": "memori learn — preload the most recent N facts "
+                       "into the LLM's context on session start. Returns "
+                       "a markdown block ready to paste into the system "
+                       "prompt. Use this when the agent starts a new "
+                       "session and you want the model to immediately "
+                       "know what it learned last time, without an extra "
+                       "round-trip per turn.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer", "default": 20},
+                "user_id": {"type": "string"},
+                "agent_id": {"type": "string"},
+                "run_id": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "contextm_recall_step",
+        "description": "Killer feature — asymmetric retrieval for memory "
+                       "past 20 steps. Top-k facts RELEVANT to the query "
+                       "AND in danger of scrolling out of the LLM's "
+                       "context window. Multiplies the underlying VSA "
+                       "fusion score by a step-distance boost that peaks "
+                       "at the window edge. Returns a markdown context "
+                       "block ready for the LLM system prompt.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "user_id": {"type": "string"},
+                "current_step": {"type": "integer", "default": 30},
+                "window": {"type": "integer", "default": 20},
+                "k": {"type": "integer", "default": 12},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "contextm_export_markdown",
+        "description": "sqlite-memory learn — dump the bi-temporal Trace "
+                       "as .md files (one per fact + one per chunk + "
+                       "README). Human-auditable, git-diff-able, "
+                       "portable. The output directory's frontmatter "
+                       "carries every bi-temporal field (valid_from / "
+                       "valid_to / tx_from / tx_to / source_hash).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "out_dir": {"type": "string",
+                            "description": "output directory (will be created)"},
+                "user_id": {"type": "string"},
+                "include_inactive": {"type": "boolean", "default": False},
+                "include_chunks": {"type": "boolean", "default": True},
+            },
+            "required": ["out_dir"],
+        },
+    },
+    {
+        "name": "contextm_import_markdown",
+        "description": "Read markdown fact files back into the Trace. "
+                       "Round-trip the export. ``strategy='upsert'`` writes; "
+                       "``strategy='verify'`` is a dry-run hash check.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "in_dir": {"type": "string"},
+                "user_id": {"type": "string"},
+                "strategy": {"type": "string", "enum": ["upsert", "verify"],
+                             "default": "upsert"},
+            },
+            "required": ["in_dir"],
+        },
+    },
+    {
+        "name": "contextm_replay",
+        "description": "DSH session replay — re-emit the session's "
+                       "audit-log / fact events in order, optionally "
+                       "filtered to a time window. The audit log is "
+                       "append-only BLAKE3-chained; this is a read API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string"},
+                "from_ts": {"type": "string",
+                            "description": "ISO datetime lower bound (inclusive)"},
+                "to_ts": {"type": "string",
+                          "description": "ISO datetime upper bound (inclusive)"},
+                "n": {"type": "integer", "default": 10000},
+            },
+        },
+    },
+    {
+        "name": "contextm_fork",
+        "description": "DSH session fork — copy the session's event prefix "
+                       "up to ``at_event_id``, then continue from there "
+                       "with a new run_id. Returns the prefix + a fresh "
+                       "run_id. Caller is responsible for switching the "
+                       "run_id on subsequent mem.add() calls.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string"},
+                "at_event_id": {"type": "string"},
+                "new_run_id": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "contextm_trajectory",
+        "description": "Reddit 'trajectory view' ask — visualizable event "
+                       "stream for the web trajectory viewer. One entry "
+                       "per step, in chronological order. Each entry has "
+                       "step / id / ts / kind / user_id / payload_summary "
+                       "/ payload.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string"},
+                "n": {"type": "integer", "default": 200},
+            },
+        },
+    },
+    {
+        "name": "contextm_inspect",
+        "description": "Reddit 'inspect' ask — dump facts / chunks / audit "
+                       "tail for a (user_id, agent_id, run_id) scope as "
+                       "pretty JSON. The CLI-native answer to 'I want to "
+                       "see what's in memory without writing code'.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "default": "default"},
+                "agent_id": {"type": "string"},
+                "run_id": {"type": "string"},
+                "limit": {"type": "integer", "default": 50},
+                "what": {"type": "string",
+                         "enum": ["facts", "chunks", "audit", "all"],
+                         "default": "all"},
+            },
+        },
+    },
 ]
 
 
@@ -531,6 +697,84 @@ class MCPServer:
                     user_id=args.get("user_id"),
                     dry_run=args.get("dry_run", False))
                 text = json.dumps(out, indent=1, default=str)
+            # ----- Reddit-driven P0+P1 surface (2026-08-29 deep dive) -----
+            elif name == "contextm_edit":
+                out = m.edit(args["memory_id"], args["new_text"],
+                             edited_by=args.get("edited_by", "user"),
+                             reason=args.get("reason"))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_preload":
+                text = m.preload_context(
+                    n=int(args.get("n", 20)),
+                    user_id=args.get("user_id", "default"),
+                    agent_id=args.get("agent_id"),
+                    run_id=args.get("run_id"))
+            elif name == "contextm_recall_step":
+                out = m.recall_step(
+                    args["query"],
+                    user_id=args.get("user_id", "default"),
+                    current_step=int(args.get("current_step", 30)),
+                    window=int(args.get("window", 20)),
+                    k=int(args.get("k", 12)))
+                text = out.get("context_block", "") or json.dumps(
+                    out, indent=1, default=str)
+            elif name == "contextm_export_markdown":
+                out = m.export_markdown(
+                    args["out_dir"],
+                    user_id=args.get("user_id", "default"),
+                    include_inactive=bool(args.get("include_inactive", False)),
+                    include_chunks=bool(args.get("include_chunks", True)))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_import_markdown":
+                out = m.import_markdown(
+                    args["in_dir"],
+                    user_id=args.get("user_id", "default"),
+                    strategy=args.get("strategy", "upsert"))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_replay":
+                out = m.replay(
+                    user_id=args.get("user_id", "default"),
+                    from_ts=args.get("from_ts"),
+                    to_ts=args.get("to_ts"),
+                    n=int(args.get("n", 10_000)))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_fork":
+                out = m.fork(
+                    user_id=args.get("user_id", "default"),
+                    at_event_id=args.get("at_event_id"),
+                    new_run_id=args.get("new_run_id"))
+                text = json.dumps({
+                    "new_run_id": out["new_run_id"],
+                    "forked_at": out["forked_at"],
+                    "prefix_events": out["prefix_events"],
+                }, indent=1, default=str)
+            elif name == "contextm_trajectory":
+                out = m.trajectory(
+                    user_id=args.get("user_id", "default"),
+                    n=int(args.get("n", 200)))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_inspect":
+                # delegate to the same _inspect code path the CLI uses
+                from cortexm.cli import _inspect  # type: ignore
+                # build a fake argparse Namespace so _inspect works
+                class _Args:
+                    db = None
+                    user_id = args.get("user_id", "default")
+                    agent_id = args.get("agent_id")
+                    run_id = args.get("run_id")
+                    limit = int(args.get("limit", 50))
+                    format = "json"
+                    what = args.get("what", "all")
+                # _inspect opens its own Memory; we can't pass ours.
+                # Capture stdout instead.
+                import io as _io, contextlib as _ctx
+                buf = _io.StringIO()
+                with _ctx.redirect_stdout(buf):
+                    try:
+                        _inspect(_Args())
+                    except SystemExit:
+                        pass
+                text = buf.getvalue() or "{}"
             else:
                 return {"content": [{"type": "text",
                                      "text": f"unknown tool {name}"}],
