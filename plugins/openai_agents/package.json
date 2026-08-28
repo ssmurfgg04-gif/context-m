@@ -1,0 +1,10 @@
+{
+  "name": "context-m-openai-agents",
+  "version": "0.1.0",
+  "description": "OpenAI Agents SDK memory tools for Context-M (μ=0 neuro-symbolic memory fabric).",
+  "main": "context_m_adapter.py",
+  "python": ">=3.11",
+  "license": "MIT",
+  "homepage": "https://github.com/ssmurfgg04-gif/context-m",
+  "keywords": ["openai", "agents", "sdk", "memory", "context-m"]
+}

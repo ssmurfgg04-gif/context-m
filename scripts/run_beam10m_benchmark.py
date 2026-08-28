@@ -67,9 +67,11 @@ def main():
     ap.add_argument("--config", default="baseline",
                     choices=["baseline", "+unmess", "+unmess+dissim",
                              "+unmess+dissim+query", "+unmess+dissim+rerank",
-                             "+all_v2", "all"],
+                             "+full_v3", "+all_v2", "all"],
                     help="which feature stack to enable; 'all' runs the 4 "
-                         "original configs, '+all_v2' adds the rerank stack")
+                         "original configs, '+all_v2' adds the rerank stack, "
+                         "'+full_v3' adds the 2026-08-28 push (tiny_fallback "
+                         "+ prefilter + ppr + rerank + unmess + dissim)")
     ap.add_argument("--cache-dir", default="/tmp/beam_cache",
                     help="where to cache BEAM rows (avoid re-downloading)")
     ap.add_argument("--db", default="/tmp/beam10m_bench.db",
@@ -115,6 +117,11 @@ def main():
         # the new SOTA-inspired stack: full feature set + cross-encoder rerank
         configs_to_run = ["baseline", "+unmess+dissim",
                            "+unmess+dissim+rerank"]
+    elif args.config == "+full_v3":
+        # 2026-08-28 push: baseline + full feature stack with new
+        # tiny_fallback + prefilter layers (the user's "--rerank --ppr"
+        # request). PPR is on by default in Config.
+        configs_to_run = ["baseline", "+unmess+dissim+rerank", "+full_v3"]
     else:
         configs_to_run = [args.config]
 
@@ -167,6 +174,17 @@ def run_single_config(personas, config_name, args):
     # NEW: enable cross-encoder rerank for configs that include "+rerank"
     if "rerank" in config_name:
         cfg.enable_rerank = True
+    # 2026-08-28 push: enable the new tiny_fallback + prefilter layers
+    # for the +full_v3 config. They're on by default in production but
+    # the bench baselines leave them off; we opt them in here.
+    if "full_v3" in config_name:
+        cfg.tiny_fallback_enabled = True
+        cfg.prefilter_enabled = True
+        cfg.enable_rerank = True
+        cfg.unmess_enabled = True  # already triggered by "unmess" substring below
+        cfg.bitap_trigger_enabled = True
+        # PPR is on by default; explicit for clarity
+        cfg.ppr_enabled = True
     # Bench determinism: SLB bypassed so templated near-duplicate queries
     # (cosine ≈ 0.97 against the threshold) don't flip hit/miss on BLAS
     # ULP drift. Every query recomputes fresh fusion — the bench measures
@@ -177,12 +195,20 @@ def run_single_config(personas, config_name, args):
     # optional feature stacks
     idiolect = None
     dissim = None
-    if "unmess" in config_name:
+    # 2026-08-28 push: +full_v3 must also run the unmess + dissim
+    # preprocessing path (idiolect normalization + DisSim compound
+    # sentence splitter), because those operate at the BENCH SCRIPT
+    # level — they rewrite the input text BEFORE mem.add(). The Config
+    # flags cfg.unmess_enabled etc. are for the extractor's internal
+    # path, which is different.
+    use_unmess = "unmess" in config_name or "full_v3" in config_name
+    use_dissim = "dissim" in config_name or "full_v3" in config_name
+    if use_unmess:
         from context_m.text.embedder import HashingEmbedder
         from context_m.text.idiolect import PerUserIdiolectNormalizer
         idiolect = PerUserIdiolectNormalizer(
             HashingEmbedder(mem.palace.dims, mem.palace.cfg.seed))
-    if "dissim" in config_name:
+    if use_dissim:
         from context_m.text.dissim import DisSimSplitter
         dissim = DisSimSplitter(max_depth=2)
 

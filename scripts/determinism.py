@@ -135,6 +135,8 @@ def bench_config_overrides(**extras) -> dict:
         "seed": 0x0C0FFEE,
         "enable_rerank": False,
         "unmess_enabled": False,
+        "tiny_fallback_enabled": False,
+        "prefilter_enabled": False,
         # PPR is deterministic (iters are fixed) but it amplifies any
         # tie-break bleed via the diffusion loop. Bench baselines turn
         # it off; "+ppr" configs turn it on.

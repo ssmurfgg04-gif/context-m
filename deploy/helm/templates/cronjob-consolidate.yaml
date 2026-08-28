@@ -1,0 +1,50 @@
+{{- if .Values.consolidate.enabled -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "context-m.fullname" . }}-consolidate
+  labels:
+    {{- include "context-m.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.consolidate.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: consolidate
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  cortexm consolidate \
+                    --db {{ .Values.persistence.mountPath }}/contextm.db \
+                    && echo "consolidate OK"
+              env:
+                - name: CONTEXT_M_DB
+                  value: {{ .Values.persistence.mountPath }}/contextm.db
+                - name: CONTEXT_M_CODEC
+                  value: {{ .Values.image.codec | default "int8" }}
+                - name: CONTEXT_M_FADE
+                  value: "true"
+                - name: CONTEXT_M_TMT
+                  value: "true"
+              volumeMounts:
+                - name: data
+                  mountPath: {{ .Values.persistence.mountPath }}
+          volumes:
+            - name: data
+              {{- if .Values.persistence.enabled }}
+              persistentVolumeClaim:
+                claimName: {{ include "context-m.fullname" . }}
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+{{- end -}}

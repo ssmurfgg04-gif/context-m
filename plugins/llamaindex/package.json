@@ -1,0 +1,10 @@
+{
+  "name": "context-m-llamaindex",
+  "version": "0.1.0",
+  "description": "LlamaIndex NodePostprocessor for Context-M (μ=0 neuro-symbolic memory fabric).",
+  "main": "context_m_postprocessor.py",
+  "python": ">=3.11",
+  "license": "MIT",
+  "homepage": "https://github.com/ssmurfgg04-gif/context-m",
+  "keywords": ["llamaindex", "memory", "rag", "agent", "context-m"]
+}

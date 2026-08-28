@@ -307,6 +307,15 @@ def main():
     bench_cfg.update({
         "unmess_enabled": True,         # measure WITH the OOD pipeline
         "reconstruct_enabled": True,
+        # 2026-08-28 push: enable the new layers (tiny_fallback +
+        # prefilter) to measure their impact on the headline numbers.
+        # bench_config_overrides() turns them OFF for baselines; we
+        # explicitly flip them ON here for the "production-shape" run.
+        "tiny_fallback_enabled": True,
+        "prefilter_enabled": True,
+        "ppr_enabled": True,           # PPR diffusion is the default in prod
+        "enable_rerank": True,         # cross-encoder rerank lifts prec@5
+        "bitap_trigger_enabled": True,
         "mind_diversity_check": True,
     })
     cfg = Config(db_path=":memory:", **bench_cfg)
@@ -347,10 +356,15 @@ def main():
             "codec": cfg.codec,
             "unmess_enabled": cfg.unmess_enabled,
             "reconstruct_enabled": cfg.reconstruct_enabled,
+            "tiny_fallback_enabled": cfg.tiny_fallback_enabled,
+            "prefilter_enabled": cfg.prefilter_enabled,
             "mind_diversity_check": cfg.mind_diversity_check,
             "slb_disabled": cfg.slb_disabled,
             "ppr_enabled": cfg.ppr_enabled,
             "enable_rerank": cfg.enable_rerank,
+            "bitap_trigger_enabled": cfg.bitap_trigger_enabled,
+            "fade_enabled": cfg.fade_enabled,
+            "tmt_enabled": cfg.tmt_enabled,
         },
         "ingest": {
             "wall_seconds": round(ingest_s, 3),
@@ -405,7 +419,12 @@ def main():
     # build a fresh memory for the stress test (so consolidation is clean)
     stress_cfg = dict(BENCH_OVERRIDES)
     stress_cfg.update({"unmess_enabled": True,
-                       "reconstruct_enabled": True})
+                       "reconstruct_enabled": True,
+                       # 2026-08-28 push: stress-test the new layers too.
+                       "tiny_fallback_enabled": True,
+                       "prefilter_enabled": True,
+                       "ppr_enabled": True,
+                       "enable_rerank": True})
     cfg2 = Config(db_path=":memory:", **stress_cfg)
     stress_mem = Memory(cfg2)
     stress_corpus = _build_corpus(args.users, args.facts_per_user)

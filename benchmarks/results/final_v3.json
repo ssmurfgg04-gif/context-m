@@ -1,0 +1,155 @@
+{
+  "timestamp": "2026-08-28T12:32:15.140305+00:00",
+  "config": {
+    "users": 5,
+    "facts_per_user": 50,
+    "dims": 768,
+    "codec": "int8",
+    "unmess_enabled": true,
+    "reconstruct_enabled": true,
+    "tiny_fallback_enabled": true,
+    "prefilter_enabled": true,
+    "mind_diversity_check": true,
+    "slb_disabled": true,
+    "ppr_enabled": true,
+    "enable_rerank": true,
+    "bitap_trigger_enabled": true,
+    "fade_enabled": true,
+    "tmt_enabled": false
+  },
+  "ingest": {
+    "wall_seconds": 0.258,
+    "facts": 173,
+    "active_facts": 94,
+    "chunks": 250,
+    "commits": 251,
+    "derived_facts": 0,
+    "u0_protocol": "verified",
+    "tokens_per_second": 29034
+  },
+  "retrieval_latency": {
+    "p50_us": 7241.1,
+    "p95_us": 8861.2,
+    "p99_us": 10072.1,
+    "min_us": 6351.6,
+    "max_us": 10149.4,
+    "n_samples": 125
+  },
+  "cost_per_1m": {
+    "wall_per_query_us": 7616.7,
+    "wall_per_1m_seconds": 7616.727,
+    "wall_per_1m_minutes": 126.95,
+    "cost_per_1m_usd": 1.0579,
+    "llm_calls_per_1m": 0,
+    "queries_measured": 1000
+  },
+  "storage": {
+    "n_facts": 173,
+    "n_chunks": 250,
+    "db_size_bytes": 184764,
+    "db_size_mb": 0.18,
+    "bytes_per_fact": 1068.0,
+    "compression_vs_fp32": 3.2,
+    "codec": "int8",
+    "dims": 768,
+    "vsa_per_fact_bytes": 768
+  },
+  "context_handling": {
+    "context_block_chars_p50": 325,
+    "context_block_tokens_p50": 325,
+    "fact_count_p50": 10,
+    "max_block_tokens": 338,
+    "min_block_tokens": 316,
+    "queries_measured": 25
+  },
+  "continuous_learning": {
+    "phases": [
+      {
+        "phase": 1,
+        "ingest_seconds": 0.057,
+        "facts": 44,
+        "active_facts": 26,
+        "chunks": 62,
+        "retrieval_latency_ms": 7.15
+      },
+      {
+        "phase": 2,
+        "ingest_seconds": 0.062,
+        "facts": 86,
+        "active_facts": 50,
+        "chunks": 125,
+        "retrieval_latency_ms": 7.15
+      },
+      {
+        "phase": 3,
+        "ingest_seconds": 0.067,
+        "facts": 133,
+        "active_facts": 74,
+        "chunks": 187,
+        "retrieval_latency_ms": 7.25
+      },
+      {
+        "phase": 4,
+        "ingest_seconds": 0.064,
+        "facts": 173,
+        "active_facts": 94,
+        "chunks": 250,
+        "retrieval_latency_ms": 7.35
+      }
+    ],
+    "growth_rate": [
+      44,
+      86,
+      133,
+      173
+    ],
+    "latency_growth": [
+      7.15,
+      7.15,
+      7.25,
+      7.35
+    ],
+    "provenance_integrity": true,
+    "consolidation_stats": {
+      "merged_pairs": 0,
+      "retired_facts": 0,
+      "palace_defragged": true,
+      "prefetcher_retrained": false,
+      "fade_stats": {
+        "scanned": 94,
+        "deactivated": 0,
+        "merged_into": 0,
+        "merged_dropped": 0,
+        "min_score": 0.34999978806291937,
+        "max_score": 9.974986263042526,
+        "mean_score": 2.1831940329142445,
+        "dry_run": false
+      },
+      "tmt_stats": {
+        "l2_sessions_built": 5,
+        "l3_days_built": 5,
+        "l4_personas_built": 0,
+        "l2_skipped_small": 0,
+        "l4_skipped_few_sessions": 5,
+        "dry_run": false
+      },
+      "commit_id": "1b66ca665e654483b8300720b956f706",
+      "dry_run": false
+    },
+    "fade_stats": {
+      "scanned": 104,
+      "deactivated": 0,
+      "merged_into": 0,
+      "merged_dropped": 0,
+      "min_score": 0.3499997859691323,
+      "max_score": 9.974986203369646,
+      "mean_score": 2.0525983925119853,
+      "dry_run": false
+    },
+    "facts_after_consolidation": 183,
+    "active_facts_after": 104,
+    "memory_reduction_pct": 43.2,
+    "sublinear_growth": false,
+    "growth_ratio": 3.93
+  }
+}

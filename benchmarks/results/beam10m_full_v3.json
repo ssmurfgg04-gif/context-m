@@ -1,0 +1,255 @@
+{
+  "benchmark": "beam10m_real",
+  "source": "Mohammadta/BEAM-10M",
+  "n_personas": 4,
+  "max_turns_per_persona": 40,
+  "total_chars": 91356,
+  "total_ground_truth_facts": 35,
+  "configs": {
+    "baseline": {
+      "config": "baseline",
+      "n_facts_stored": 196,
+      "extraction_recall": 0.7429,
+      "retrieval_precision_at_5": 0.6,
+      "ingest_time_s": 4.99,
+      "query_time_s": 0.33,
+      "ms_per_ingest_persona": 1247.2,
+      "ms_per_query": 9.3,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess+dissim+rerank": {
+      "config": "+unmess+dissim+rerank",
+      "n_facts_stored": 278,
+      "extraction_recall": 1.0,
+      "retrieval_precision_at_5": 0.9143,
+      "ingest_time_s": 9.03,
+      "query_time_s": 0.48,
+      "ms_per_ingest_persona": 2257.6,
+      "ms_per_query": 13.7,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+full_v3": {
+      "config": "+full_v3",
+      "n_facts_stored": 278,
+      "extraction_recall": 1.0,
+      "retrieval_precision_at_5": 0.9429,
+      "ingest_time_s": 9.14,
+      "query_time_s": 0.48,
+      "ms_per_ingest_persona": 2286.1,
+      "ms_per_query": 13.6,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    }
+  },
+  "personas": [
+    {
+      "user_id": "beam_1",
+      "n_turns": 40,
+      "n_facts": 9,
+      "text_chars": 33127,
+      "facts": [
+        {
+          "subject": "beam_1",
+          "relation": "name",
+          "value": "Jennifer Mccall"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "age",
+          "value": "59"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "parent",
+          "value": "Alicia"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "partner",
+          "value": "James"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "child",
+          "value": "Mary"
+        },
+        {
+          "subject": "beam_1",
+          "relation": "child",
+          "value": "Nancy"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_2",
+      "n_turns": 40,
+      "n_facts": 10,
+      "text_chars": 20481,
+      "facts": [
+        {
+          "subject": "beam_2",
+          "relation": "name",
+          "value": "Jason Mccall"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "age",
+          "value": "37"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "parent",
+          "value": "Heather"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "parent",
+          "value": "Kevin"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Mary"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Nicholas"
+        },
+        {
+          "subject": "beam_2",
+          "relation": "child",
+          "value": "Timothy"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_3",
+      "n_turns": 40,
+      "n_facts": 6,
+      "text_chars": 24981,
+      "facts": [
+        {
+          "subject": "beam_3",
+          "relation": "name",
+          "value": "Jason Mccall"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "age",
+          "value": "29"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "gender",
+          "value": "Male"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "location",
+          "value": "Anthonyside, Suriname"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "profession",
+          "value": "Administrator, Charities/Voluntary Organisations"
+        },
+        {
+          "subject": "beam_3",
+          "relation": "partner",
+          "value": "Catherine"
+        }
+      ]
+    },
+    {
+      "user_id": "beam_4",
+      "n_turns": 40,
+      "n_facts": 10,
+      "text_chars": 12767,
+      "facts": [
+        {
+          "subject": "beam_4",
+          "relation": "name",
+          "value": "Crystal Prince"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "age",
+          "value": "37"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "gender",
+          "value": "Female"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "location",
+          "value": "New Joshua, Central African Republic"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "profession",
+          "value": "Communications Engineer"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "parent",
+          "value": "Judith"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "partner",
+          "value": "David"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "child",
+          "value": "Michael"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "child",
+          "value": "Kirsten"
+        },
+        {
+          "subject": "beam_4",
+          "relation": "child",
+          "value": "Juan"
+        }
+      ]
+    }
+  ]
+}

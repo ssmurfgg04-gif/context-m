@@ -359,6 +359,40 @@ class MemoryReader:
         sym_facts, notes = self._symbolic_query(plan, user_id, agent_id, run_id,
                                                 scope, k, query)
 
+        # --- query-aware triple pre-filter (HippoRAG 2 lineage) ------------
+        # Drop candidate facts that have low lexical+semantic+relation
+        # overlap with the query BEFORE fusion. HippoRAG 2 credits this
+        # for a 7% F1 gain: removing irrelevant triples from the candidate
+        # pool prevents noise from contaminating the VSA holographic
+        # superposition and the PPR graph. μ=0 — deterministic scorer.
+        # Default ON; configurable via Config.prefilter_enabled.
+        if getattr(self.cfg, "prefilter_enabled", True) and (vsa_scores or sym_facts):
+            try:
+                from context_m.bridge.prefilter import prefilter_triples
+                # merge the union of vsa + symbolic candidates for filtering
+                pf_map = {f.id: f for f in self.store.get_facts(list(vsa_scores))}
+                pf_map.update({f.id: f for f, _ in sym_facts})
+                pf_candidates = list(pf_map.values())
+                filtered, pf_stats = prefilter_triples(
+                    pf_candidates, query,
+                    query_emb=q_vec,
+                    embedder=self.palace.embedder,
+                    relation_hints=list(plan.relations) if plan.relations else None,
+                    threshold=getattr(self.cfg, "prefilter_threshold", 0.08),
+                    min_keep=getattr(self.cfg, "prefilter_min_keep", 3),
+                )
+                # rebuild vsa_scores / sym_facts to exclude dropped facts
+                kept_ids = {f.id for f in filtered}
+                vsa_scores = {fid: s for fid, s in vsa_scores.items()
+                              if fid in kept_ids}
+                sym_facts = [(f, b) for f, b in sym_facts
+                             if f.id in kept_ids]
+                # stash stats on the plan for the result.timing block
+                plan.prefilter_stats = pf_stats
+            except Exception:
+                # prefilter is best-effort; never let it block retrieval
+                pass
+
         # --- fusion ---------------------------------------------------------
         # 'mentioned' anchors are retrieval scaffolding, not answers: their
         # long snippets inflate lexical similarity, so ONLY their VSA
@@ -852,6 +886,100 @@ class MemoryReader:
         if scope:
             extra = {fid: w for fid, w in extra.items() if fid in scope}
         return extra
+
+    # ------------------------------------------------------------- hologram
+    def working_memory(self, query: str, *, user_id: str = "default",
+                       agent_id: str | None = None, run_id: str | None = None,
+                       k: int | None = None) -> dict:
+        """Compress top-k retrieved facts into a single HRR superposition.
+
+        Strategic-plan item: "Holographic working memory — compress the
+        top-k retrieved facts into a single HRR superposition injected
+        into the LLM system prompt. The LLM unbinds specific facts on
+        demand. This is a 5-10× token reduction for the context window."
+
+        Returns a dict with:
+          - preamble: short (~30-50 token) LLM-ready description
+          - fact_ids: which facts are in the superposition
+          - hrr_b64: the HRR vector, base64-packed (for round-trip
+                    through the MCP / REST API)
+          - n_facts: how many facts were superposed
+          - roles_present: subset of {S, R, V}
+        """
+        k = k or self.cfg.top_k_default
+        # reuse the standard search pipeline to get top-k facts
+        res = self.search(query, user_id=user_id, agent_id=agent_id,
+                           run_id=run_id, k=k)
+        facts = res.facts
+        if not facts:
+            return {"preamble": "(no facts in memory)",
+                    "fact_ids": [], "hrr_b64": None,
+                    "n_facts": 0, "roles_present": []}
+        try:
+            from context_m.vsa.working_memory import build_holographic_wm
+            vsa = getattr(self.palace, "vsa", None) or \
+                self._init_vsa_for_wm()
+            hwm = build_holographic_wm(facts, vsa, self.palace.embedder,
+                                         max_facts=k)
+            d = hwm.to_dict_with_vec()
+            d["query"] = query
+            d["user_id"] = user_id
+            return d
+        except Exception as e:
+            # fall back to the textual context block if HRR build fails
+            return {"preamble": res.context_block,
+                    "fact_ids": [f.id for f in facts],
+                    "hrr_b64": None, "n_facts": len(facts),
+                    "roles_present": [], "error": str(e)}
+
+    def _init_vsa_for_wm(self):
+        """Lazy VSA init for working memory if palace doesn't expose one."""
+        from context_m.vsa.ops import VSA
+        return VSA(dims=self.cfg.dims, mode=self.cfg.vsa_mode,
+                   seed=self.cfg.seed,
+                   lexical_lambda=self.cfg.lexical_lambda)
+
+    def hologram_extract(self, hrr_b64: str, role: str,
+                         *, candidate_ids: list[str],
+                         user_id: str = "default") -> list[dict]:
+        """Unbind a role from a holographic WM vector and return top-k matches.
+
+        Used by agents that received a working-memory hologram and want
+        to recall a specific fact slot. Pure HRR algebra — μ=0.
+        """
+        try:
+            from context_m.vsa.working_memory import (
+                HolographicWM, extract_from_hologram, _vec_from_b64)
+            import numpy as np
+            hrr = _vec_from_b64(hrr_b64)
+            # fetch candidate facts and compute their embeddings
+            facts = self.store.get_facts(candidate_ids)
+            facts = [f for f in facts if f and f.is_active]
+            if not facts:
+                return []
+            cand_ids = [f.id for f in facts]
+            # embed the role-specific component of each fact
+            texts = []
+            for f in facts:
+                if role == "S":
+                    texts.append(f.subject or "")
+                elif role == "R":
+                    texts.append((f.relation or "").replace("_", " "))
+                elif role == "V":
+                    texts.append(f.value or "")
+                else:
+                    texts.append("")
+            embs = np.stack([self.palace.embedder.embed(t) for t in texts])
+            vsa = getattr(self.palace, "vsa", None) or \
+                self._init_vsa_for_wm()
+            hwm = HolographicWM(hrr=hrr, n_facts=len(cand_ids),
+                                 roles_present={role}, fact_ids=cand_ids,
+                                 preamble="")
+            hits = extract_from_hologram(hwm, role, None, vsa,
+                                          embs, cand_ids, top_k=3)
+            return [{"id": fid, "score": round(s, 4)} for fid, s in hits]
+        except Exception as e:
+            return [{"error": str(e)}]
 
     # ------------------------------------------------------------- format
     def _context_block(self, query: str, intent: str, facts: list[Fact],

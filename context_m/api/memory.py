@@ -431,10 +431,20 @@ class Memory:
             out["lifecycle"] = lifecycle.consolidate(self.store, now)
         if kwargs.get("dreaming", True):
             from context_m.trace.consolidate import consolidate as _dream
+            # Respect the Config's fade_enabled / tmt_enabled flags by
+            # default so `cortexm consolidate` runs the full production
+            # pass without requiring CLI flag plumbing. CLI / env can
+            # still turn them off via kwargs.
+            run_fade = kwargs.get("run_fade",
+                                   getattr(self.config, "fade_enabled", True))
+            run_tmt = kwargs.get("run_tmt",
+                                  getattr(self.config, "tmt_enabled", False))
             out["dreaming"] = _dream(self.store, palace=self.palace,
                                        prefetcher=self.prefetcher,
                                        user_id=kwargs.get("user_id"),
-                                       dry_run=kwargs.get("dry_run", False))
+                                       dry_run=kwargs.get("dry_run", False),
+                                       run_fade=run_fade,
+                                       run_tmt=run_tmt)
         return out
 
     def export_schema_report(self, user_id: str | None = None) -> dict:

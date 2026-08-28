@@ -185,7 +185,8 @@ class Extractor:
         # against the sentence with up to N edits. This stays deterministic
         # (Wu-Manber is bitwise, no learned weights) and <50μs on a typical
         # sentence — same order as the regex itself.
-        if not _TRIGGER.search(sent):
+        trigger_fired = bool(_TRIGGER.search(sent))
+        if not trigger_fired:
             if (not getattr(self.cfg, "bitap_trigger_enabled", True)
                     or not _bitap_trigger_match(sent,
                                                 self.cfg.bitap_trigger_max_edits)):
@@ -198,6 +199,34 @@ class Extractor:
                     continue
                 out.extend(c for c in cands if c.value and len(c.value) >= 2)
         out.extend(extract_events(sent, sp, ts, ctx))
+        # --- μ≈0 tiny-transformer fallback (gated on pattern miss) ---------
+        # When Bitap widened the trigger but the pattern library still
+        # returned nothing for this sentence, run the deterministic tiny
+        # self-attention fallback. This catches the long tail of facts
+        # whose surface form the pattern library doesn't model:
+        # "Alice calls home every weekend" → (Alice, prefers, "calls home
+        # every weekend"). Stays μ=0 — no external model, no API, no
+        # learned weights. Default ON; bench configs turn it off via
+        # tiny_fallback_enabled=False to keep baseline numbers comparable.
+        if (not out and trigger_fired is False
+                and getattr(self.cfg, "tiny_fallback_enabled", True)):
+            try:
+                from context_m.bridge.fallback import get_default
+                tt = get_default(dims=getattr(self.cfg, "dims", 768),
+                                  seed=getattr(self.cfg, "seed", 0x0C0FFEE))
+                cands = tt.extract_candidates(
+                    sent, subject_hint=ctx.subject,
+                    relations=tuple(getattr(ctx, "relations_hint", ())) or ())
+                # convert FallbackCandidate → Candidate so the rest of the
+                # pipeline (dedup, provenance) treats them uniformly
+                for fc in cands:
+                    out.append(Candidate(
+                        subject=fc.subject, relation=fc.relation,
+                        value=fc.value, confidence=fc.confidence,
+                        pattern=fc.pattern, span=fc.span, note=fc.note))
+            except Exception:
+                # the fallback is best-effort — never let it crash ingest
+                pass
         # single resolution pass: SELF / first-person / pronouns
         resolved: list[Candidate] = []
         for c in out:

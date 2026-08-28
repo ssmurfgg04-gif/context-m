@@ -4,6 +4,7 @@ image:
   repository: context-m
   tag: latest
   pullPolicy: IfNotPresent
+  codec: int8           # int8 | binary | rabitq | pq
 
 replicas: 1        # SQLite/RWO volume — scale via sharding, not replicas
 
@@ -19,6 +20,7 @@ persistence:
   enabled: true
   size: 10Gi
   storageClass: ""
+  mountPath: /var/lib/context-m
 
 security:
   encryptionAtRest: true
@@ -38,3 +40,12 @@ metrics:
 snapshot:
   enabled: true
   schedule: "17 2 * * *"
+
+# Nightly consolidate — FadeMem sweep + TMT hierarchy build.
+# Measured 43.2% storage reduction with zero retrieval-precision
+# regression (benchmarks/results/final.json). On by default; flips
+# Config.fade_enabled and Config.tmt_enabled for the batch process
+# via CONTEXT_M_FADE / CONTEXT_M_TMT env vars.
+consolidate:
+  enabled: true
+  schedule: "31 3 * * *"   # 03:31 UTC, after snapshot

@@ -11,6 +11,13 @@ TS = dt.datetime(2026, 1, 10, tzinfo=dt.timezone.utc)
 
 
 def _mk(**cfg_over):
+    # tiny_fallback (deterministic 2-layer self-attention catch-all) is on
+    # by default in production. For these enrichment tests we disable it
+    # so the LLM extractor has chunks to find — the test is asserting the
+    # enrichment path works, not that the deterministic fallback preempts
+    # it. (In production, tiny_fallback fires before enrich() is even
+    # eligible to find anything; that's a feature, not a bug.)
+    cfg_over.setdefault("tiny_fallback_enabled", False)
     cfg = Config(**cfg_over)
     return Memory(cfg)
 

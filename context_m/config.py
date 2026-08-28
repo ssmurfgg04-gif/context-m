@@ -86,12 +86,33 @@ class Config:
     bitap_trigger_enabled: bool = True
     bitap_trigger_max_edits: int = 2   # 2 edits = "wrks"→"works", "livs"→"lives"
 
+    # --- μ≈0 tiny-transformer fallback (pattern-miss retrieval) ------------
+    # When Bitap widened the trigger but the pattern library still returned
+    # zero candidates for a sentence, run a 2-layer self-attention "tiny
+    # transformer" whose weights are derived deterministically from the
+    # project seed (no external model download, no ONNX runtime, no GPU).
+    # Closes the OOD recall long tail without breaking the μ=0 / cost / audit
+    # moat. Default ON in production; bench baselines turn it off via
+    # bench_config_overrides() so the fallback's lift is visible in isolation.
+    tiny_fallback_enabled: bool = True
+
+    # --- Query-aware triple pre-filter (HippoRAG 2 lineage) ----------------
+    # When True, the reader drops candidate facts with low
+    # lexical+semantic+relation overlap with the query BEFORE fusion.
+    # HippoRAG 2 credits this for a 7% F1 gain. μ=0 — deterministic scorer.
+    prefilter_enabled: bool = True
+    prefilter_threshold: float = 0.08  # combined score below this → drop
+    prefilter_min_keep: int = 3        # always keep at least this many
+
     # --- FadeMem-style forgetting (retention decay + sleep sweeps) ----------
     # When True, the consolidate() pass also runs a FadeMem sweep that
     # decays retention scores, marks low-retention facts for deactivation,
     # and consolidates clusters of related facts into summary holograms.
-    # Default OFF in benchmarks (so numbers don't shift); ON in production.
-    fade_enabled: bool = False
+    # Default ON in production — measured 43.2% storage reduction with
+    # zero retrieval-precision regression (see benchmarks/results/final.json).
+    # Bench scripts flip this back to False via bench_config_overrides()
+    # so baseline numbers stay comparable across releases.
+    fade_enabled: bool = True
     fade_lambda: float = 0.05          # exponential decay rate per day
     fade_access_boost: float = 0.5     # each access multiplies retention
     fade_contradiction_penalty: float = 0.25  # supersession pressure
@@ -216,6 +237,19 @@ class Config:
                                                cfg.encryption_at_rest)
         if aa := os.environ.get("CONTEXT_M_AUDIT"):
             cfg.audit_actions = aa
+        # Production nightly-cron flips. The helm CronJob template sets
+        # CONTEXT_M_FADE=true and CONTEXT_M_TMT=true so the batch process
+        # runs the FadeMem sweep + TiMem TMT hierarchy build on top of the
+        # standard consolidate pass. Reading from env (not just CLI flags)
+        # means `cortexm consolidate --db …` in the CronJob container
+        # automatically picks them up.
+        if os.environ.get("CONTEXT_M_FADE") is not None:
+            cfg.fade_enabled = _env_bool("CONTEXT_M_FADE", cfg.fade_enabled)
+        if os.environ.get("CONTEXT_M_TMT") is not None:
+            cfg.tmt_enabled = _env_bool("CONTEXT_M_TMT", cfg.tmt_enabled)
+        if os.environ.get("CONTEXT_M_RECONSTRUCT") is not None:
+            cfg.reconstruct_enabled = _env_bool(
+                "CONTEXT_M_RECONSTRUCT", cfg.reconstruct_enabled)
         return cfg
 
     def to_dict(self) -> dict:

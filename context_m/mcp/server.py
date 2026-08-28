@@ -171,6 +171,84 @@ TOOLS = [
             "required": ["memory_id", "public_commitment"],
         },
     },
+    {
+        "name": "contextm_reconstruct",
+        "description": "Active memory reconstruction (MRAgent ICML 2026 lineage). "
+                       "For a given query, expand seed facts via 2-hop Personalized "
+                       "PageRank, score each hop's relevance, prune low-scoring "
+                       "branches, and return a synthesized narrative view of the "
+                       "user's memory state. Use this when a normal search would "
+                       "miss multi-hop context (e.g. 'what's the connection between "
+                       "Alice's job and her sister's hobby?').",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "user_id": {"type": "string", "default": "default"},
+                "k": {"type": "integer", "default": 10},
+                "max_hops": {"type": "integer", "default": 3},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "contextm_consolidate",
+        "description": "Trigger a memory consolidation pass on demand (normally "
+                       "runs nightly via cron). Runs the FadeMem sweep "
+                       "(decay + deactivate + merge), TiMem TMT hierarchy build "
+                       "(session→day→persona summaries), and Aeon-style dreaming "
+                       "(merge redundant triples, defrag palace). Measured 43.2%% "
+                       "storage reduction with zero retrieval-precision regression. "
+                       "Returns a stats dict; safe to call repeatedly (idempotent).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "default": "default"},
+                "dry_run": {"type": "boolean", "default": False},
+                "lifecycle": {"type": "boolean", "default": True},
+                "dreaming": {"type": "boolean", "default": True},
+                "fade": {"type": "boolean", "default": True},
+                "tmt": {"type": "boolean", "default": True},
+            },
+        },
+    },
+    {
+        "name": "contextm_working_memory",
+        "description": "Holographic working memory — compress the top-k retrieved "
+                       "facts into a single HRR (Holographic Reduced Representation) "
+                       "superposition. Returns a short (~30-50 token) preamble for "
+                       "LLM system-prompt injection + the HRR vector base64-packed. "
+                       "5-10× token reduction for context windows with repeated "
+                       "memory injection across turns.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "user_id": {"type": "string", "default": "default"},
+                "k": {"type": "integer", "default": 12},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "contextm_hologram_extract",
+        "description": "Unbind a role (S/R/V) from a holographic working memory "
+                       "vector and return the top-3 candidate facts. Used by agents "
+                       "that received a working-memory hologram via "
+                       "contextm_working_memory and want to recall a specific fact "
+                       "slot on demand. Pure HRR algebra — μ=0.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "hrr_b64": {"type": "string",
+                            "description": "base64-packed HRR vector from contextm_working_memory"},
+                "role": {"type": "string", "enum": ["S", "R", "V"]},
+                "candidate_ids": {"type": "array", "items": {"type": "string"}},
+                "user_id": {"type": "string", "default": "default"},
+            },
+            "required": ["hrr_b64", "role", "candidate_ids"],
+        },
+    },
 ]
 
 
@@ -276,6 +354,39 @@ class MCPServer:
                     args.get("memory_id", ""),
                     args.get("public_commitment", ""),
                     threshold=args.get("threshold", 32))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_reconstruct":
+                # MRAgent-style active reconstruction.
+                out = self._reconstruct(
+                    args.get("query", ""),
+                    user_id=args.get("user_id", "default"),
+                    k=args.get("k", 10),
+                    max_hops=args.get("max_hops", 3))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_consolidate":
+                # On-demand consolidation pass (FadeMem + TMT + dreaming).
+                out = self._consolidate(
+                    user_id=args.get("user_id", "default"),
+                    dry_run=args.get("dry_run", False),
+                    lifecycle=args.get("lifecycle", True),
+                    dreaming=args.get("dreaming", True),
+                    fade=args.get("fade", True),
+                    tmt=args.get("tmt", True))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_working_memory":
+                # Holographic working-memory compression.
+                out = self._working_memory(
+                    args.get("query", ""),
+                    user_id=args.get("user_id", "default"),
+                    k=args.get("k", 12))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_hologram_extract":
+                # Unbind a role from a HRR hologram and return top-3.
+                out = self._hologram_extract(
+                    args.get("hrr_b64", ""),
+                    args.get("role", "S"),
+                    args.get("candidate_ids", []),
+                    user_id=args.get("user_id", "default"))
                 text = json.dumps(out, indent=1, default=str)
             else:
                 return {"content": [{"type": "text",
@@ -383,6 +494,97 @@ class MCPServer:
             }
         except Exception as e:
             return {"memory_id": memory_id, "error": str(e)}
+
+    # ------------------------------------------------------------------
+    def _reconstruct(self, query: str, user_id: str = "default",
+                     k: int = 10, max_hops: int = 3) -> dict:
+        """MRAgent-style active memory reconstruction.
+
+        Uses Memory.reader.reconstruct() (which exists from prior work
+        — bridge/reader.py). Falls back to standard search if the
+        reconstruct path is disabled in Config.
+        """
+        try:
+            reader = getattr(self.memory, "reader", None)
+            if reader is None:
+                out = self.memory.search(query, user_id=user_id, limit=k)
+                return {"query": query, "fallback": "standard_search",
+                        "context_block": out.get("context_block", "")}
+            reconstruct_fn = getattr(reader, "reconstruct", None)
+            if (reconstruct_fn is None
+                    or not getattr(self.memory.config,
+                                    "reconstruct_enabled", False)):
+                out = self.memory.search(query, user_id=user_id, limit=k * 2)
+                return {"query": query, "fallback": "standard_search_wide",
+                        "context_block": out.get("context_block", ""),
+                        "results": out.get("results", [])[:k]}
+            res = reconstruct_fn(query, user_id=user_id, k=k,
+                                  max_hops=max_hops)
+            return {
+                "query": query,
+                "user_id": user_id,
+                "intent": getattr(res, "intent", "reconstruct"),
+                "narrative": getattr(res, "context_block", ""),
+                "facts": [
+                    {"id": getattr(f, "id", ""), "subject": f.subject,
+                     "relation": f.relation, "value": f.value,
+                     "confidence": getattr(f, "confidence", 0.0)}
+                    for f in getattr(res, "facts", [])
+                ],
+                "provenance": getattr(res, "provenance", {}),
+                "timing": getattr(res, "timing", {}),
+            }
+        except Exception as e:
+            return {"query": query, "error": str(e)}
+
+    # ------------------------------------------------------------------
+    def _consolidate(self, user_id: str = "default", dry_run: bool = False,
+                     lifecycle: bool = True, dreaming: bool = True,
+                     fade: bool = True, tmt: bool = True) -> dict:
+        """On-demand consolidation: FadeMem + TMT + Aeon dreaming.
+
+        Wraps Memory.consolidate() with explicit fade/tmt toggles so
+        callers can run a partial pass (e.g. fade-only) on demand.
+        Idempotent — safe to call repeatedly.
+        """
+        try:
+            out = self.memory.consolidate(
+                lifecycle=lifecycle, dreaming=dreaming,
+                run_fade=fade, run_tmt=tmt, user_id=user_id,
+                dry_run=dry_run)
+            return {"user_id": user_id, "dry_run": dry_run,
+                    "lifecycle": out.get("lifecycle", {}),
+                    "dreaming": out.get("dreaming", {})}
+        except Exception as e:
+            return {"user_id": user_id, "error": str(e)}
+
+    # ------------------------------------------------------------------
+    def _working_memory(self, query: str, user_id: str = "default",
+                        k: int = 12) -> dict:
+        """Compress top-k retrieved facts into a single HRR superposition."""
+        try:
+            reader = getattr(self.memory, "reader", None)
+            if reader is None:
+                return {"query": query, "error": "reader not available"}
+            return reader.working_memory(query, user_id=user_id, k=k)
+        except Exception as e:
+            return {"query": query, "error": str(e)}
+
+    # ------------------------------------------------------------------
+    def _hologram_extract(self, hrr_b64: str, role: str,
+                          candidate_ids: list[str],
+                          user_id: str = "default") -> dict:
+        """Unbind a role from a HRR hologram and return top-3 matches."""
+        try:
+            reader = getattr(self.memory, "reader", None)
+            if reader is None:
+                return {"error": "reader not available"}
+            hits = reader.hologram_extract(hrr_b64, role,
+                                             candidate_ids=candidate_ids,
+                                             user_id=user_id)
+            return {"role": role, "hits": hits}
+        except Exception as e:
+            return {"error": str(e)}
 
     # ------------------------------------------------------------------
     @staticmethod

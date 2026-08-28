@@ -1,0 +1,10 @@
+{
+  "name": "context-m-langchain",
+  "version": "0.1.0",
+  "description": "LangChain BaseMemory adapter for Context-M (μ=0 neuro-symbolic memory fabric).",
+  "main": "context_m_memory.py",
+  "python": ">=3.11",
+  "license": "MIT",
+  "homepage": "https://github.com/ssmurfgg04-gif/context-m",
+  "keywords": ["langchain", "memory", "agent", "rag", "context-m", "neuro-symbolic"]
+}
