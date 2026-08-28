@@ -2133,3 +2133,63 @@ Stage Summary:
 - release.yml smoke-test bug fixed in commit 6d3d9fb.
 - v0.5.0 tag re-pointed at 6d3d9fb (was 4e12df1).
 - New release workflow running.
+
+---
+Task ID: 2026-08-29-pypi-trusted-publisher-blocked
+Agent: main (Super Z)
+Task: Diagnose the second release.yml failure + provide user-action path.
+
+Work Log:
+- release.yml build job SUCCEEDED after the smoke-test fix in
+  commit 6d3d9fb:
+    * Build sdist + wheel ✓ (cortexm-0.5.0.tar.gz + cortexm-0.5.0-py3-none-any.whl)
+    * Verify tag matches pyproject version ✓ (0.5.0 == 0.5.0)
+    * Quick smoke — import the built wheel ✓ (cortexm.LLM_CALLS = 0,
+      μ=0 verified at build time)
+    * Upload artifact ✓
+- release.yml publish job FAILED at the PyPI publish step with:
+    `invalid-publisher`: valid token, but no corresponding publisher
+    (Publisher with matching claims was not found)
+- This is NOT a code bug — it is the one-time trusted-publisher
+  registration on PyPI. The workflow correctly asserts:
+      sub:           repo:ssmurfgg04-gif@232103099/context-m@1348305123:environment:release
+      repository:    ssmurfgg04-gif/context-m
+      workflow_ref:  ssmurfgg04-gif/context-m/.github/workflows/release.yml@refs/tags/v0.5.0
+      environment:   release
+  PyPI just doesn't know about this publisher yet.
+
+USER ACTION REQUIRED (5 minutes, one-time):
+  1. Sign in to https://pypi.org as the owner of the `cortexm`
+     project (the previous PyPI publish of 0.3.0 was done with
+     this account; user knows which one).
+  2. Go to: https://pypi.org/manage/project/cortexm/settings/publishing/
+  3. "Add a new publisher" → fill in:
+       PyPI Project Name:        cortexm
+       Owner:                    ssmurfgg04-gif
+       Repository name:          context-m
+       Workflow name:            release.yml
+       Environment name:         release
+  4. Save.
+  5. Then either:
+       (a) Re-run the failed workflow from the Actions UI:
+           https://github.com/ssmurfgg04-gif/context-m/actions/runs/33211141132
+           Click "Re-run failed jobs" → publish job retries.
+       (b) OR: I can re-trigger by deleting + recreating the v0.5.0
+           tag (just say "re-trigger PyPI").
+
+Alternative path (if the user prefers a long-lived token):
+  - Create a PyPI API token at https://pypi.org/manage/account/token/
+    with scope "Project: cortexm"
+  - Add it as a repository secret: GHA → Settings → Secrets and
+    variables → Actions → New secret → name `PYPI_TOKEN`
+  - Tell me, and I'll switch release.yml from trusted publishing
+    to use `password: ${{ secrets.PYPI_TOKEN }}` (one line change).
+  - The 2026 best practice is trusted publishing (no token to
+    leak/rotate) but the secret path also works.
+
+Stage Summary:
+- release.yml code is correct. Build + smoke + verify all pass.
+- Trusted publisher is the only missing piece — 5 min user action.
+- Once registered, the v0.5.0 PyPI publish will succeed.
+- The artifacts are uploaded as GHA artifact `dist` (run_id=33211141132)
+  so even without re-running, the wheels are retrievable.
