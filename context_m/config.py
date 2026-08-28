@@ -65,6 +65,19 @@ class Config:
     fusion_vsa_weight: float = 0.6
     fusion_symbolic_weight: float = 0.4
 
+    # --- cross-encoder rerank (μ=0, web search SOTA 2026-08) -------------
+    # Cross-encoder-style reranking: re-score top-K candidates by cosine
+    # sim between query embedding and a natural-language rendering of
+    # each fact ("the name of beam_1 is jennifer mccall"). Lifts prec@5
+    # 10-20pp on MS-MARCO-style benchmarks. Default OFF so baseline
+    # numbers don't shift; bench enables via "+rerank" config.
+    enable_rerank: bool = False
+    rerank_alpha: float = 0.55          # weight on rerank score (vs original)
+    rerank_beta: float = 0.45           # weight on original fusion score
+    prf_alpha: float = 0.6              # Rocchio: query weight
+    prf_beta: float = 0.4               # Rocchio: top-3 mean weight
+    prf_topn: int = 3                   # how many top hits for PRF mean
+
     # --- index ----------------------------------------------------------
     index_threshold: int = 2048        # build tree when N >= this
     index_leaf_size: int = 512

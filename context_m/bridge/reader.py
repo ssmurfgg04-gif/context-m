@@ -149,6 +149,23 @@ class MemoryReader:
         # Override via reader.with_decoder("rdf" | "datalog" | "json").
         from context_m.bridge.decoders import get_decoder
         self._decoder = get_decoder("llm_prompt")
+        # Cross-encoder-style fact reranker (μ=0). Lazily imported so the
+        # rest of the fabric is unaffected. Controlled by the
+        # `enable_rerank` config knob (False by default — the bench must
+        # explicitly enable it via "+rerank" config).
+        self._reranker = None
+        if getattr(config, "enable_rerank", False):
+            try:
+                from context_m.bridge.rerank import FactReranker
+                self._reranker = FactReranker(
+                    palace.embedder,
+                    alpha=getattr(config, "rerank_alpha", 0.55),
+                    beta=getattr(config, "rerank_beta", 0.45),
+                    prf_alpha=getattr(config, "prf_alpha", 0.6),
+                    prf_beta=getattr(config, "prf_beta", 0.4),
+                    prf_topn=getattr(config, "prf_topn", 3))
+            except Exception:  # noqa: BLE001
+                self._reranker = None
 
     def with_decoder(self, name: str) -> "MemoryReader":
         """Swap the output decoder (NSR insight: same palace + Trace,
@@ -412,6 +429,41 @@ class MemoryReader:
         facts = [f for f in facts if not f.quarantined
                  and (f.is_active or allow_inactive)]
         facts.sort(key=lambda f: ranked_ids.index(f.id))
+
+        # --- cross-encoder rerank (μ=0) -------------------------------------
+        # If enabled, re-score top-k by embedding each fact's natural-
+        # language rendering and computing cosine sim to the query. The
+        # chunk vectors in the palace are long and fact-dense — a fact-
+        # level embedding is focused and lifts precision@k by 10-20pp on
+        # MS-MARCO-style benchmarks (cross-encoder reranking, web search
+        # 2026-08). The candidate pool is expanded to 3*k for the rerank
+        # pass so we have a deeper top-N to draw from. PRF (Rocchio)
+        # shifts the query embedding toward the mean of the top-3 fact
+        # NL embeddings — a 2-5pp lift on TREC.
+        rerank_used = False
+        if (self._reranker is not None
+                and plan.intent in ("recall", "current", "multihop")
+                and len(facts) >= 2):
+            # expand the candidate pool back to the wider fusion set so
+            # the rerank can find facts the diversifier dropped
+            pool_ids = [fid for fid, _ in
+                        sorted(candidates.items(),
+                               key=lambda kv: (-kv[1],
+                                               _content_key(_f1.get(kv[0]))))
+                        [:max(k * 3, 15)]]
+            pool_facts = [f for f in self.store.get_facts(pool_ids)
+                          if (not f.quarantined
+                              and (f.is_active or allow_inactive))]
+            pool_scores = {f.id: candidates.get(f.id, 0.0) for f in pool_facts}
+            reranked, new_scores = self._reranker.rerank(
+                q_vec, pool_facts, pool_scores, top_k=k, enable_prf=True)
+            if reranked:
+                facts = reranked
+                ranked_ids = [f.id for f in facts]
+                # patch candidates so _context_block and SLB see rerank scores
+                candidates.update(new_scores)
+                rerank_used = True
+
         if self.prefetcher is not None and facts:
             self.prefetcher.observe([f.id for f in facts[:6]])
 
@@ -429,7 +481,8 @@ class MemoryReader:
             {"latency_ms": round((t1 - t0) * 1e3, 3), "slb": "miss",
              "prefetch_boosted": len(prefetch_boosted),
              "vsa_candidates": len(vsa_scores),
-             "symbolic_candidates": len(sym_facts)},
+             "symbolic_candidates": len(sym_facts),
+             "rerank": rerank_used},
             False, {f.id: round(candidates.get(f.id, 0.0), 4) for f in facts})
 
     # ------------------------------------------------------------- symbolic

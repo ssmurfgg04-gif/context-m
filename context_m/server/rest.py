@@ -70,6 +70,80 @@ class TokenBucket:
             return True
 
 
+# ------------------------------------------------------------------ per-endpoint ratelimit
+# P2 #8 from code review: SPARQL queries are slower than /healthz and
+# previously shared one bucket. A SPARQL client issuing SELECT queries at
+# the global rate would (a) starve /healthz probes and (b) be throttled at
+# the wrong RPS for graph workload. Per-endpoint buckets fix both.
+#
+# Tier map (rate / burst per key per tier):
+#   * "fast"    : /healthz, /readyz, /metrics, /openapi.json, OPTIONS
+#                 cheap probes — high RPS, low cost-of-allow
+#   * "medium"  : /v1/add, /v1/search, /v1/memories*, /v1/users, /v1/stats,
+#                 /v1/verify, /v1/audit, /v1/keys*, /v1/state_at,
+#                 /v1/snapshot, /v1/restore, /v1/erase, /v1/retention,
+#                 /v1/export, /v1/consolidate, /v1/chaos, /v1/federation/*
+#                 normal REST workload
+#   * "slow"    : /v1/sparql (GET+POST)
+#                 SPARQL SELECT queries do graph traversal; a single query
+#                 can take 50-200 ms — separate, smaller bucket so SPARQL
+#                 clients cannot starve the REST surface and vice versa.
+RATE_LIMIT_TIERS: dict[str, tuple[float, int]] = {
+    "fast":   (200.0, 400),    # 200 rps / burst 400  — health probes
+    "medium": (50.0,  100),    # 50  rps / burst 100  — REST default
+    "slow":   (10.0,  20),     # 10  rps / burst 20   — SPARQL (graph traversal)
+}
+
+
+def _tier_for_path(path: str) -> str:
+    """Classify an HTTP path into a rate-limit tier.
+
+    Returns one of 'fast' | 'medium' | 'slow'. Defaults to 'medium' so
+    any unmapped /v1/* route inherits the safe default rather than the
+    fast-probe bucket (which would let an attacker bypass throttling by
+    inventing routes).
+    """
+    p = path.split("?", 1)[0].rstrip("/") or "/"
+    if p in ("/healthz", "/readyz", "/metrics", "/openapi.json", "/"):
+        return "fast"
+    if p == "/v1/sparql":
+        return "slow"
+    return "medium"
+
+
+class TieredTokenBuckets:
+    """Per-endpoint token buckets — one bucket per (tier, key).
+
+    Each tier has its own rate/burst; each (tier, key) pair has its own
+    running token count. This means a SPARQL client hammering /v1/sparql
+    will not exhaust the budget for the same client's /v1/search calls,
+    and a monitoring agent hitting /healthz every 100ms will never be
+    throttled by a SPARQL DoS.
+    """
+
+    def __init__(self, tiers: dict[str, tuple[float, int]] | None = None
+                 ) -> None:
+        self.tiers = tiers or RATE_LIMIT_TIERS
+        self._buckets: dict[tuple[str, str], TokenBucket] = {}
+        self._lock = threading.Lock()
+
+    def _bucket(self, tier: str, key: str) -> TokenBucket:
+        bk = (tier, key)
+        b = self._buckets.get(bk)
+        if b is not None:
+            return b
+        with self._lock:
+            b = self._buckets.get(bk)
+            if b is None:
+                rate, burst = self.tiers.get(tier, self.tiers["medium"])
+                b = TokenBucket(rate, burst)
+                self._buckets[bk] = b
+            return b
+
+    def allow(self, tier: str, key: str) -> bool:
+        return self._bucket(tier, key).allow(key)
+
+
 # ------------------------------------------------------------------ openapi
 def openapi_spec() -> dict:
     def op(summary: str, params: list | None = None, body: bool = False,
@@ -179,8 +253,13 @@ class FabricState:
     def __init__(self, memory: Memory) -> None:
         self.memory = memory
         self.lock = threading.RLock()
-        self.bucket = TokenBucket(memory.config.rate_limit_rps,
-                                  memory.config.rate_limit_burst)
+        # P2 #8: per-endpoint rate limiting. The old single TokenBucket
+        # shared one budget across /healthz (1ms probe) and /v1/sparql
+        # (50-200ms graph traversal). A SPARQL DoS would starve the
+        # liveness probe; a /healthz flood would starve real REST traffic.
+        # TieredTokenBuckets keeps a separate bucket per (tier, key) so
+        # graph clients and probe clients don't interact.
+        self.bucket = TieredTokenBuckets()
 
     # expose key store helpers
     @property
@@ -241,7 +320,7 @@ def build_handler(state: FabricState):
             except json.JSONDecodeError:
                 raise ValueError("invalid JSON body")
 
-        def _auth(self, action: str) -> dict:
+        def _auth(self, action: str, path: str = "") -> dict:
             hdr = self.headers.get("Authorization") or ""
             if not hdr.startswith("Bearer "):
                 REGISTRY.inc("contextm_http_requests_total",
@@ -258,10 +337,15 @@ def build_handler(state: FabricState):
                              {"code": "401"})
                 self._send(401, {"error": "invalid or revoked key"})
                 return {}
-            if not state.bucket.allow(key):
+            # P2 #8: per-endpoint rate limit. /healthz = 'fast' tier,
+            # /v1/sparql = 'slow' tier, everything else = 'medium'.
+            tier = _tier_for_path(path) if path else _tier_for_path(
+                self.path.split("?")[0])
+            if not state.bucket.allow(tier, key):
                 REGISTRY.inc("contextm_http_requests_total",
                              {"code": "429"})
-                self._send(429, {"error": "rate limit exceeded"})
+                self._send(429, {"error": f"rate limit exceeded "
+                                          f"(tier={tier})"})
                 return {}
             try:
                 authorize(meta, action)

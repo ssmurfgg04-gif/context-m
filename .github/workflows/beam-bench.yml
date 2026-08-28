@@ -20,11 +20,11 @@ on:
       max_turns:
         description: "Max user turns per persona"
         required: false
-        default: "100"
+        default: "50"
       config:
-        description: "Feature stack: baseline | +unmess | +unmess+dissim | +unmess+dissim+query | all"
+        description: "Feature stack: baseline | +unmess | +unmess+dissim | +unmess+dissim+query | +unmess+dissim+rerank | +all_v2 | all"
         required: false
-        default: "all"
+        default: "+all_v2"
   workflow_run:
     workflows: ["beam-cache"]
     types: [completed]

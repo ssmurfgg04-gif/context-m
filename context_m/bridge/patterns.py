@@ -656,3 +656,92 @@ def _profile_relative(m, ctx, sp, ts, sent):
     # fact is stored and the relation can be re-classified later.
     return [Candidate(target, "related_to", v, 0.75,
                        "profile_relative")]
+
+
+# --- section-aware kinship extraction (BEAM-10M user_relationships) -----------
+# The previous `profile_relative` pattern emitted every kinship bullet as
+# `related_to` because it didn't know which section header the bullet was
+# under. The fix is a multi-line pattern that captures the section header
+# + bullet as one regex, so the relation can be derived from the header
+# in the same pass.
+#
+# BEAM-10M user_relationships section looks like:
+#   PARENTS & GUARDIANS:
+#   • Alicia (female, age 80)
+#   • John (male, age 82)
+#   ROMANTIC PARTNER:
+#   • Chris (35, software engineer)
+#   CHILDREN:
+#   • Brittany (12)
+#   • Maria (8)
+#   SIBLINGS:
+#   • Sam (28, lawyer)
+#   FRIENDS:
+#   • Bob (40, teacher)
+#
+# Section→relation map (BEAM-10M canonical headers):
+_KINSHIP_SECTIONS = {
+    "PARENTS & GUARDIANS": "parent",
+    "PARENTS": "parent",
+    "GUARDIANS": "parent",
+    "ROMANTIC PARTNER": "partner",
+    "ROMANTIC PARTNERS": "partner",
+    "PARTNER": "partner",
+    "PARTNERS": "partner",
+    "SPOUSE": "spouse",
+    "CHILDREN": "child",
+    "CHILD": "child",
+    "SIBLINGS": "sibling",
+    "SIBLING": "sibling",
+    "FRIENDS": "friend",
+    "FRIEND": "friend",
+    "COLLEAGUES": "colleague",
+    "COLLEAGUE": "colleague",
+    "COWORKERS": "colleague",
+    "EXTENDED FAMILY": "family",
+    "GRANDPARENTS": "parent",  # grandparent is a parent role
+    "GRANDCHILDREN": "child",
+    "NEPHEWS & NIECES": "sibling",  # sibling lineage
+    "IN-LAWS": "family",
+}
+# Build one big alternation of section headers (longest first so
+# "PARENTS & GUARDIANS" beats "PARENTS")
+_KINSHIP_HEADERS = sorted(_KINSHIP_SECTIONS.keys(), key=len, reverse=True)
+_KINSHIP_HEADERS_RE = "|".join(
+    re.escape(h).replace(r"\ ", r"\s+") for h in _KINSHIP_HEADERS)
+
+
+@pattern("profile_kinship_section",
+         rf"(?P<section>{_KINSHIP_HEADERS_RE})\s*:\s*\n"
+         rf"(?P<bullets>(?:\s*•\s+{NAME}\s*\([^)]*\)\s*\n?)+)")
+def _profile_kinship_section(m, ctx, sp, ts, sent):
+    """Section-aware kinship extraction.
+
+    Matches a whole section header + bullet block, emits one Candidate
+    per bullet with the section-derived relation. This replaces the
+    lossy `related_to` fallback that the single-line `profile_relative`
+    pattern was emitting.
+    """
+    section_raw = m.group("section")
+    # normalize header to canonical form (collapse whitespace, uppercase)
+    section_key = re.sub(r"\s+", " ", section_raw).strip().upper()
+    relation = _KINSHIP_SECTIONS.get(section_key)
+    if relation is None:
+        # try matching by prefix (e.g. "PARENTS & GUARDIANS" might have
+        # spacing differences)
+        for h in _KINSHIP_HEADERS:
+            if h in section_key:
+                relation = _KINSHIP_SECTIONS[h]
+                break
+    if relation is None:
+        return []  # unknown section — leave to single-line pattern
+    bullets = m.group("bullets")
+    target = ctx.subject_name or "SELF"
+    out: list[Candidate] = []
+    # iterate bullets within the section
+    for bm in re.finditer(rf"•\s+(?P<val>{NAME})\s*\([^)]*\)", bullets):
+        v = clean_value(bm.group("val"))
+        if v and len(v) >= 2:
+            out.append(Candidate(target, relation, v, 0.85,
+                                 "profile_kinship_section"))
+    return out

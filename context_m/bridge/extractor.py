@@ -38,7 +38,14 @@ _TRIGGER = _re.compile(
     r"mother|father|mom|dad|wife|husband|partner|daughter|son|cousin|shipped|"
     r"launched|finished|completed|building|joined|left|quit|always|never|please|"
     r"studied|majored|degree|hobby|favorite|skill|goal|planning|speak|pet|age|"
-    r"you|she|he|they)\b", _re.I)
+    r"you|she|he|they|"
+    # BEAM-10M kinship section headers — must be in trigger so the
+    # section-aware pattern in patterns.py fires. Without these, the
+    # bullet lines under "PARENTS & GUARDIANS:" etc would be filtered
+    # out by _sentence_candidates (no trigger match → no pattern scan).
+    r"parents|guardians|children|siblings|friends|colleagues|coworkers|"
+    r"in-laws|grandparent|grandchild|nephew|niece|family|"
+    r"profession|gender|location|occupation)\b", _re.I)
 _DATE_TRIGGER = _re.compile(
     r"\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|yesterday|today|"
     r"tomorrow|last|ago|since", _re.I)

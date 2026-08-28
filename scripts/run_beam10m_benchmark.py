@@ -51,8 +51,10 @@ def main():
                     help="max user turns to ingest per persona")
     ap.add_argument("--config", default="baseline",
                     choices=["baseline", "+unmess", "+unmess+dissim",
-                             "+unmess+dissim+query", "all"],
-                    help="which feature stack to enable; 'all' runs all 4")
+                             "+unmess+dissim+query", "+unmess+dissim+rerank",
+                             "+all_v2", "all"],
+                    help="which feature stack to enable; 'all' runs the 4 "
+                         "original configs, '+all_v2' adds the rerank stack")
     ap.add_argument("--cache-dir", default="/tmp/beam_cache",
                     help="where to cache BEAM rows (avoid re-downloading)")
     ap.add_argument("--db", default="/tmp/beam10m_bench.db",
@@ -83,6 +85,10 @@ def main():
     if args.config == "all":
         configs_to_run = ["baseline", "+unmess", "+unmess+dissim",
                            "+unmess+dissim+query"]
+    elif args.config == "+all_v2":
+        # the new SOTA-inspired stack: full feature set + cross-encoder rerank
+        configs_to_run = ["baseline", "+unmess+dissim",
+                           "+unmess+dissim+rerank"]
     else:
         configs_to_run = [args.config]
 
@@ -132,6 +138,9 @@ def run_single_config(personas, config_name, args):
         os.unlink(args.db)
     cfg = Config.from_env()
     cfg.db_path = args.db
+    # NEW: enable cross-encoder rerank for configs that include "+rerank"
+    if "rerank" in config_name:
+        cfg.enable_rerank = True
     mem = Memory(cfg)
 
     # optional feature stacks

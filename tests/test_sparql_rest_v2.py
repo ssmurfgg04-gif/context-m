@@ -19,6 +19,7 @@ import socket
 import sys
 import time
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -625,3 +626,105 @@ class TestSparqlServerThreaded:
             assert elapsed < 2.0  # 5 concurrent shouldn't take >2s
         finally:
             srv.stop()
+
+
+# ----------------------------------------------------------- per-endpoint rate limit (P2 #8)
+class TestPerEndpointRateLimit:
+    """Per-endpoint tiered rate limiter (P2 #8 from code review).
+
+    SPARQL queries share one Memory with the REST surface but should
+    have their own rate-limit bucket so a slow graph traversal cannot
+    starve /healthz probes or /v1/search traffic.
+    """
+
+    def test_tier_classification(self):
+        """_tier_for_path maps known routes to the right tier."""
+        from context_m.server.rest import _tier_for_path
+        assert _tier_for_path("/healthz") == "fast"
+        assert _tier_for_path("/readyz") == "fast"
+        assert _tier_for_path("/metrics") == "fast"
+        assert _tier_for_path("/openapi.json") == "fast"
+        assert _tier_for_path("/") == "fast"
+        # SPARQL is its own slow tier
+        assert _tier_for_path("/v1/sparql") == "slow"
+        assert _tier_for_path("/v1/sparql?query=SELECT") == "slow"
+        # everything else falls through to medium
+        assert _tier_for_path("/v1/search") == "medium"
+        assert _tier_for_path("/v1/add") == "medium"
+        assert _tier_for_path("/v1/memories/abc-123") == "medium"
+        # unmapped routes inherit the safe default (medium, not fast)
+        assert _tier_for_path("/v1/unknown") == "medium"
+
+    def test_buckets_isolated_per_tier(self):
+        """A key hitting the 'slow' tier does NOT consume 'medium' budget."""
+        from context_m.server.rest import TieredTokenBuckets
+        tb = TieredTokenBuckets({
+            "fast":   (200.0, 400),
+            "medium": (50.0,  100),
+            "slow":   (10.0,  20),
+        })
+        # the same key hitting two tiers must have two independent buckets
+        # — drain 'slow' to zero and verify 'medium' is unaffected
+        key = "ctxm_reader_abc"
+        for _ in range(20):
+            assert tb.allow("slow", key)  # burst=20, all OK
+        # 'slow' is now empty
+        assert tb.allow("slow", key) is False
+        # 'medium' for the SAME key should still have its full budget
+        for _ in range(100):
+            assert tb.allow("medium", key), \
+                "medium tier drained by slow-tier traffic — bug"
+        # and 'fast' too
+        for _ in range(400):
+            assert tb.allow("fast", key), \
+                "fast tier drained by slow-tier traffic — bug"
+
+    def test_sparql_does_not_starve_healthz(self, mem):
+        """End-to-end: hammer /v1/sparql until 429, /healthz still 200."""
+        import threading
+        from context_m.server import rest as rest_mod
+        from context_m.server.rest import serve, FabricState, build_handler
+        port = _free_port()
+        # tiny SPARQL tier so we hit 429 quickly: 1 rps / burst 2
+        old_tiers = rest_mod.RATE_LIMIT_TIERS
+        rest_mod.RATE_LIMIT_TIERS = {
+            "fast":   (200.0, 400),
+            "medium": (50.0,  100),
+            "slow":   (1.0,   2),    # 1 rps / burst 2 — tiny for the test
+        }
+        # construct FabricState AFTER patching RATE_LIMIT_TIERS so it
+        # picks up the tiny SPARQL bucket
+        from http.server import ThreadingHTTPServer
+        state = FabricState(mem)
+        httpd = ThreadingHTTPServer(("127.0.0.1", port),
+                                     build_handler(state))
+        httpd.daemon_threads = True
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        try:
+            meta = mem.keys.create("reader", label="rl-test")
+            key = meta["key"]
+            time.sleep(0.2)
+            # hammer /v1/sparql until we get a 429
+            sparql_codes = []
+            url = (f"http://127.0.0.1:{port}/v1/sparql?query="
+                   "SELECT%20%3Fs%20%3Fp%20%3Fo%20WHERE%20%7B%20%3Fs%20%3Fp%20%3Fo%20%7D%20LIMIT%201")
+            for _ in range(10):
+                try:
+                    s, _ = _http_get(url, headers={"Authorization":
+                                                  f"Bearer {key}"})
+                    sparql_codes.append(s)
+                except urllib.error.HTTPError as e:
+                    sparql_codes.append(e.code)
+            # at least one 429 on SPARQL — burst is only 2
+            assert 429 in sparql_codes, \
+                f"SPARQL never throttled: {sparql_codes}"
+            # /healthz (no auth) should still return 200 every time
+            for _ in range(20):
+                s, _ = _http_get(f"http://127.0.0.1:{port}/healthz")
+                assert s == 200, f"healthz starved: {s}"
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            rest_mod.RATE_LIMIT_TIERS = old_tiers
+
