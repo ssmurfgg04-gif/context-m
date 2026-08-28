@@ -23,5 +23,5 @@
  ],
  "finding": "LLM judge mean 0.223 vs deterministic judge mean 0.335; exact agreement 82.1%. Two independent graders \u2014 the offline judge is not silently inflating scores (it grades higher here)",
  "protocol": "BEAM-style context-sufficiency rubric replicated with the recorded judge model(s); canonical BEAM uses gpt-5 \u2014 numbers are NOT directly comparable across judge models.",
- "generated_at": "2026-08-28T11:13:16.807140+00:00"
+ "generated_at": "2026-08-28T18:48:45.886645+00:00"
 }
