@@ -343,9 +343,20 @@ class MemoryReader:
         if not getattr(self.cfg, "chunk_recall_enabled", True):
             stats.skipped = "disabled"
             return {}, stats
-        if not scope:
-            stats.skipped = "empty_scope"
-            return {}, stats
+
+        # Reddit-deep-dive 2026-08-29 fix: do NOT early-exit when
+        # `scope` (the fact-id set) is empty. The whole point of the
+        # chunk_recall path is to surface answer-bearing chunks that
+        # have ZERO extracted facts (Tier-4.4.3 answerable=0.0 root
+        # cause). When the pattern library extracts nothing from any
+        # chunk, scope=∅, and the prior code skipped chunk_recall
+        # entirely — leaving factless chunks (where the answer lives)
+        # completely invisible. Now we load chunks first and only
+        # skip if BOTH scope AND chunks are empty.
+        #
+        # The branch-filter downstream (line ~378) handles empty
+        # `active_fids` correctly: chunks with 0 facts hit the
+        # `if not c_facts: kept.append(c)` branch and are kept.
 
         # Load all chunks in scope. The (user_id, agent_id, run_id)
         # scope is the same one _scope_ids filters facts by — same
@@ -412,13 +423,48 @@ class MemoryReader:
         topn = int(getattr(self.cfg, "chunk_recall_topn", 8))
         max_chars = 2000  # bound the embed cost per chunk
 
+        # Reddit deep-dive (2026-08-29): BM25 is one of the top
+        # user-requested features (≥10 mentions across r/LocalLLaMA +
+        # r/LangChain + r/agi + r/ClaudeCode). Replacing Jaccard with
+        # Okapi BM25 (k1=1.5, b=0.75) gives proper IDF weighting +
+        # term-frequency saturation + length normalization. On
+        # natural-language queries with rare terms (PR numbers,
+        # usernames, version strings) this lifts recall materially:
+        # Jaccard treats "PR #65353" the same as "the", while BM25
+        # gives the rare term ~10x the weight.
+        use_bm25 = bool(getattr(self.cfg, "chunk_recall_use_bm25", True))
+        bm25_norm: dict[str, float] = {}
+        if use_bm25:
+            try:
+                from cortexm.bench.baselines import BM25Index
+                bm25_docs = [
+                    {"id": c["id"],
+                     "text": (c.get("text") or "")[:max_chars]}
+                    for c in chunks if c.get("text")
+                ]
+                if bm25_docs:
+                    bm25 = BM25Index(bm25_docs)
+                    bm25_hits = bm25.search(query, k=len(bm25_docs))
+                    raw = [s for _, s in bm25_hits]
+                    if raw:
+                        smin, smax = min(raw), max(raw)
+                        span = (smax - smin) or 1.0
+                        bm25_norm = {cid: (s - smin) / span
+                                     for cid, s in bm25_hits}
+            except Exception:
+                # graceful fallback to Jaccard
+                bm25_norm = {}
+
         scored: list[tuple[float, str]] = []
         for c in chunks:
             text = (c.get("text") or "")[:max_chars]
             if not text:
                 continue
-            c_words = _content_word_set(text)
-            lex = _jaccard(q_words, c_words)
+            if bm25_norm:
+                lex = bm25_norm.get(c["id"], 0.0)
+            else:
+                c_words = _content_word_set(text)
+                lex = _jaccard(q_words, c_words)
             sem = 0.0
             if q_vec is not None:
                 try:

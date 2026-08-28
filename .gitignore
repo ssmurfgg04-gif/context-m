@@ -46,3 +46,5 @@ benchmarks/llm/.cache/
 logs/
 *.log
 tool-results/
+download/
+scripts/reddit_pain_points.json

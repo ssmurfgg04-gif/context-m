@@ -1,0 +1,109 @@
+{
+  "name": "dsh-cortexm",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness (Cordis) plugin — bi-temporal VSA memory + cognition engine + BLAKE3 provenance, exposed as a DSH storage+session plugin.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./storage": "./src/storage.js",
+    "./session": "./src/session.js"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "memory",
+    "agent-memory",
+    "bi-temporal",
+    "vsa",
+    "holographic",
+    "provenance",
+    "blake3",
+    "cognition",
+    "edge",
+    "offline"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ssmurfgg04-gif/context-m.git",
+    "directory": "plugins/dsh-cortexm"
+  },
+  "homepage": "https://github.com/ssmurfgg04-gif/context-m/tree/main/plugins/dsh-cortexm",
+  "bugs": {
+    "url": "https://github.com/ssmurfgg04-gif/context-m/issues"
+  },
+  "license": "MIT",
+  "author": "Context-M contributors",
+  "engines": {
+    "node": ">=18"
+  },
+  "dsh": {
+    "$schema": "https://deepseek-ai.github.io/deepseek-harness/schema/plugin-manifest.json",
+    "name": "cortexm",
+    "kind": ["storage", "session"],
+    "categories": ["memory", "storage", "sessions"],
+    "provides": {
+      "storage": {
+        "interface": "cortexm.store",
+        "methods": ["add", "search", "structural_query", "consolidate",
+                    "export_provenance", "audit"]
+      },
+      "session": {
+        "interface": "cortexm.session",
+        "methods": ["replay", "fork", "trajectory"]
+      }
+    },
+    "requires": ["cortexm >= 0.3.0 (Python)"],
+    "runtime": "python-bridge",
+    "config": {
+      "CORTEXM_DB": {
+        "type": "string",
+        "default": ":memory:",
+        "description": "SQLite path for the bi-temporal Trace (use :memory: for ephemeral, or a file path for persistence)"
+      },
+      "CORTEXM_CODEC": {
+        "type": "string",
+        "enum": ["int8", "binary", "rabitq", "pq"],
+        "default": "int8",
+        "description": "VSA codec — int8 baseline, binary/rabitq edge, pq cloud"
+      },
+      "CORTEXM_FADE": {
+        "type": "string",
+        "enum": ["off", "linear", "exponential"],
+        "default": "exponential",
+        "description": "FadeMem forgetting curve"
+      },
+      "CORTEXM_COGNITION": {
+        "type": "boolean",
+        "default": true,
+        "description": "Run HMS cognition engine (PatternScanner + AbstractionEngine + GapDetector + HypothesisEngine + AnalogyDetector) on consolidate"
+      },
+      "CORTEXM_PROVENANCE": {
+        "type": "boolean",
+        "default": true,
+        "description": "Append-only BLAKE3-chained audit log + ZK-provenance export"
+      },
+      "CORTEXM_CHUNK_RECALL_USE_BM25": {
+        "type": "boolean",
+        "default": true,
+        "description": "Use Okapi BM25 (k1=1.5, b=0.75) for chunk-recall lexical scoring instead of Jaccard"
+      }
+    },
+    "effects": {
+      "on_load": [
+        "spawn cortexm serve subprocess (stdio JSON-RPC)",
+        "verify schema version vs plugin manifest"
+      ],
+      "on_unload": [
+        "flush pending writes",
+        "close stdio pipe",
+        "no orphan listeners (cordis ctx.effect() cleanup)"
+      ]
+    },
+    "tags": ["memory", "bi-temporal", "vsa", "hrr", "cognition", "provenance"]
+  }
+}

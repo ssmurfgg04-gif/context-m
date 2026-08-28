@@ -131,6 +131,28 @@ def main(argv=None) -> int:
     p.add_argument("rest", nargs="*")
     p.add_argument("--db", default=None)
 
+    # Reddit deep-dive (2026-08-29): "UI" / "dashboard" / "viewer" /
+    # "inspect" appeared ≥10 times across r/LocalLLaMA + r/LangChain
+    # + r/agi + r/ClaudeCode. Users want a way to inspect what's in
+    # memory without writing code. `cortexm inspect` is the lean,
+    # CLI-native answer: dump facts / chunks / recent audit events
+    # for a (user_id, agent_id, run_id) scope as pretty JSON.
+    p = sub.add_parser("inspect", help="inspect memory contents (facts, "
+                                        "chunks, audit tail) for a scope")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default",
+                   help="scope to this user (default: 'default')")
+    p.add_argument("--agent-id", default=None,
+                   help="scope to this agent (default: all agents)")
+    p.add_argument("--run-id", default=None,
+                   help="scope to this run (default: all runs)")
+    p.add_argument("--limit", type=int, default=50,
+                   help="cap on facts / chunks returned (default 50)")
+    p.add_argument("--format", choices=["json", "text"], default="json",
+                   help="output format (default json)")
+    p.add_argument("--what", choices=["facts", "chunks", "audit", "all"],
+                   default="all", help="what to dump (default all)")
+
     args = ap.parse_args(argv)
     if not args.cmd:
         ap.print_help()
@@ -230,6 +252,9 @@ def main(argv=None) -> int:
         bench_main()
         return 0
 
+    if args.cmd == "inspect":
+        return _inspect(args)
+
     m = _memory(args)
     try:
         if args.cmd == "stats":
@@ -297,6 +322,152 @@ def cost_report(memories: int, competitor_per_memory: float) -> str:
         "  pq       8 MB  cloud",
     ]
     return "\n".join(lines)
+
+
+def _inspect(args) -> int:
+    """`cortexm inspect` — memory inspection UI (Reddit ≥10 mentions
+    for "UI"/"dashboard"/"viewer"/"inspect" across r/LocalLLaMA +
+    r/LangChain + r/agi + r/ClaudeCode, 2026-08-29 deep dive).
+
+    Dumps facts, chunks, and the recent audit tail for a given
+    (user_id, agent_id, run_id) scope as pretty JSON. Lean, no
+    external deps, no web server. Power users can pipe to `jq` or
+    a TUI viewer; non-power users get a readable dump.
+
+    Output sections:
+      - summary: counts of facts/chunks/events
+      - facts: list of fact dicts (subject, relation, value, valid_from,
+              valid_to, learned_at, confidence, source_id, source_snippet)
+      - chunks: list of chunk dicts (id, text[:200], created_at, n_facts)
+      - audit: list of recent audit events (id, ts, kind, payload summary)
+    """
+    from cortexm.api.memory import Memory
+    from cortexm.config import Config
+    cfg = Config.from_env()
+    if getattr(args, "db", None):
+        cfg.db_path = args.db
+    m = Memory(cfg)
+    try:
+        store = m.store
+        user_id = args.user_id
+        agent_id = args.agent_id
+        run_id = args.run_id
+        limit = max(1, min(args.limit, 1000))
+
+        # 1. facts
+        facts: list[dict] = []
+        if args.what in ("facts", "all"):
+            for f in store.query_facts(user_id=user_id,
+                                       agent_id=agent_id,
+                                       run_id=run_id,
+                                       active=True):
+                snippet = ""
+                if f.source_id:
+                    chunk = store.get_chunk(f.source_id)
+                    if chunk and chunk.get("text"):
+                        snippet = chunk["text"][:160]
+                facts.append({
+                    "id": f.id,
+                    "subject": f.subject,
+                    "relation": f.relation,
+                    "value": f.value,
+                    "valid_from": str(f.valid_from),
+                    "valid_to": str(f.valid_to) if f.valid_to else None,
+                    "learned_at": str(getattr(f, "learned_at", "") or ""),
+                    "confidence": float(getattr(f, "confidence", 0.0) or 0.0),
+                    "source_id": f.source_id or "",
+                    "source_snippet": snippet,
+                })
+                if len(facts) >= limit:
+                    break
+
+        # 2. chunks
+        chunks: list[dict] = []
+        if args.what in ("chunks", "all"):
+            try:
+                for c in store.chunks_for_scope(user_id=user_id,
+                                                agent_id=agent_id,
+                                                run_id=run_id):
+                    c_facts = store.facts_for_chunk(c["id"],
+                                                    active_only=True)
+                    chunks.append({
+                        "id": c["id"],
+                        "text": (c.get("text") or "")[:200],
+                        "created_at": str(c.get("created_at", "") or ""),
+                        "agent_id": c.get("agent_id"),
+                        "run_id": c.get("run_id"),
+                        "n_facts": len(c_facts),
+                    })
+                    if len(chunks) >= limit:
+                        break
+            except Exception as e:
+                chunks.append({"error": f"chunks_for_scope failed: {e}"})
+
+        # 3. audit tail
+        audit: list[dict] = []
+        if args.what in ("audit", "all"):
+            try:
+                for ev in m.audit_log.tail(limit):
+                    # payload may be JSON string or dict
+                    payload = ev.get("payload")
+                    if isinstance(payload, str):
+                        try:
+                            payload = json.loads(payload)
+                        except Exception:
+                            pass
+                    audit.append({
+                        "id": ev.get("id", ""),
+                        "ts": ev.get("ts", ""),
+                        "kind": ev.get("kind", ""),
+                        "user_id": ev.get("user_id", ""),
+                        "payload_summary": (str(payload)[:200]
+                                             if payload else ""),
+                    })
+            except Exception as e:
+                audit.append({"error": f"audit_log.tail failed: {e}"})
+
+        out = {
+            "scope": {
+                "user_id": user_id,
+                "agent_id": agent_id,
+                "run_id": run_id,
+            },
+            "summary": {
+                "facts": len(facts),
+                "chunks": len(chunks),
+                "audit_events": len(audit),
+                "limit": limit,
+            },
+            "facts": facts,
+            "chunks": chunks,
+            "audit": audit,
+        }
+
+        if args.format == "text":
+            print(f"=== cortexm inspect ===")
+            print(f"scope: user={user_id} agent={agent_id} run={run_id}")
+            print(f"facts: {len(facts)}  chunks: {len(chunks)}  "
+                  f"audit: {len(audit)}")
+            print("\n--- facts ---")
+            for f in facts:
+                print(f"  [{f['id'][:8]}] ({f['subject']} {f['relation']} "
+                      f"{f['value']}) conf={f['confidence']:.2f} "
+                      f"src={f['source_id'][:8]}")
+                if f["source_snippet"]:
+                    print(f"      …{f['source_snippet'][:120]}")
+            print("\n--- chunks ---")
+            for c in chunks:
+                print(f"  [{c['id'][:8]}] n_facts={c['n_facts']} "
+                      f"{c['text'][:120]}")
+            print("\n--- audit (recent) ---")
+            for ev in audit:
+                print(f"  [{ev['id'][:8]}] {ev['ts']} {ev['kind']} "
+                      f"user={ev['user_id']}")
+        else:
+            print(json.dumps(out, indent=2, default=str))
+        return 0
+    finally:
+        m.close()
 
 
 if __name__ == "__main__":
