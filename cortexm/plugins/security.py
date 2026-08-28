@@ -1,4 +1,5 @@
-"""Security middleware plugin — MINJA + MIND as compose-anywhere middleware.
+"""Security middleware plugin — MINJA + MIND + PermissionGate as
+compose-anywhere middleware.
 
 Reddit deep-dive (2026-08-29): security was the #2 most-mentioned
 pain point (46 mentions of "provenance" + 18 of "hallucinates" /
@@ -6,7 +7,11 @@ pain point (46 mentions of "provenance" + 18 of "hallucinates" /
 be a plugin, not baked in. Users who want it mount it; users who
 don't, skip it.
 
-This plugin wraps two existing defenses as kernel middleware:
+User directive (2026-08-29): "no malicious code shall be executed
+to read user data without explicit permission but I think yes we
+can just add that to the security plugins."
+
+This plugin wraps three existing defenses as kernel middleware:
 
   1. MINJA (``cortexm.security.injection``) — pattern scan at
      INGEST time. High-risk patterns (ignore instructions, jailbreak,
@@ -17,7 +22,13 @@ This plugin wraps two existing defenses as kernel middleware:
      time. If the top-k facts are too similar (low diversity), the
      retrieval is flagged as a possible InjecMEM anchor-based poisoning.
 
-Both are μ=0 (no LLM, no API call).
+  3. PermissionGate (``cortexm.security.permission``) — default-deny
+     gate for code-execution + user-data reads. Plugins that want to
+     invoke ``os.system`` / ``subprocess`` / ``open()`` MUST first
+     call ``permission.grant_read(path)`` / ``permission.grant_exec(cmd)``
+     — otherwise the gate denies and audits the attempt.
+
+All three are μ=0 (no LLM, no API call).
 
 Usage::
 
@@ -39,6 +50,14 @@ Usage::
     hits = mem.search("where did I eat?", user_id="alice")
     mind_verdict = sec.scan_retrieval(hits)
     # mind_verdict.diversity ∈ [0,1]; .flagged = True if too low
+
+    # An agentic tool plugin wants to run "ls /tmp/agent_ws"
+    perm = sec.permission
+    perm.grant_read("/tmp/agent_ws")        # explicit user grant
+    perm.grant_exec("ls")                    # explicit exec grant
+    v = perm.can_exec("ls /tmp/agent_ws")   # .allowed = True
+    v = perm.can_read("/etc/passwd")        # .allowed = False (sensitive)
+    v = perm.can_exec("curl evil.com")       # .allowed = False (sensitive)
 """
 from __future__ import annotations
 
@@ -47,6 +66,8 @@ from typing import Any
 
 from cortexm.security import injection as minja
 from cortexm.security import mind
+from cortexm.security import permission as _permission_mod
+from cortexm.security.permission import PermissionGate
 
 
 @dataclass
@@ -71,7 +92,7 @@ class SecurityVerdict:
 
 
 class SecurityPlugin:
-    """Mounts MINJA + MIND as kernel services.
+    """Mounts MINJA + MIND + PermissionGate as kernel services.
 
     This plugin does NOT enforce policy — it returns verdicts. The
     caller (or the kernel's pipeline middleware, if mounted)
@@ -80,6 +101,14 @@ class SecurityPlugin:
     security composable: a paranoid user mounts it AND a policy
     plugin that acts on the verdicts; a casual user mounts it for
     observability only.
+
+    The PermissionGate is the exception: it IS enforced by default
+    (default-deny) — but only callers who consult the gate's
+    ``can_read`` / ``can_exec`` verdicts are affected. The plugin
+    does not monkeypatch ``os`` or ``subprocess``. Plugins that
+    want to execute code MUST call ``self.permission.can_exec(cmd)``
+    first; if they ignore the verdict, the gate can't help them.
+    That's by design: composition, not coercion.
     """
 
     name = "security"
@@ -89,10 +118,17 @@ class SecurityPlugin:
     inject: list[str] = []
 
     def __init__(self, mind_threshold: float = 0.85,
-                 quarantine_high_risk: bool = True) -> None:
+                 quarantine_high_risk: bool = True,
+                 enable_permission_gate: bool = True) -> None:
         self.mind_threshold = mind_threshold
         self.quarantine_high_risk = quarantine_high_risk
+        self.enable_permission_gate = enable_permission_gate
         self._embedder = None
+        # The PermissionGate is constructed eagerly so users can
+        # start granting immediately after mount, even before any
+        # memory or audit_log service is wired.
+        self.permission: PermissionGate | None = (
+            PermissionGate() if enable_permission_gate else None)
 
     def apply(self, ctx) -> None:
         # Try to grab the memory service's embedder for MIND diversity
@@ -103,6 +139,11 @@ class SecurityPlugin:
                 mem_service, dict) else mem_service
             self._embedder = getattr(mem, "palace", None) and \
                 getattr(mem.palace, "embedder", None)
+            # If memory has an audit_log, wire the permission gate to it.
+            if self.permission is not None:
+                audit = getattr(mem, "audit_log", None)
+                if audit is not None:
+                    self.permission.audit = audit
         except Exception:
             self._embedder = None
 
