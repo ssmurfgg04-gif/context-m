@@ -37,7 +37,7 @@ This module exposes:
     baked into Config.
 
 Usage:
-  from context_m.bench.determinism import enforce_determinism, bench_config_overrides
+  from cortexm.bench.determinism import enforce_determinism, bench_config_overrides
   enforce_determinism()  # at top of script
   cfg = Config(**bench_config_overrides())
   ...

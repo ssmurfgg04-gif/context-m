@@ -13,11 +13,11 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.vsa.role_vectors import EngineeredRoleVectors
-from context_m.bridge.decoders import RDFDecoder, get_decoder
-from context_m.server.sparql import (
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.vsa.role_vectors import EngineeredRoleVectors
+from cortexm.bridge.decoders import RDFDecoder, get_decoder
+from cortexm.server.sparql import (
     parse_sparql, match_triple, apply_filters,
     execute_sparql, SparqlServer)
 
@@ -181,7 +181,7 @@ class TestEngineeredRoleVectors:
         """VSA.role_vec should return the engineered vector when
         EngineeredRoleVectors is attached."""
         import numpy as np
-        from context_m.vsa.ops import VSA
+        from cortexm.vsa.ops import VSA
         vsa = VSA(dims=32, mode="conv")
         erv = EngineeredRoleVectors(dims=32, n_roles=3, n_epochs=30)
         erv.fit(np.random.default_rng(0).standard_normal((100, 32))

@@ -10,9 +10,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from context_m import accel
-from context_m.util import h64 as py_h64
-from context_m.vsa.ops import VSA
+from cortexm import accel
+from cortexm.util import h64 as py_h64
+from cortexm.vsa.ops import VSA
 
 pytestmark = pytest.mark.skipif(
     not accel.RUST_AVAILABLE,
@@ -208,9 +208,9 @@ class TestSimdKernels:
         """End-to-end: MemoryPalace.search() should hit the Rust fast path
         when cortexm_core is available and produce the same top-k as the
         numpy path. Guards against silent regressions in palace.py."""
-        from context_m.config import Config
-        from context_m.trace.store import TraceStore
-        from context_m.vsa.palace import MemoryPalace
+        from cortexm.config import Config
+        from cortexm.trace.store import TraceStore
+        from cortexm.vsa.palace import MemoryPalace
         import tempfile, os, contextlib
 
         with tempfile.TemporaryDirectory() as tmp:

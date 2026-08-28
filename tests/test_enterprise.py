@@ -14,11 +14,11 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.security.pii import PIIGuard, PIIVault, scan, redact_inplace
-from context_m.security.crypto import AESGCMCipher
-from context_m.security.rbac import APIKeyStore, authorize, RBACError
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.security.pii import PIIGuard, PIIVault, scan, redact_inplace
+from cortexm.security.crypto import AESGCMCipher
+from cortexm.security.rbac import APIKeyStore, authorize, RBACError
 
 
 # ---------------------------------------------------------------- PII
@@ -301,7 +301,7 @@ class TestRESTServer:
             m = Memory(cfg)
             admin = m.keys.create("admin", label="test")["key"]
             reader = m.keys.create("reader", label="ro")["key"]
-            from context_m.server.rest import serve
+            from cortexm.server.rest import serve
             with socket.socket() as s:
                 s.bind(("127.0.0.1", 0))
                 port = s.getsockname()[1]

@@ -5,7 +5,7 @@ custom memory/RAG in their agent framework. Mem0 ships a
 `MemoryPostprocessor`; Context-M needs one too.
 
 Usage:
-    from context_m.plugins.llamaindex import ContextMMemoryPostprocessor
+    from cortexm.plugins.llamaindex import ContextMMemoryPostprocessor
     from llama_index.core.postprocessor_types import NodePostprocessor
     # in a query engine pipeline:
     #   query_engine = index.as_query_engine(

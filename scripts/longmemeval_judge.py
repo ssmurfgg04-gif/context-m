@@ -30,8 +30,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
+from cortexm.api.memory import Memory
+from cortexm.config import Config
 
 
 @dataclass

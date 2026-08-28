@@ -1,5 +1,5 @@
 """6 — InjecMEM defense: poisoned facts are quarantined, never retrieved."""
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 m.add("My name is Carol. I love hiking.", user_id="carol")

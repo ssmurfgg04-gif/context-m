@@ -28,9 +28,9 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from context_m.config import Config
-from context_m.text.embedder import HashingEmbedder
-from context_m.text.labse import PolyglotEncoder, encode
+from cortexm.config import Config
+from cortexm.text.embedder import HashingEmbedder
+from cortexm.text.labse import PolyglotEncoder, encode
 
 
 # ----------------------------------------------------------------- helpers

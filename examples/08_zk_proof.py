@@ -1,5 +1,5 @@
 """8 — Zero-knowledge-lite: prove a memory matches without revealing it."""
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 m.add("My name is Grace. My allergy is penicillin — confidential record.",

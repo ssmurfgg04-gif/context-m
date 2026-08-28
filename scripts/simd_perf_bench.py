@@ -22,7 +22,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
-import context_m.accel as accel
+import cortexm.accel as accel
 
 
 def bench(name: str, fn_rust, fn_np, n_iter: int = 1000,

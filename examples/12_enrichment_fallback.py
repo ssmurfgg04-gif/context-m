@@ -14,7 +14,7 @@ path:
 
 import datetime as dt
 
-from context_m import Memory
+from cortexm import Memory
 
 TS = dt.datetime(2026, 1, 10, tzinfo=dt.timezone.utc)
 

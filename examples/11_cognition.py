@@ -20,10 +20,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timezone
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.trace.fact import Fact
-from context_m.util import new_id, iso
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.trace.fact import Fact
+from cortexm.util import new_id, iso
 
 
 def _add_fact(store, subject, relation, value, user_id="alice"):
@@ -65,7 +65,7 @@ def main():
     print("    PatternScanner -> AbstractionEngine -> GapDetector")
     print("    -> HypothesisEngine -> AnalogyDetector")
     print()
-    from context_m.cognition import run_cognition_pass
+    from cortexm.cognition import run_cognition_pass
     report = run_cognition_pass(mem.store, palace=mem.palace)
     print(f"    scan: {report.scan['patterns']} patterns surfaced "
           f"({report.scan['n_facts_scanned']} facts scanned)")
@@ -107,7 +107,7 @@ def main():
     # 5. Test the structural multi-hop query
     print("[5] Structural query — answer 'Who is Alice's grandfather?'")
     print("    structural_query(Alice, [father, father])")
-    from context_m.trace.structural import structural_query
+    from cortexm.trace.structural import structural_query
     res = structural_query(
         mem.store, mem.palace,
         start_entity="Alice",

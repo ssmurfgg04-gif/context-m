@@ -18,10 +18,10 @@ sys.path.insert(0, str(REPO))
 import numpy as np
 import pytest
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.text.embedder import HashingEmbedder
-from context_m.trace.fact import Fact
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.text.embedder import HashingEmbedder
+from cortexm.trace.fact import Fact
 
 
 def _fact(relation: str, value: str, subject: str = "beam_1",
@@ -40,22 +40,22 @@ def _fact(relation: str, value: str, subject: str = "beam_1",
 class TestFactNL:
     def test_name_relation(self):
         f = _fact("name", "Jennifer Mccall")
-        from context_m.bridge.rerank import fact_nl
+        from cortexm.bridge.rerank import fact_nl
         assert fact_nl(f) == "the name of beam_1 is jennifer mccall"
 
     def test_age_relation(self):
         f = _fact("age", "59")
-        from context_m.bridge.rerank import fact_nl
+        from cortexm.bridge.rerank import fact_nl
         assert fact_nl(f) == "the age of beam_1 is 59"
 
     def test_works_at_relation(self):
         f = _fact("works_at", "Google", subject="alice")
-        from context_m.bridge.rerank import fact_nl
+        from cortexm.bridge.rerank import fact_nl
         assert fact_nl(f) == "alice works at google"
 
     def test_unknown_relation_falls_back_to_3tuple(self):
         f = _fact("hates", "mondays", subject="alice")
-        from context_m.bridge.rerank import fact_nl
+        from cortexm.bridge.rerank import fact_nl
         assert fact_nl(f) == "alice | hates | mondays"
 
 
@@ -76,7 +76,7 @@ class TestRerank:
     def test_rerank_promotes_matching_fact(self):
         """Query 'what is the name of beam_1' should rank the name fact first."""
         emb = HashingEmbedder(dims=768, seed=0x0C0FFEE)
-        from context_m.bridge.rerank import FactReranker
+        from cortexm.bridge.rerank import FactReranker
         rr = FactReranker(emb)
         q = emb.embed("what is the name of beam_1")
         facts = self._facts()
@@ -94,7 +94,7 @@ class TestRerank:
     def test_rerank_returns_top_k_only(self):
         """rerank(top_k=3) returns exactly 3 facts."""
         emb = HashingEmbedder(dims=768, seed=0x0C0FFEE)
-        from context_m.bridge.rerank import FactReranker
+        from cortexm.bridge.rerank import FactReranker
         rr = FactReranker(emb)
         q = emb.embed("name")
         facts = self._facts()
@@ -105,7 +105,7 @@ class TestRerank:
     def test_rerank_empty_input(self):
         """rerank on empty facts list returns empty list."""
         emb = HashingEmbedder(dims=768, seed=0x0C0FFEE)
-        from context_m.bridge.rerank import FactReranker
+        from cortexm.bridge.rerank import FactReranker
         rr = FactReranker(emb)
         q = emb.embed("anything")
         reranked, new_scores = rr.rerank(q, [], {}, top_k=5)
@@ -119,7 +119,7 @@ class TestRerank:
         we can guarantee it runs without error and returns top_k facts.
         """
         emb = HashingEmbedder(dims=768, seed=0x0C0FFEE)
-        from context_m.bridge.rerank import FactReranker
+        from cortexm.bridge.rerank import FactReranker
         rr = FactReranker(emb)
         q = emb.embed("the age of beam_1")
         facts = self._facts()
@@ -130,7 +130,7 @@ class TestRerank:
     def test_rerank_score_blend_in_range(self):
         """Blended scores are in [0, 1] (min-max normalized)."""
         emb = HashingEmbedder(dims=768, seed=0x0C0FFEE)
-        from context_m.bridge.rerank import FactReranker
+        from cortexm.bridge.rerank import FactReranker
         rr = FactReranker(emb)
         q = emb.embed("name")
         facts = self._facts()
@@ -164,7 +164,7 @@ class TestRerankConfig:
         cfg.enable_rerank = True
         mem = Memory(cfg)
         assert mem.reader._reranker is not None
-        from context_m.bridge.rerank import FactReranker
+        from cortexm.bridge.rerank import FactReranker
         assert isinstance(mem.reader._reranker, FactReranker)
         mem.close()
 

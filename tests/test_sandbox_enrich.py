@@ -4,8 +4,8 @@ import datetime as dt
 
 import pytest
 
-from context_m import Memory
-from context_m.config import Config
+from cortexm import Memory
+from cortexm.config import Config
 
 TS = dt.datetime(2026, 1, 10, tzinfo=dt.timezone.utc)
 

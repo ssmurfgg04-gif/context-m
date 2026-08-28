@@ -1,0 +1,41 @@
+{
+ "fetched_at_utc": "2026-08-27T12:05:53Z",
+ "repos": [
+  "rust-lang/rust",
+  "numpy/numpy",
+  "pydantic/pydantic"
+ ],
+ "threads": [
+  {
+   "id": "rust-lang_rust#65590",
+   "url": "https://github.com/rust-lang/rust/issues/65590",
+   "repo": "rust-lang/rust",
+   "title": "Rustc panicked while running rls"
+  },
+  {
+   "id": "rust-lang_rust#65897",
+   "url": "https://github.com/rust-lang/rust/issues/65897",
+   "repo": "rust-lang/rust",
+   "title": "nll crater run for 1.40"
+  },
+  {
+   "id": "rust-lang_rust#57640",
+   "url": "https://github.com/rust-lang/rust/issues/57640",
+   "repo": "rust-lang/rust",
+   "title": "Resolve `await` syntax"
+  },
+  {
+   "id": "numpy_numpy#5844",
+   "url": "https://github.com/numpy/numpy/issues/5844",
+   "repo": "numpy/numpy",
+   "title": "Decide on what the resolution rules for __op__/__rop__/__numpy_ufunc__ actually are"
+  },
+  {
+   "id": "pydantic_pydantic#6557",
+   "url": "https://github.com/pydantic/pydantic/issues/6557",
+   "repo": "pydantic/pydantic",
+   "title": "No module named 'pydantic_core._pydantic_core' using AWS Lambdas"
+  }
+ ],
+ "license_note": "Public GitHub issue threads fetched via the unauthenticated REST API; used for benchmark evaluation with attribution, not redistributed as a dataset."
+}

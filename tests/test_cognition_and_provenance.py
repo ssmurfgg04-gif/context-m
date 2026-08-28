@@ -18,10 +18,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 from datetime import datetime, timezone
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.trace.fact import Fact
-from context_m.util import new_id, iso
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.trace.fact import Fact
+from cortexm.util import new_id, iso
 
 
 def _now_iso() -> str:
@@ -58,7 +58,7 @@ def test_pattern_scanner_surfaces_relation_freq(mem):
     """Scanner should find the father relation in a kinship trace."""
     _add_fact(mem.store, "Alice", "father", "Bob")
     _add_fact(mem.store, "Bob", "father", "Charles")
-    from context_m.cognition.scanner import PatternScanner
+    from cortexm.cognition.scanner import PatternScanner
     scanner = PatternScanner(mem.store)
     res = scanner.run()
     assert res.n_facts_scanned >= 2
@@ -75,8 +75,8 @@ def test_gap_detector_finds_missing_relation(mem):
     _add_fact(mem.store, "Alice", "father", "Bob")
     _add_fact(mem.store, "Bob", "father", "Charles")
     _add_fact(mem.store, "Charles", "father", "David")
-    from context_m.cognition.scanner import PatternScanner
-    from context_m.cognition.gaps import GapDetector
+    from cortexm.cognition.scanner import PatternScanner
+    from cortexm.cognition.gaps import GapDetector
     scanner = PatternScanner(mem.store)
     scan = scanner.run()
     gaps = GapDetector(mem.store).run(scan)
@@ -91,7 +91,7 @@ def test_hypothesis_engine_emits_hypothesized_by_edge(mem):
     _add_fact(mem.store, "Alice", "father", "Bob")
     _add_fact(mem.store, "Bob", "father", "Charles")
     _add_fact(mem.store, "Charles", "father", "David")
-    from context_m.cognition import run_cognition_pass
+    from cortexm.cognition import run_cognition_pass
     report = run_cognition_pass(mem.store, palace=mem.palace)
     assert report.hypotheses.get("facts_added", 0) >= 1
     # all hypotheses should have confidence < 0.5 (per design)
@@ -121,7 +121,7 @@ def test_cognition_dry_run_writes_nothing(mem):
     _add_fact(mem.store, "Alice", "father", "Bob")
     before = mem.store.conn.execute(
         "SELECT COUNT(*) FROM facts").fetchone()[0]
-    from context_m.cognition import run_cognition_pass
+    from cortexm.cognition import run_cognition_pass
     run_cognition_pass(mem.store, palace=mem.palace, dry_run=True)
     after = mem.store.conn.execute(
         "SELECT COUNT(*) FROM facts").fetchone()[0]
@@ -135,8 +135,8 @@ def test_analogy_detector_finds_isomorphic_relations(mem):
                         ("carol", "Anthropic")]:
         _add_fact(mem.store, who, "works_at", where)
         _add_fact(mem.store, who, "studies_at", where)
-    from context_m.cognition.scanner import PatternScanner
-    from context_m.cognition.analogy import AnalogyDetector
+    from cortexm.cognition.scanner import PatternScanner
+    from cortexm.cognition.analogy import AnalogyDetector
     scan = PatternScanner(mem.store).run()
     analogies = AnalogyDetector(mem.store, min_overlap=0.5,
                                   min_support=2).run(scan)
@@ -152,7 +152,7 @@ def test_analogy_detector_finds_isomorphic_relations(mem):
 
 def test_ed25519_key_generation():
     """Ed25519AgentKey.generate() should produce a valid keypair."""
-    from context_m.provenance.agent import Ed25519AgentKey
+    from cortexm.provenance.agent import Ed25519AgentKey
     k = Ed25519AgentKey.generate(label="test")
     assert len(k.private_key) == 32
     assert len(k.public_key) == 32
@@ -166,7 +166,7 @@ def test_ed25519_key_generation():
 
 def test_cose_sign1_round_trip(mem):
     """COSE Sign1 envelope should sign + verify a commit."""
-    from context_m.provenance import (
+    from cortexm.provenance import (
         Ed25519AgentKey, sign_commit, verify_commit)
     agent = Ed25519AgentKey.generate()
     env = sign_commit(
@@ -183,7 +183,7 @@ def test_vc_export_and_verify(mem):
     """W3C VC export of a memory range should verify."""
     _add_fact(mem.store, "Alice", "works_at", "Google")
     _add_fact(mem.store, "Alice", "lives_in", "Toronto")
-    from context_m.provenance import (
+    from cortexm.provenance import (
         export_memory_range_vc, verify_vc, Ed25519AgentKey)
     agent = Ed25519AgentKey.generate()
     vc = export_memory_range_vc(mem.store, user_id="alice", agent=agent)
@@ -195,7 +195,7 @@ def test_vc_export_and_verify(mem):
 
 def test_scitt_submit_and_verify(mem):
     """Submit a COSE Sign1 to SCITT, verify the receipt."""
-    from context_m.provenance import (
+    from cortexm.provenance import (
         Ed25519AgentKey, sign_commit, submit_to_scitt,
         verify_receipt, reset_scitt_log)
     reset_scitt_log()
@@ -215,7 +215,7 @@ def test_structural_query_grandfather(mem):
     as the grandfather."""
     _add_fact(mem.store, "Alice", "father", "Bob")
     _add_fact(mem.store, "Bob", "father", "Charles")
-    from context_m.trace.structural import structural_query
+    from cortexm.trace.structural import structural_query
     res = structural_query(
         mem.store, mem.palace,
         start_entity="Alice",
@@ -230,7 +230,7 @@ def test_structural_query_grandfather(mem):
 def test_structural_query_handles_missing_hop(mem):
     """If a hop has no match, structural_query should abstain gracefully."""
     _add_fact(mem.store, "Alice", "father", "Bob")
-    from context_m.trace.structural import structural_query
+    from cortexm.trace.structural import structural_query
     res = structural_query(
         mem.store, mem.palace,
         start_entity="Alice",
@@ -244,7 +244,7 @@ def test_structural_query_handles_missing_hop(mem):
 
 def test_mcp_cognition_run_tool(mem):
     """The MCP contextm_cognition_run tool should run the cognition pass."""
-    from context_m.mcp.server import MCPServer
+    from cortexm.mcp.server import MCPServer
     server = MCPServer(mem)
     _add_fact(mem.store, "Alice", "father", "Bob")
     _add_fact(mem.store, "Bob", "father", "Charles")
@@ -256,7 +256,7 @@ def test_mcp_cognition_run_tool(mem):
 
 def test_mcp_structural_query_tool(mem):
     """The MCP contextm_structural_query tool should answer grandfather."""
-    from context_m.mcp.server import MCPServer
+    from cortexm.mcp.server import MCPServer
     server = MCPServer(mem)
     _add_fact(mem.store, "Alice", "father", "Bob")
     _add_fact(mem.store, "Bob", "father", "Charles")
@@ -273,7 +273,7 @@ def test_mcp_provenance_export_tool_disabled_by_default():
     should return a disabled stub, not crash."""
     cfg = Config(db_path=":memory:")
     mem = Memory(cfg)
-    from context_m.mcp.server import MCPServer
+    from cortexm.mcp.server import MCPServer
     server = MCPServer(mem)
     out = server._provenance_export(user_id="alice")
     assert out.get("disabled") is True
@@ -282,7 +282,7 @@ def test_mcp_provenance_export_tool_disabled_by_default():
 def test_mcp_provenance_export_tool_enabled(mem):
     """When provenance_enabled=True, the MCP tool should produce a
     full VC + COSE + SCITT envelope."""
-    from context_m.mcp.server import MCPServer
+    from cortexm.mcp.server import MCPServer
     server = MCPServer(mem)
     _add_fact(mem.store, "Alice", "works_at", "Google")
     out = server._provenance_export(user_id="alice")
@@ -295,7 +295,7 @@ def test_mcp_provenance_export_tool_enabled(mem):
 
 def test_mcp_tools_list_has_new_tools():
     """The MCP TOOLS list should include the new tools."""
-    from context_m.mcp.server import TOOLS
+    from cortexm.mcp.server import TOOLS
     names = [t["name"] for t in TOOLS]
     assert "contextm_provenance_export" in names
     assert "contextm_structural_query" in names

@@ -35,10 +35,10 @@ sys.path.insert(0, str(REPO))
 
 import numpy as np
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.bench.generator import make_persona
-from context_m.bench.messy import messify_persona_dict
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.bench.generator import make_persona
+from cortexm.bench.messy import messify_persona_dict
 
 
 def build_corpus(n: int = 200, seed: int = 42) -> list[dict]:

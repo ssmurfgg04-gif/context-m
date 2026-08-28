@@ -25,9 +25,9 @@ import os
 import numpy as np
 import pytest
 
-from context_m.config import Config, INDEX_BACKENDS
-from context_m.index import NsgBackend
-from context_m.index.nsg import NSG_RUST_AVAILABLE, nsg_status
+from cortexm.config import Config, INDEX_BACKENDS
+from cortexm.index import NsgBackend
+from cortexm.index.nsg import NSG_RUST_AVAILABLE, nsg_status
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def force_numpy_mode(monkeypatch):
     is exercised even when the Rust wheel IS installed. This is the
     portable-anywhere guarantee — the fallback must always work.
     """
-    import context_m.index.nsg as nsg_mod
+    import cortexm.index.nsg as nsg_mod
     monkeypatch.setattr(nsg_mod, "NSG_RUST_ENABLED", False)
     yield
 
@@ -109,7 +109,7 @@ class TestNsgBackendNumpy:
 
     def test_mode_is_numpy_fallback(self):
         # Sanity: the fixture worked and the module flag is off.
-        import context_m.index.nsg as nsg_mod
+        import cortexm.index.nsg as nsg_mod
         assert nsg_mod.NSG_RUST_ENABLED is False
 
     def test_build_and_search_self_match(self):

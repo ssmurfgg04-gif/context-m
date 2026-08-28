@@ -29,7 +29,7 @@
 
 This is a SMOKE benchmark — small enough to run in CI (~30s), big
 enough to surface real numbers. The full BEAM-10M harness lives in
-context_m.bench.run; this script gives you the headline numbers for
+cortexm.bench.run; this script gives you the headline numbers for
 the user-facing benchmark table.
 
 Usage:
@@ -62,10 +62,10 @@ try:
 except Exception:
     BENCH_OVERRIDES = {"slb_disabled": True}
 
-from context_m.config import Config
-from context_m.api.memory import Memory
-from context_m.trace.consolidate import consolidate
-from context_m.trace.fade import fade_sweep
+from cortexm.config import Config
+from cortexm.api.memory import Memory
+from cortexm.trace.consolidate import consolidate
+from cortexm.trace.fade import fade_sweep
 
 
 def _build_corpus(n_users: int = 5, n_facts_per_user: int = 100) -> list:

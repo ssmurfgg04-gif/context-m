@@ -14,8 +14,8 @@ Requires nothing beyond the core package (pure Python CRDT).
 
 import datetime as dt
 
-from context_m import Memory
-from context_m.federation import (
+from cortexm import Memory
+from cortexm.federation import (
     InMemoryMesh,
     apply_to_store,
     node_from_store,

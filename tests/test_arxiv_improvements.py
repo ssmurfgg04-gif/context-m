@@ -6,29 +6,29 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from context_m.text.fuzzy import (
+from cortexm.text.fuzzy import (
     bitap_levenshtein, levenshtein, similarity, ngram_jaccard,
     best_match, fuzzy_contains,
 )
-from context_m.text.dissim import DisSimSplitter
-from context_m.text.idiolect import PerUserIdiolectNormalizer
-from context_m.text.embedder import HashingEmbedder
-from context_m.vsa.cleanup import HopfieldCleanup
-from context_m.vsa.ops import VSA
-from context_m.vsa.tlsh_trie import TernaryTrie
-from context_m.vsa.hologram_overlay import HolographicFactOverlay
-from context_m.vsa.attribution import (
+from cortexm.text.dissim import DisSimSplitter
+from cortexm.text.idiolect import PerUserIdiolectNormalizer
+from cortexm.text.embedder import HashingEmbedder
+from cortexm.vsa.cleanup import HopfieldCleanup
+from cortexm.vsa.ops import VSA
+from cortexm.vsa.tlsh_trie import TernaryTrie
+from cortexm.vsa.hologram_overlay import HolographicFactOverlay
+from cortexm.vsa.attribution import (
     ProtoDashAttributer, sentence_level_score, tag_retrieval_path,
     RETRIEVAL_PATHS,
 )
-from context_m.security.zk_hamming import (
+from cortexm.security.zk_hamming import (
     HammingZKProver, checksum_prove_and_verify,
 )
-from context_m.trace.rebuild import TraceRebuilder
-from context_m.trace.dedup import DedupAuditor
-from context_m.accel import detect_tier, recommend_codec, tier_status
-from context_m.bridge.query_extract import QueryTimeExtractor
-from context_m.bridge.onnx_runtime import DeterministicConfig
+from cortexm.trace.rebuild import TraceRebuilder
+from cortexm.trace.dedup import DedupAuditor
+from cortexm.accel import detect_tier, recommend_codec, tier_status
+from cortexm.bridge.query_extract import QueryTimeExtractor
+from cortexm.bridge.onnx_runtime import DeterministicConfig
 
 
 # ---------- Bitap fuzzy matching ----------
@@ -294,7 +294,7 @@ class TestHammingZK:
         assert verified is False
 
     def test_hamming_distance(self):
-        from context_m.security.zk_hamming import _hamming_distance, _hamming_weight
+        from cortexm.security.zk_hamming import _hamming_distance, _hamming_weight
         assert _hamming_distance(b"\x00", b"\x00") == 0
         assert _hamming_distance(b"\x00", b"\x01") == 1
         assert _hamming_distance(b"\xff", b"\x00") == 8
@@ -346,7 +346,7 @@ class TestONNXRuntime:
         assert cfg.force_fp32 is True
 
     def test_layercast_contract_documented(self):
-        from context_m.bridge.onnx_runtime import LAYERCAST_CONTRACT
+        from cortexm.bridge.onnx_runtime import LAYERCAST_CONTRACT
         assert "BF16" in LAYERCAST_CONTRACT
         assert "FP32" in LAYERCAST_CONTRACT
         assert "MatMul" in LAYERCAST_CONTRACT

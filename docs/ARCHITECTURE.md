@@ -13,7 +13,7 @@ truth and time; a **VSA Memory Palace** for fuzzy recall; and a
 **deterministic bridge** that never calls an LLM (μ=0). The two layers
 cover each other's weaknesses, and the audit chain falls out for free.
 
-## Layer 1 — the Symbolic Trace (`context_m/trace/`)
+## Layer 1 — the Symbolic Trace (`cortexm/trace/`)
 
 **Data model** (`fact.py`): `(subject, relation, value)` triples with
 bi-temporal timestamps — `valid_from/valid_to` (when the fact was true
@@ -49,7 +49,7 @@ coexist / quarantine). Retention is `confidence × recency ×
 reinforcement / contradiction-pressure` — not a pure Ebbinghaus decay —
 and consolidation promotes reinforced short-term facts to long-term.
 
-## Layer 2 — the VSA Memory Palace (`context_m/vsa/`)
+## Layer 2 — the VSA Memory Palace (`cortexm/vsa/`)
 
 **Algebra** (`ops.py`): each fact is encoded as
 `normalize(bind(S, s) + bind(R, r) + bind(V, v) + λ·normalize(s+r+v))`.
@@ -80,7 +80,7 @@ signature is ≥0.97 cosine to a cached signature reuses the cached
 ranking. Conversational follow-ups are near-duplicates; hits cost a
 single 64×768 dot product (~6 µs).
 
-## The Bridge (`context_m/bridge/`)
+## The Bridge (`cortexm/bridge/`)
 
 **Extraction** (`patterns.py`, `extractor.py`): ~60 high-precision
 patterns across first-person, third-person (with pronoun resolution)
@@ -105,7 +105,7 @@ per-relation diversity cap so one relation cannot flood the context
 block, and prefetcher boosts. Output: the `[Memory — Known facts]`
 context block plus the full provenance chain per fact.
 
-## The five features (`context_m/features/`, `federation.py`)
+## The five features (`cortexm/features/`, `federation.py`)
 
 - **Memory Git** — hash-chained commits form a DAG; branches fork
   memory state; 3-way merge (latest-wins or union) with conflict
@@ -129,11 +129,11 @@ context block plus the full provenance chain per fact.
 
 ## Surfaces
 
-`context_m/api/memory.py` — the Mem0-compatible facade plus temporal
+`cortexm/api/memory.py` — the Mem0-compatible facade plus temporal
 queries, audit, Memory Git, proofs, healing, federation.
-`context_m/mcp/server.py` — dependency-free MCP stdio server (9 tools).
-`context_m/cli.py` — `cortexm serve|stats|verify|consolidate|migrate|
-cost|bench|export-schema|git`. `context_m/migrate/importers.py` —
+`cortexm/mcp/server.py` — dependency-free MCP stdio server (9 tools).
+`cortexm/cli.py` — `cortexm serve|stats|verify|consolidate|migrate|
+cost|bench|export-schema|git`. `cortexm/migrate/importers.py` —
 mem0 / Zep / Chroma importers.
 
 ## Performance engineering notes

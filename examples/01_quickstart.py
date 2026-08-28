@@ -1,5 +1,5 @@
 """1 — Quickstart: add, search, μ=0. Offline, no API keys."""
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 m.add("My name is Alice Johnson. I work at Google as a software engineer.",

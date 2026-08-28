@@ -6,9 +6,9 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from context_m.api.memory import Memory
-from context_m.bridge.ppr import personalized_pagerank, ppr_boost
-from context_m.config import Config
+from cortexm.api.memory import Memory
+from cortexm.bridge.ppr import personalized_pagerank, ppr_boost
+from cortexm.config import Config
 
 
 class TestPPR:

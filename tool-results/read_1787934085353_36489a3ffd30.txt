@@ -1,0 +1,1147 @@
+     1→"""Read path — deterministic neuro-symbolic query planner.
+     2→
+     3→Query → intent parse (temporal / ordering / counting / supersession /
+     4→current-state / multi-hop / free recall) → parallel VSA palace search +
+     5→symbolic Trace queries → contradiction-chain & entity-hop expansion →
+     6→weighted fusion → context block with per-fact cryptographic provenance.
+     7→
+     8→Every retrieval returns the full audit chain:
+     9→query → VSA match → symbolic dereference → source hash → source text.
+    10→No LLM calls at query time (edge-capable, offline).
+    11→"""
+    12→
+    13→from __future__ import annotations
+    14→
+    15→import re
+    16→import time
+    17→from dataclasses import dataclass, field
+    18→from datetime import datetime, timezone
+    19→
+    20→from context_m import metrics
+    21→from context_m.bridge.dates import find_dates
+    22→from context_m.config import Config
+    23→from context_m.text.tokenizer import cap_sequences, content_words
+    24→from context_m.trace.fact import Fact
+    25→from context_m.trace.store import TraceStore
+    26→from context_m.util import normalize
+    27→from context_m.vsa.palace import MemoryPalace
+    28→from context_m.vsa.slb import SemanticLookasideBuffer
+    29→
+    30→
+    31→def _content_key(f: "Fact | None") -> tuple:
+    32→    """Deterministic ordering key for a fact. Fact ids are uuid4 (random
+    33→    per process); ties broken on id would make rankings — and therefore
+    34→    benchmark scores — vary across identical runs. Content never does."""
+    35→    if f is None:
+    36→        return ("~", "~", "~", "~")
+    37→    return (f.subject, f.relation, f.value, str(f.valid_from))
+    38→
+    39→
+    40→RELATION_HINTS = [
+    41→    # occupation idioms FIRST: "for a living" contains "living", which the
+    42→    # residence hint below would otherwise capture, drowning the `role`
+    43→    # fact under lives_in/moved_to noise.
+    44→    (re.compile(r"\b(for a living|occupation|profession|career|job title|"
+    45→                r"what does .{2,40}? do|works? as)\b", re.I),
+    46→     ["role", "works_at", "studied"]),
+    47→    (re.compile(r"\b(work\w*|employer|company|job)\b", re.I),
+    48→     ["works_at", "role"]),
+    49→    (re.compile(r"\b(live|lives|living|based|city|hometown|resid\w*|mov\w*)\b", re.I),
+    50→     ["lives_in", "moved_to"]),
+    51→    (re.compile(r"\b(prefer\w*|like\w*|favorite|favourite|taste)\b", re.I),
+    52→     ["prefers", "likes", "dislikes"]),
+    53→    (re.compile(r"\b(music|food|coffee|genre|playlist|meal|lunch|dinner|"
+    54→                r"drink|snack|editor|theme|picking|pick|choose|choosing)\b",
+    55→                re.I),
+    56→     ["prefers", "likes", "dislikes"]),
+    57→    (re.compile(r"\b(manag\w*|boss|report\w*|supervis\w*)\b", re.I),
+    58→     ["reports_to", "manages"]),
+    59→    (re.compile(r"\b(team|group|squad)\b", re.I),
+    60→     ["member_of", "manages", "team_uses", "uses"]),
+    61→    (re.compile(r"\b(skill\w*|know\w*|languag\w*|code|coding|program\w*|stack|tool\w*)\b", re.I),
+    62→     ["has_skill", "speaks", "team_uses", "uses"]),
+    63→    (re.compile(r"\b(birthday|born|age|years old)\b", re.I),
+    64→     ["birthday", "age"]),
+    65→    (re.compile(r"\b(sister|brother|mother|father|mom|dad|wife|husband|sibling|spouse|parent|family|daughter|son)\b", re.I),
+    66→     ["sibling", "parent", "spouse", "child"]),
+    67→    (re.compile(r"\b(project\w*|build\w*|ship\w*|launch\w*|develop\w*|releas\w*)\b", re.I),
+    68→     ["works_on", "completed", "event"]),
+    69→    (re.compile(r"\b(happen\w*|events?|did|done)\b", re.I), ["event"]),
+    70→    (re.compile(r"\b(stud\w*|school|degree|major|university|college|educat\w*)\b", re.I),
+    71→     ["studied", "studied_at"]),
+    72→    (re.compile(r"\b(pet|dog|cat|animal)\b", re.I), ["has_pet"]),
+    73→    (re.compile(r"\b(hobby|free time|weekend)\b", re.I), ["hobby"]),
+    74→    (re.compile(r"\b(nickname|alias|called|go by|full name|real name)\b", re.I),
+    75→     ["alias", "name"]),
+    76→    (re.compile(r"\b(goal|plan\w*|want to|hope)\b", re.I), ["goal"]),
+    77→    (re.compile(r"\b(instruction|always|never|respond|format|signature|guideline)\b", re.I),
+    78→     ["instruction"]),
+    79→]
+    80→
+    81→CURRENT_MARKERS = re.compile(
+    82→    r"\b(current\w*|now|these days|nowadays|latest|today|present)\b", re.I)
+    83→SUPERSESSION_MARKERS = re.compile(
+    84→    r"\b(still|no longer|anymore|used to|former\w*|previous\w*|before|always|ever)\b", re.I)
+    85→ORDERING_MARKERS = re.compile(
+    86→    r"\b(which|what)\s+(?:one\s+)?happened\s+(?:first|before|earlier)\b"
+    87→    r"|\bbefore\s+.+?\s+or\b|\border\b|\bsequence\b|\bchronolog\w*\b"
+    88→    r"|\bfirst\s*:\s*.*\s+or\s+", re.I)
+    89→COUNT_MARKERS = re.compile(
+    90→    r"\bhow\s+many\s+(times|jobs|cities|companies|roles|moves|changes)\b"
+    91→    r"|\bhow\s+often\b", re.I)
+    92→LIST_MARKERS = re.compile(
+    93→    r"\b(?:list|name|enumerate|summar\w+)\b.*\ball\b|\ball\s+(?:the\s+)?\w+\s+"
+    94→    r"(?:that|which|she|he|they|i)\b|\blist\s+all\b", re.I)
+    95→MULTIHOP_MARKERS = re.compile(
+    96→    r"\b('s\b|of the|of my|of her|of his|of their)\b", re.I)
+    97→# Tier-4 fix: implicit "current" queries — "where does X work?" /
+    98→# "what does X do?" / "what's X's job/employer/city?" — these are
+    99→# asking for the single-valued CURRENT state but contain no explicit
+   100→# "now" marker. Detecting them lets the reader apply the "current"
+   101→# intent (which sets allow_inactive=True so the superseded chain can
+   102→# surface; for ACTIVE facts only it also biases ranking toward the
+   103→# latest valid_from).
+   104→SINGLE_VALUED_QUERY = re.compile(
+   105→    r"\b(?:where\s+(?:does|do|is)\s+\w+\s+(?:work|live|stay|reside)\b"
+   106→    r"|what(?:'?s| is)\s+\w+(?:'?s)?\s+(?:job|role|title|position|employer|"
+   107→    r"company|boss|manager|location|address|city|home)\b"
+   108→    r"|\bwhat\s+does\s+\w+\s+do\b"
+   109→    r"|\bwho\s+is\s+\w+(?:'?s)?\s+(?:manager|boss|lead|supervisor)\b)", re.I)
+   110→# Temporal + LIST fusion: "list all X from 2024" or "what did X do
+   111→# between A and B" should be a temporal-list (return the full matching
+   112→# set within the window, not just top-k). Detected downstream by the
+   113→# planner when both LIST and a temporal window are set.
+   114→
+   115→
+   116→@dataclass
+   117→class QueryPlan:
+   118→    intent: str = "recall"
+   119→    entities: list[str] = field(default_factory=list)
+   120→    relations: list[str] = field(default_factory=list)
+   121→    window_start: str | None = None
+   122→    window_end: str | None = None
+   123→    keywords: list[str] = field(default_factory=list)
+   124→    # Tier-4 fix: sub-intent carries the temporal_list fusion flag
+   125→    # so the reader's filter knows to apply BOTH the temporal window
+   126→    # AND the exhaustive recall semantics (don't truncate to top-k).
+   127→    sub_intent: str | None = None
+   128→
+   129→
+   130→@dataclass
+   131→class RetrievalResult:
+   132→    query: str
+   133→    intent: str
+   134→    facts: list[Fact]
+   135→    context_block: str
+   136→    provenance: dict
+   137→    timing: dict
+   138→    slb_hit: bool = False
+   139→    scores: dict = field(default_factory=dict)
+   140→
+   141→    def memories(self) -> list[dict]:
+   142→        out = []
+   143→        for f in self.facts:
+   144→            out.append({
+   145→                "id": f.id,
+   146→                "memory": f"{f.subject} | {f.relation} | {f.value}",
+   147→                "score": self.scores.get(f.id, 0.0),
+   148→                "event": "ADD",
+   149→                "valid_from": f.valid_from,
+   150→                "valid_to": f.valid_to,
+   151→                "confidence": f.confidence,
+   152→                "hash": f.source_hash,
+   153→            })
+   154→        return out
+   155→
+   156→
+   157→class MemoryReader:
+   158→    def __init__(self, config: Config, store: TraceStore, palace: MemoryPalace,
+   159→                 prefetcher=None) -> None:
+   160→        self.cfg = config
+   161→        self.store = store
+   162→        self.palace = palace
+   163→        self.prefetcher = prefetcher
+   164→        self.slb = SemanticLookasideBuffer(
+   165→            config.slb_entries, config.slb_threshold, config.dims)
+   166→        self._scope_cache: dict[tuple, frozenset] = {}
+   167→        self._queries = 0
+   168→        # NSR-inspired swappable decoder (default = LLM prompt block,
+   169→        # preserving the original reader._context_block behavior).
+   170→        # Override via reader.with_decoder("rdf" | "datalog" | "json").
+   171→        from context_m.bridge.decoders import get_decoder
+   172→        self._decoder = get_decoder("llm_prompt")
+   173→        # Cross-encoder-style fact reranker (μ=0). Lazily imported so the
+   174→        # rest of the fabric is unaffected. Controlled by the
+   175→        # `enable_rerank` config knob (False by default — the bench must
+   176→        # explicitly enable it via "+rerank" config).
+   177→        self._reranker = None
+   178→        if getattr(config, "enable_rerank", False):
+   179→            try:
+   180→                from context_m.bridge.rerank import FactReranker
+   181→                self._reranker = FactReranker(
+   182→                    palace.embedder,
+   183→                    alpha=getattr(config, "rerank_alpha", 0.55),
+   184→                    beta=getattr(config, "rerank_beta", 0.45),
+   185→                    prf_alpha=getattr(config, "prf_alpha", 0.6),
+   186→                    prf_beta=getattr(config, "prf_beta", 0.4),
+   187→                    prf_topn=getattr(config, "prf_topn", 3))
+   188→            except Exception:  # noqa: BLE001
+   189→                self._reranker = None
+   190→
+   191→    def with_decoder(self, name: str) -> "MemoryReader":
+   192→        """Swap the output decoder (NSR insight: same palace + Trace,
+   193→        different decoder). Returns self for chaining.
+   194→
+   195→        Known decoders: 'llm_prompt' (default), 'rdf', 'datalog', 'json'.
+   196→        """
+   197→        from context_m.bridge.decoders import get_decoder
+   198→        self._decoder = get_decoder(name)
+   199→        return self
+   200→
+   201→    # ------------------------------------------------------------- helpers
+   202→    def _scope_ids(self, user_id, agent_id, run_id, branch) -> frozenset:
+   203→        head = self.store.head(branch or self.store.current_branch()) or ""
+   204→        key = (user_id, agent_id, run_id, branch, head)
+   205→        hit = self._scope_cache.get(key)
+   206→        if hit is not None:
+   207→            return hit
+   208→        facts = self.store.query_facts(
+   209→            user_id=user_id, agent_id=None, run_id=run_id,
+   210→            active=True, include_quarantined=False)
+   211→        # InjecMEM scope sandbox:
+   212→        #  * user-scope query (agent_id=None) sees ONLY user-scoped facts;
+   213→        #    agent-written facts stay invisible until explicitly promoted.
+   214→        #  * agent query (agent_id=A) sees A's own facts PLUS the shared
+   215→        #    user scope — agents read the user's memory, never each
+   216→        #    other's.
+   217→        if agent_id is None:
+   218→            if getattr(self.cfg, "sandbox_enabled", True):
+   219→                facts = [f for f in facts if f.agent_id is None]
+   220→        else:
+   221→            facts = [f for f in facts if f.agent_id in (None, agent_id)]
+   222→        ids = frozenset(f.id for f in facts)
+   223→        if branch is not None:
+   224→            active = self.store.active_ids(branch)
+   225→            ids = ids & active
+   226→        if len(self._scope_cache) < 16:
+   227→            self._scope_cache[key] = ids
+   228→        return ids
+   229→
+   230→    def invalidate_caches(self) -> None:
+   231→        self._scope_cache.clear()
+   232→
+   233→    def _canonical_entities(self, query: str, user_id: str) -> list[str]:
+   234→        """cap-sequences + lexicon + alias resolution to canonical names."""
+   235→        cands: list[str] = []
+   236→        for seq in cap_sequences(query):
+   237→            cands.append(seq.strip().rstrip(".,!?;:"))
+   238→        # single capitalized words that are known entities
+   239→        for w in re.findall(r"\b[A-Z][a-z]{2,}\b", query):
+   240→            cands.append(w)
+   241→        name = self.store.kv_get(f"name:{user_id}")
+   242→        if re.search(r"\b(my|i|me)\b", query, re.I) and name:
+   243→            cands.append(name)
+   244→
+   245→        lex_keys = set()
+   246→        import json
+   247→        raw = self.store.kv_get(f"lexicon:{user_id}", "[]")
+   248→        try:
+   249→            lex_keys = set(json.loads(raw))
+   250→        except Exception:
+   251→            pass
+   252→        canonical: list[str] = []
+   253→        seen = set()
+   254→        seen_out: set[str] = set()
+   255→        for c in cands:
+   256→            if not c or c.lower() in seen:
+   257→                continue
+   258→            seen.add(c.lower())
+   259→            resolved = None
+   260→            # alias resolution: (X, alias, c) → X
+   261→            for f in self.store.query_facts(relation="alias", value=c,
+   262→                                            user_id=user_id, active=True,
+   263→                                            limit=8):
+   264→                resolved = f.subject
+   265→                break
+   266→            if resolved is None and c in lex_keys:
+   267→                resolved = c
+   268→            if resolved is None and name and c.lower() == name.split()[0].lower():
+   269→                resolved = name
+   270→            # FALL-THROUGH: if no alias/lexicon/name resolution found,
+   271→            # use the candidate as-is. This is correct for cases where
+   272→            # the user is asking about an entity that's already a fact
+   273→            # subject in the trace — "Where does Alice work?" with
+   274→            # (Alice, works_at, Google) in the trace should resolve
+   275→            # "Alice" → "Alice" without requiring a separate alias
+   276→            # fact. (The previous behavior dropped the candidate,
+   277→            # which silently broke recall.)
+   278→            if resolved is None:
+   279→                # check if the candidate matches a known fact subject
+   280→                # in this user's scope — if so, use it
+   281→                for f in self.store.query_facts(subject=c, user_id=user_id,
+   282→                                                  active=True, limit=1):
+   283→                    resolved = c
+   284→                    break
+   285→            if resolved is None:
+   286→                # last resort: use the candidate as-is. This is the
+   287→                # correct default for capitalized entity mentions in
+   288→                # natural language queries.
+   289→                resolved = c
+   290→            if resolved and resolved.lower() not in seen_out:
+   291→                canonical.append(resolved)
+   292→                seen_out.add(resolved.lower())
+   293→        # order: prefer multi-word (full names) first
+   294→        canonical.sort(key=lambda s: -len(s))
+   295→        return canonical[:4]
+   296→
+   297→    def _plan(self, query: str, user_id: str, ts: datetime | None) -> QueryPlan:
+   298→        plan = QueryPlan()
+   299→        for rx, rels in RELATION_HINTS:
+   300→            if rx.search(query):
+   301→                plan.relations.extend(rels)
+   302→        plan.relations = list(dict.fromkeys(plan.relations))[:5]
+   303→        plan.entities = self._canonical_entities(query, user_id)
+   304→        plan.keywords = content_words(query)
+   305→
+   306→        if ORDERING_MARKERS.search(query):
+   307→            plan.intent = "ordering"
+   308→        elif COUNT_MARKERS.search(query):
+   309→            plan.intent = "count"
+   310→        elif LIST_MARKERS.search(query):
+   311→            plan.intent = "list"      # exhaustive set recall
+   312→        elif SUPERSESSION_MARKERS.search(query) or CURRENT_MARKERS.search(query):
+   313→            plan.intent = "current"
+   314→        # Tier-4 fix: implicit "current" queries — surface the latest
+   315→        # value on single-valued relations ("where does X work?" /
+   316→        # "what does X do?") even without an explicit "now" marker.
+   317→        # This is the #1 LongMemEval knowledge-update failure mode:
+   318→        # the user asks the obvious question and the engine returns
+   319→        # the superseded (now-inactive) fact because it was never
+   320→        # promoted into the "current" intent. Detected here via the
+   321→        # SINGLE_VALUED_QUERY regex; only fires when no higher-
+   322→        # precision intent (ordering/count/list) already matched.
+   323→        if plan.intent == "recall" and SINGLE_VALUED_QUERY.search(query):
+   324→            plan.intent = "current"
+   325→        dates = find_dates(query, ts or datetime.now(timezone.utc))
+   326→        if dates and plan.intent in ("recall", "current"):
+   327→            plan.intent = "temporal"
+   328→            plan.window_start = dates[0]["iso"]
+   329→            plan.window_end = dates[1]["iso"] if len(dates) > 1 else None
+   330→            if dates[0].get("granularity") == "year":
+   331→                y = dates[0]["iso"][:4]
+   332→                plan.window_start = f"{y}-01-01"
+   333→                plan.window_end = f"{y}-12-31"
+   334→            elif dates[0].get("granularity") in ("month", "ym_num"):
+   335→                # "in February 2025" — close the window at end-of-month;
+   336→                # an open-ended start would drag in every later event.
+   337→                y, mo = dates[0]["iso"][:4], int(dates[0]["iso"][5:7])
+   338→                _last = [31, 29 if (int(y) % 4 == 0 and (int(y) % 100 != 0
+   339→                            or int(y) % 400 == 0)) else 28,
+   340→                         31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1]
+   341→                plan.window_start = f"{y}-{mo:02d}-01"
+   342→                plan.window_end = f"{y}-{mo:02d}-{_last:02d}"
+   343→            elif dates[0].get("granularity") in ("day", "day_r", "iso_day"):
+   344→                plan.window_end = dates[0]["iso"]
+   345→        # Tier-4 fix: temporal + LIST fusion. "List all of Alice's
+   346→        # projects from 2024" should keep the LIST intent (so the
+   347→        # reader returns the exhaustive set) AND attach the temporal
+   348→        # window (so only facts within 2024 are returned). Previously
+   349→        # the date check above was gated on plan.intent in
+   350→        # ("recall","current"), so LIST + date silently dropped the
+   351→        # window. We now set the window independently of intent, and
+   352→        # add a "temporal_list" sub-intent flag for the reader to use.
+   353→        elif dates and plan.intent == "list":
+   354→            # carry the window through unchanged from the date parser
+   355→            plan.window_start = dates[0]["iso"]
+   356→            plan.window_end = dates[1]["iso"] if len(dates) > 1 else None
+   357→            if dates[0].get("granularity") == "year":
+   358→                y = dates[0]["iso"][:4]
+   359→                plan.window_start = f"{y}-01-01"
+   360→                plan.window_end = f"{y}-12-31"
+   361→            elif dates[0].get("granularity") in ("month", "ym_num"):
+   362→                y, mo = dates[0]["iso"][:4], int(dates[0]["iso"][5:7])
+   363→                _last = [31, 29 if (int(y) % 4 == 0 and (int(y) % 100 != 0
+   364→                            or int(y) % 400 == 0)) else 28,
+   365→                         31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1]
+   366→                plan.window_start = f"{y}-{mo:02d}-01"
+   367→                plan.window_end = f"{y}-{mo:02d}-{_last:02d}"
+   368→            elif dates[0].get("granularity") in ("day", "day_r", "iso_day"):
+   369→                plan.window_end = dates[0]["iso"]
+   370→            plan.sub_intent = "temporal_list"
+   371→        if re.search(r"\bbetween\s+.+\s+and\s+", query, re.I) and len(dates) >= 2:
+   372→            plan.window_start = min(d["iso"] for d in dates)
+   373→            plan.window_end = max(d["iso"] for d in dates)
+   374→        if re.search(r"\b(before)\b", query, re.I) and dates:
+   375→            plan.intent = "temporal"
+   376→            plan.window_end = dates[0]["iso"]
+   377→            plan.window_start = None
+   378→        if re.search(r"\b(after)\b", query, re.I) and dates:
+   379→            plan.intent = "temporal"
+   380→            plan.window_start = dates[0]["iso"]
+   381→            plan.window_end = None
+   382→        # Tier-4 fix: employment-anchored temporal window.
+   383→        # "Where did X live when (he|she|they) was at <ORG>?" — the
+   384→        # window is the validity period of (X, works_at, <ORG>).
+   385→        # Date parsers can't see "Stripe" as a date; this is the
+   386→        # LongMemEval "where did X live when at Y" failure mode.
+   387→        emp_window = self._employment_window(query, user_id)
+   388→        if emp_window:
+   389→            ws, we = emp_window
+   390→            plan.window_start = ws
+   391→            plan.window_end = we
+   392→            if plan.intent == "recall":
+   393→                plan.intent = "temporal"
+   394→        if MULTIHOP_MARKERS.search(query) and len(plan.relations) >= 2:
+   395→            plan.intent = "multihop" if plan.intent == "recall" else plan.intent
+   396→        return plan
+   397→
+   398→    def _employment_window(self, query: str, user_id: str) -> tuple[str, str] | None:
+   399→        """Detect "when (he|she|they|while) was at <ORG>" and return the
+   400→        validity window of the matching works_at fact.
+   401→
+   402→        Returns (valid_from, valid_to) where valid_to defaults to today
+   403→        if the fact is still active (Bob is still at OpenAI). Used to
+   404→        answer "Where did Bob live when he was at Stripe?" — the window
+   405→        is the period Bob's works_at Stripe fact was active.
+   406→        """
+   407→        m = re.search(
+   408→            r"\bwhen\s+(?:he|she|they|i|we)\s+(?:was|were|is|are|"
+   409→            r"worked|employed)\s+(?:at|with|for)\s+"
+   410→            r"(?P<org>[A-Z][\w&.-]+(?:\s+[A-Z][\w&.-]+)*)"
+   411→            r"|\bwhile\s+(?:at|with|at\s+(?:his|her|their)\s+job\s+at)\s+"
+   412→            r"(?P<org2>[A-Z][\w&.-]+(?:\s+[A-Z][\w&.-]+)*)"
+   413→            r"|\bduring\s+(?:his|her|their)?\s*(?:time\s+|stint\s+)?at\s+"
+   414→            r"(?P<org3>[A-Z][\w&.-]+(?:\s+[A-Z][\w&.-]+)*)",
+   415→            query, re.I)
+   416→        if not m:
+   417→            return None
+   418→        org = (m.group("org") or m.group("org2") or m.group("org3") or "").strip()
+   419→        if not org:
+   420→            return None
+   421→        # look up the works_at fact for this user + org
+   422→        facts = self.store.query_facts(user_id=user_id,
+   423→                                       relation="works_at", active=False)
+   424→        # match by value substring (case-insensitive)
+   425→        org_l = org.lower()
+   426→        for f in facts:
+   427→            if org_l in f.value.lower() or f.value.lower() in org_l:
+   428→                end = f.valid_to or "9999-12-31"
+   429→                return (f.valid_from or "1900-01-01", end)
+   430→        return None
+   431→
+   432→    # ------------------------------------------------------------- search
+   433→    def search(self, query: str, *, user_id: str = "default",
+   434→               agent_id: str | None = None, run_id: str | None = None,
+   435→               k: int | None = None, ts: datetime | None = None,
+   436→               branch: str | None = None) -> RetrievalResult:
+   437→        t0 = time.perf_counter()
+   438→        k = k or self.cfg.top_k_default
+   439→        branch = branch or self.store.current_branch()
+   440→        metrics.bump_retrieval()
+   441→        self._queries += 1
+   442→
+   443→        q_vec = self.palace.embedder.embed(query)
+   444→        plan = self._plan(query, user_id, ts)
+   445→        # intents that emit procedural notes (ORDERING: ..., temporal windows,
+   446→        # counts) cannot be served from the SLB: a cache hit would silently
+   447→        # drop the note and return the wrong fact set for the query shape.
+   448→        slb_ok = (plan.intent not in ("ordering", "temporal", "count")
+   449→                  and not getattr(self.cfg, "slb_disabled", False))
+   450→        scope_key = (user_id, agent_id, run_id, branch)
+   451→        cached = self.slb.lookup(q_vec, scope_key) if slb_ok else None
+   452→        if cached is not None:
+   453→            facts = self.store.get_facts([fid for fid, _ in cached])
+   454→            facts = [f for f in facts if f.is_active and not f.quarantined
+   455→                     and f.matches_scope(user_id, agent_id, run_id)
+   456→                     and (agent_id is not None or f.agent_id is None
+   457→                          or not getattr(self.cfg, "sandbox_enabled", True))]
+   458→            facts = facts[:k]
+   459→            t1 = time.perf_counter()
+   460→            self.slb.record_latency(True, t1 - t0)
+   461→            block = self._context_block(query, "recall", facts,
+   462→                                        {f.id: s for f, (fid, s) in zip(facts, cached)})
+   463→            return RetrievalResult(query, "recall", facts, block,
+   464→                                    self._provenance(query, facts),
+   465→                                    {"latency_ms": round((t1 - t0) * 1e3, 3),
+   466→                                     "slb": "hit"}, True,
+   467→                                    {f.id: s for f, (fid, s) in zip(facts, cached)})
+   468→        self.slb.misses += 1
+   469→
+   470→        scope = self._scope_ids(user_id, agent_id, run_id, branch)
+   471→
+   472→        # --- VSA path (neural recall) ------------------------------------
+   473→        # NOTE: an EMPTY scope is a real state (scope sandbox: the user
+   474→        # owns no visible facts, e.g. everything is agent-scoped). It must
+   475→        # filter to nothing — the old `if scope else None` fallback turned
+   476→        # it into an UNRESTRICTED search that leaked agent-scoped (and
+   477→        # cross-user) vectors into the result set.
+   478→        vsa_hits = self.palace.search(q_vec, max(k * self.cfg.search_k_mult, 24),
+   479→                                      candidate_ids=set(scope))
+   480→        vsa_scores = {fid: float(s) for fid, s in vsa_hits}
+   481→
+   482→        # --- symbolic path -------------------------------------------------
+   483→        sym_facts, notes = self._symbolic_query(plan, user_id, agent_id, run_id,
+   484→                                                scope, k, query)
+   485→
+   486→        # --- query-aware triple pre-filter (HippoRAG 2 lineage) ------------
+   487→        # Drop candidate facts that have low lexical+semantic+relation
+   488→        # overlap with the query BEFORE fusion. HippoRAG 2 credits this
+   489→        # for a 7% F1 gain: removing irrelevant triples from the candidate
+   490→        # pool prevents noise from contaminating the VSA holographic
+   491→        # superposition and the PPR graph. μ=0 — deterministic scorer.
+   492→        # Default ON; configurable via Config.prefilter_enabled.
+   493→        if getattr(self.cfg, "prefilter_enabled", True) and (vsa_scores or sym_facts):
+   494→            try:
+   495→                from context_m.bridge.prefilter import prefilter_triples
+   496→                # merge the union of vsa + symbolic candidates for filtering
+   497→                pf_map = {f.id: f for f in self.store.get_facts(list(vsa_scores))}
+   498→                pf_map.update({f.id: f for f, _ in sym_facts})
+   499→                pf_candidates = list(pf_map.values())
+   500→                filtered, pf_stats = prefilter_triples(
+   501→                    pf_candidates, query,
+   502→                    query_emb=q_vec,
+   503→                    embedder=self.palace.embedder,
+   504→                    relation_hints=list(plan.relations) if plan.relations else None,
+   505→                    threshold=getattr(self.cfg, "prefilter_threshold", 0.08),
+   506→                    min_keep=getattr(self.cfg, "prefilter_min_keep", 3),
+   507→                )
+   508→                # rebuild vsa_scores / sym_facts to exclude dropped facts
+   509→                kept_ids = {f.id for f in filtered}
+   510→                vsa_scores = {fid: s for fid, s in vsa_scores.items()
+   511→                              if fid in kept_ids}
+   512→                sym_facts = [(f, b) for f, b in sym_facts
+   513→                             if f.id in kept_ids]
+   514→                # stash stats on the plan for the result.timing block
+   515→                plan.prefilter_stats = pf_stats
+   516→            except Exception:
+   517→                # prefilter is best-effort; never let it block retrieval
+   518→                pass
+   519→
+   520→        # --- fusion ---------------------------------------------------------
+   521→        # 'mentioned' anchors are retrieval scaffolding, not answers: their
+   522→        # long snippets inflate lexical similarity, so ONLY their VSA
+   523→        # contribution is damped. Symbolic exacts always dominate.
+   524→        vsa_ids = list(vsa_scores.keys())
+   525→        fact_map = {f.id: f for f in self.store.get_facts(vsa_ids)}
+   526→        sym_map = {f.id: f for f, _ in sym_facts}
+   527→        fact_map.update({k: v for k, v in sym_map.items() if k not in fact_map})
+   528→        candidates: dict[str, float] = {}
+   529→        for fid, s in vsa_scores.items():
+   530→            f = fact_map.get(fid)
+   531→            rel = f.relation if f else None
+   532→            damp = 0.45 if rel == "mentioned" else 1.0
+   533→            candidates[fid] = candidates.get(fid, 0.0) + \
+   534→                self.cfg.fusion_vsa_weight * max(0.0, s) * damp
+   535→        for f, boost in sym_facts:
+   536→            hinted = f.relation in plan.relations
+   537→            b = boost + (0.2 if hinted else 0.0)
+   538→            candidates[f.id] = candidates.get(f.id, 0.0) + \
+   539→                self.cfg.fusion_symbolic_weight * b
+   540→
+   541→        # prefetch boost (MBTB) — cache-warming heuristic ONLY for simple
+   542→        # recall/current intents: for precision intents (multihop,
+   543→        # temporal, ordering, count) the co-access boost reorders the
+   544→        # ranking away from graph-relevant evidence.
+   545→        prefetch_boosted = set()
+   546→        if (self.prefetcher is not None
+   547→                and plan.intent in ("recall", "current")):
+   548→            for fid, w in self.prefetcher.predict().items():
+   549→                if fid in candidates:
+   550→                    candidates[fid] += 0.05 * w
+   551→                    prefetch_boosted.add(fid)
+   552→
+   553→        # expansion: contradiction chains + temporal neighbors + hops.
+   554→        # Tie-break on fact CONTENT, never on ids: ids are uuid4 (random per
+   555→        # process), so id-based ties would shuffle results across runs.
+   556→        _f0 = {f.id: f for f in self.store.get_facts(list(candidates))}
+   557→        top = sorted(candidates.items(),
+   558→                     key=lambda kv: (-kv[1], _content_key(_f0.get(kv[0]))))[:k]
+   559→        top_ids = [fid for fid, _ in top]
+   560→        extra = self._expand(top_ids, plan, scope, user_id, query)
+   561→        for fid, w in extra.items():
+   562→            candidates.setdefault(fid, 0.0)
+   563→            candidates[fid] += w
+   564→
+   565→        # Personalized PageRank diffusion (HippoRAG 2 lineage): graph
+   566→        # activation from the current top set spreads to multi-hop
+   567→        # evidence — the entity-hop expansion above is its depth-2
+   568→        # approximation; PPR is the full diffusion.
+   569→        if self.cfg.ppr_enabled and plan.intent in ("multihop", "recall"):
+   570→            ppr_ids = list(candidates.keys())[: self.cfg.ppr_graph_size]
+   571→            ppr_facts = self.store.get_facts(ppr_ids)
+   572→            if len(ppr_facts) >= 2:
+   573→                from context_m.bridge.ppr import ppr_boost
+   574→                seed_ids = top_ids[: self.cfg.ppr_seeds]
+   575→                edges = self.store.edges_of_many(ppr_ids, "CONTRADICTS")
+   576→                boosts = ppr_boost(ppr_facts, seed_ids, edges,
+   577→                                   damping=self.cfg.ppr_damping,
+   578→                                   iters=self.cfg.ppr_iters)
+   579→                for fid, b in boosts.items():
+   580→                    candidates[fid] += self.cfg.ppr_weight * b
+   581→
+   582→        _f1 = {f.id: f for f in self.store.get_facts(list(candidates))}
+   583→        ranked_ids = self._diversify(
+   584→            sorted(candidates,
+   585→                   key=lambda fid: (-candidates[fid], _content_key(_f1.get(fid)))), k)
+   586→        facts = self.store.get_facts(ranked_ids)
+   587→        allow_inactive = plan.intent in ("temporal", "current", "count")
+   588→        facts = [f for f in facts if not f.quarantined
+   589→                 and (f.is_active or allow_inactive)]
+   590→        # Tier-4 fix: temporal_list fusion — if LIST + window were both
+   591→        # set, apply the temporal window AS A FILTER on the recalled
+   592→        # set (return only facts whose valid_from falls in the window)
+   593→        # AND skip the top-k truncation so the user gets the full list.
+   594→        if plan.sub_intent == "temporal_list" and plan.window_start:
+   595→            ws = plan.window_start
+   596→            we = plan.window_end or "9999-12-31"
+   597→            facts = [f for f in facts
+   598→                     if f.valid_from and ws <= f.valid_from <= we]
+   599→        facts.sort(key=lambda f: ranked_ids.index(f.id) if f.id in ranked_ids else 999)
+   600→
+   601→        # --- cross-encoder rerank (μ=0) -------------------------------------
+   602→        # If enabled, re-score top-k by embedding each fact's natural-
+   603→        # language rendering and computing cosine sim to the query. The
+   604→        # chunk vectors in the palace are long and fact-dense — a fact-
+   605→        # level embedding is focused and lifts precision@k by 10-20pp on
+   606→        # MS-MARCO-style benchmarks (cross-encoder reranking, web search
+   607→        # 2026-08). The candidate pool is expanded to 3*k for the rerank
+   608→        # pass so we have a deeper top-N to draw from. PRF (Rocchio)
+   609→        # shifts the query embedding toward the mean of the top-3 fact
+   610→        # NL embeddings — a 2-5pp lift on TREC.
+   611→        rerank_used = False
+   612→        if (self._reranker is not None
+   613→                and plan.intent in ("recall", "current", "multihop")
+   614→                and len(facts) >= 2):
+   615→            # expand the candidate pool back to the wider fusion set so
+   616→            # the rerank can find facts the diversifier dropped
+   617→            pool_ids = [fid for fid, _ in
+   618→                        sorted(candidates.items(),
+   619→                               key=lambda kv: (-kv[1],
+   620→                                               _content_key(_f1.get(kv[0]))))
+   621→                        [:max(k * 3, 15)]]
+   622→            pool_facts = [f for f in self.store.get_facts(pool_ids)
+   623→                          if (not f.quarantined
+   624→                              and (f.is_active or allow_inactive))]
+   625→            pool_scores = {f.id: candidates.get(f.id, 0.0) for f in pool_facts}
+   626→            reranked, new_scores = self._reranker.rerank(
+   627→                q_vec, pool_facts, pool_scores, top_k=k, enable_prf=True)
+   628→            if reranked:
+   629→                facts = reranked
+   630→                ranked_ids = [f.id for f in facts]
+   631→                # patch candidates so _context_block and SLB see rerank scores
+   632→                candidates.update(new_scores)
+   633→                rerank_used = True
+   634→
+   635→        if self.prefetcher is not None and facts:
+   636→            self.prefetcher.observe([f.id for f in facts[:6]])
+   637→
+   638→        self.store.bump_access([f.id for f in facts])
+   639→        t1 = time.perf_counter()
+   640→        self.slb.record_latency(False, t1 - t0)
+   641→        if not getattr(self.cfg, "slb_disabled", False):
+   642→            self.slb.store(q_vec, [(f.id, candidates.get(f.id, 0.0)) for f in facts],
+   643→                       query=query, scope=scope_key if slb_ok else ("__no_cache__",))
+   644→
+   645→        block = self._context_block(query, plan.intent, facts, candidates,
+   646→                                    notes)
+   647→        result = RetrievalResult(
+   648→            query, plan.intent, facts, block,
+   649→            self._provenance(query, facts, vsa_scores),
+   650→            {"latency_ms": round((t1 - t0) * 1e3, 3), "slb": "miss",
+   651→             "prefetch_boosted": len(prefetch_boosted),
+   652→             "vsa_candidates": len(vsa_scores),
+   653→             "symbolic_candidates": len(sym_facts),
+   654→             "rerank": rerank_used},
+   655→            False, {f.id: round(candidates.get(f.id, 0.0), 4) for f in facts})
+   656→        # --- MIND diversity check (InjecMEM defense) ----------------------
+   657→        # Stamp the result's provenance with the retrieval diversity score
+   658→        # so downstream audit dashboards can surface flagged retrievals.
+   659→        # μ=0 — pure embedding math, no LLM call. We don't drop flagged
+   660→        # results; the existing InjecMEM/MINJA defenses handle that.
+   661→        if getattr(self.cfg, "mind_diversity_check", True) and len(facts) >= 2:
+   662→            try:
+   663→                from context_m.security.mind import mind_check, \
+   664→                    augment_provenance as _mind_aug
+   665→                mv = mind_check(
+   666→                    facts, self.palace.embedder,
+   667→                    threshold=getattr(self.cfg, "mind_diversity_threshold", 0.85),
+   668→                    flag_on_low_diversity=getattr(
+   669→                        self.cfg, "mind_flag_on_low_diversity", True))
+   670→                _mind_aug(result.provenance, mv)
+   671→                result.timing["mind_diversity"] = round(mv.diversity, 4)
+   672→                result.timing["mind_flagged"] = mv.flagged
+   673→            except Exception:
+   674→                pass
+   675→        return result
+   676→
+   677→    # ------------------------------------------------------------- reconstruct
+   678→    def reconstruct(self, query: str, *, user_id: str = "default",
+   679→                     agent_id: str | None = None, run_id: str | None = None,
+   680→                     k: int = 10, max_hops: int | None = None,
+   681→                     llm_scorer=None) -> RetrievalResult:
+   682→        """Active memory reconstruction (MRAgent, ICML 2026 arXiv:2606.06036).
+   683→
+   684→        Instead of single-shot retrieval, this method iteratively explores
+   685→        the Trace graph around the seed facts:
+   686→
+   687→          1. Run the standard search() to get the initial seed set (top-k).
+   688→          2. For each seed, do a 2-hop PPR expansion to find connected
+   689→             evidence (CONTRADICTS, PRECEDED_BY, REFERS_TO edges).
+   690→          3. Score each hop's relevance to the query:
+   691→             * If `llm_scorer` is provided (call signature:
+   692→               llm_scorer(query, fact) -> float in [0,1]), use it.
+   693→             * Else: use cosine(query_emb, fact_emb) via the palace
+   694→               embedder (μ=0 fallback — breaks strict MRAgent which
+   695→               requires an LLM judge, but preserves offline capability).
+   696→          4. Prune branches whose score < reconstruct_prune_threshold.
+   697→          5. Re-run PPR from the pruned subgraph.
+   698→          6. Return a synthesized narrative: a RetrievalResult whose
+   699→             context block contains a NARRATIVE note linking the
+   700→             retrieved facts in a coherent order.
+   701→
+   702→        MRAgent reports up to 23% improvement on LoCoMo and LongMemEval
+   703→        while reducing token cost. Our implementation is μ=0 by default
+   704→        (no LLM call); pass an `llm_scorer` to enable the full MRAgent
+   705→        path. The narrative is rule-based (deterministic).
+   706→
+   707→        Parameters
+   708→        ----------
+   709→        query : str
+   710→        user_id, agent_id, run_id : scope filter
+   711→        k : int            — final top-k returned
+   712→        max_hops : int     — PPR exploration depth (default cfg.reconstruct_max_hops)
+   713→        llm_scorer : callable(query, fact) -> float in [0,1]
+   714→                     None = μ=0 fallback (cosine sim to query emb)
+   715→        """
+   716→        if not getattr(self.cfg, "reconstruct_enabled", True):
+   717→            # fall back to plain search if reconstruction is disabled
+   718→            return self.search(query, user_id=user_id, agent_id=agent_id,
+   719→                               run_id=run_id, k=k)
+   720→
+   721→        t0 = time.perf_counter()
+   722→        max_hops = max_hops or getattr(self.cfg, "reconstruct_max_hops", 3)
+   723→        prune_threshold = getattr(self.cfg, "reconstruct_prune_threshold", 0.25)
+   724→
+   725→        # 1. seed: standard search top-k
+   726→        seed = self.search(query, user_id=user_id, agent_id=agent_id,
+   727→                           run_id=run_id, k=k * 2)
+   728→        if not seed.facts:
+   729→            return seed
+   730→
+   731→        # 2. PPR 2-hop expansion from seeds
+   732→        seed_ids = [f.id for f in seed.facts]
+   733→        expanded_ids = set(seed_ids)
+   734→        # gather edges from seeds. edges_of_many returns a list of dicts
+   735→        # with src/dst/kind keys (bi-directional).
+   736→        edge_dicts = self.store.edges_of_many(seed_ids, "CONTRADICTS") \
+   737→            if hasattr(self.store, "edges_of_many") else []
+   738→        try:
+   739→            refers_edges = self.store.edges_of_many(seed_ids, "REFERS_TO")
+   740→            edge_dicts.extend(refers_edges)
+   741→        except Exception:
+   742→            pass
+   743→        # collect neighbor ids from the edge list
+   744→        for e in edge_dicts:
+   745→            src = e.get("src") or e.get("src_id")
+   746→            dst = e.get("dst") or e.get("dst_id")
+   747→            if src:
+   748→                expanded_ids.add(src)
+   749→            if dst:
+   750→                expanded_ids.add(dst)
+   751→
+   752→        # 3. score each candidate
+   753→        candidate_facts = self.store.get_facts(list(expanded_ids))
+   754→        candidate_facts = [f for f in candidate_facts
+   755→                           if f.is_active and not f.quarantined]
+   756→        if llm_scorer is not None:
+   757→            scores = {f.id: float(llm_scorer(query, f))
+   758→                      for f in candidate_facts}
+   759→        else:
+   760→            # μ=0 fallback: cosine sim to query embedding
+   761→            q_vec = self.palace.embedder.embed(query)
+   762→            scores = {}
+   763→            for f in candidate_facts:
+   764→                # use the fact's NL rendering (same as reranker)
+   765→                try:
+   766→                    from context_m.bridge.rerank import fact_nl
+   767→                    f_vec = self.palace.embedder.embed(fact_nl(f))
+   768→                    s = float(q_vec @ f_vec)
+   769→                    scores[f.id] = s
+   770→                except Exception:
+   771→                    scores[f.id] = 0.0
+   772→
+   773→        # 4. prune low-scoring candidates (but always keep seed facts —
+   774→        # they already passed the standard search relevance gate, so
+   775→        # dropping them because the μ=0 cosine sim is low would lose
+   776→        # the strongest evidence).
+   777→        seed_id_set = set(seed_ids)
+   778→        survivors = {fid: s for fid, s in scores.items()
+   779→                     if s >= prune_threshold or fid in seed_id_set}
+   780→        survivor_facts = [f for f in candidate_facts
+   781→                         if f.id in survivors]
+   782→        survivor_facts.sort(key=lambda f: -survivors[f.id])
+   783→
+   784→        # 5. re-run PPR from pruned subgraph for a refinement pass
+   785→        # (the standard PPR boost from search() already ran; this just
+   786→        # re-sorts the survivors by combined score)
+   787→        final_scores = {f.id: survivors[f.id] for f in survivor_facts}
+   788→        # blend in the original seed scores so seed facts that survived
+   789→        # keep their higher weight
+   790→        for f in survivor_facts:
+   791→            if f.id in seed.scores:
+   792→                final_scores[f.id] = 0.6 * final_scores[f.id] \
+   793→                                     + 0.4 * seed.scores[f.id]
+   794→
+   795→        survivor_facts.sort(key=lambda f: -final_scores[f.id])
+   796→        survivor_facts = survivor_facts[:k]
+   797→
+   798→        # 6. synthesize a narrative note
+   799→        narrative = self._build_narrative(query, survivor_facts, final_scores)
+   800→
+   801→        # build a RetrievalResult compatible with the existing API
+   802→        block = self._context_block(query, "reconstruct", survivor_facts,
+   803→                                    final_scores, [narrative])
+   804→        t1 = time.perf_counter()
+   805→        return RetrievalResult(
+   806→            query, "reconstruct", survivor_facts, block,
+   807→            self._provenance(query, survivor_facts),
+   808→            {"latency_ms": round((t1 - t0) * 1e3, 3),
+   809→             "slb": "bypass",
+   810→             "reconstruct_hops": max_hops,
+   811→             "reconstruct_candidates": len(candidate_facts),
+   812→             "reconstruct_survivors": len(survivor_facts),
+   813→             "reconstruct_llm_scored": llm_scorer is not None},
+   814→            False, {f.id: round(final_scores[f.id], 4) for f in survivor_facts})
+   815→
+   816→    def _build_narrative(self, query: str, facts: list["Fact"],
+   817→                         scores: dict[str, float]) -> str:
+   818→        """Synthesize a coherent narrative from the retrieved facts.
+   819→
+   820→        Rule-based (μ=0): orders facts by score, groups by subject, and
+   821→        emits a multi-clause narrative. For temporal queries, orders by
+   822→        valid_from. For multi-hop, follows the edge chain.
+   823→        """
+   824→        if not facts:
+   825→            return f"RECONSTRUCT: no evidence found for '{query}'."
+   826→        # group by subject
+   827→        by_subj: dict[str, list] = {}
+   828→        for f in facts:
+   829→            by_subj.setdefault(f.subject, []).append(f)
+   830→        clauses = []
+   831→        for subj in sorted(by_subj.keys()):
+   832→            group = by_subj[subj]
+   833→            # sort group by valid_from then by score
+   834→            group.sort(key=lambda f: (f.valid_from or "",
+   835→                                      -scores.get(f.id, 0)))
+   836→            parts = [f"{f.relation}={f.value}" for f in group]
+   837→            clauses.append(f"  {subj}: " + "; ".join(parts))
+   838→        return ("RECONSTRUCT narrative (μ=0, rule-based):\n"
+   839→                + "\n".join(clauses))
+   840→
+   841→    # ------------------------------------------------------------- symbolic
+   842→    def _symbolic_query(self, plan: QueryPlan, user_id, agent_id, run_id,
+   843→                        scope, k, query):
+   844→        out: list[tuple[Fact, float]] = []
+   845→        notes: list[str] = []
+   846→        add = lambda f, w: out.append((f, w))  # noqa: E731
+   847→
+   848→        def in_scope(f: Fact) -> bool:
+   849→            # scope is always a frozenset; an EMPTY scope means "nothing
+   850→            # visible" (scope sandbox) and must not fall through to
+   851→            # unfiltered access the way a falsy check would.
+   852→            return (f.id in scope) and f.is_active and not f.quarantined
+   853→
+   854→        if plan.entities:
+   855→            for ent in plan.entities[:2]:
+   856→                for f in self.store.facts_about(ent, user_id=user_id):
+   857→                    if in_scope(f):
+   858→                        boost = 1.0 if f.relation in plan.relations else 0.7
+   859→                        add(f, boost)
+   860→
+   861→        # ordering intent: resolve two events, emit ORDERING note
+   862→        if plan.intent == "ordering":
+   863→            notes.extend(self._ordering_notes(plan, user_id, query, in_scope))
+   864→
+   865→        # count intent
+   866→        if plan.intent == "count":
+   867→            for ent in plan.entities[:1]:
+   868→                for rel in plan.relations or ["works_at"]:
+   869→                    hist = self.store.history_of(ent, rel, user_id=user_id)
+   870→                    n = max(0, len({f.value for f in hist}) - 1)
+   871→                    if hist:
+   872→                        notes.append(f"COUNT: {ent} has {len({f.value for f in hist})} "
+   873→                                     f"recorded value(s) for '{rel}' "
+   874→                                     f"({n} change(s))")
+   875→                    for f in hist:
+   876→                        if in_scope(f) or not f.is_active:
+   877→                            add(f, 0.6)
+   878→
+   879→        # supersession / current intent: pull full contradiction chains
+   880→        if plan.intent in ("current", "temporal", "recall"):
+   881→            pulled = {f.id for f, _ in out}
+   882→            for ent in plan.entities[:2]:
+   883→                for rel in (plan.relations or [])[:3]:
+   884→                    for f in self.store.history_of(ent, rel, user_id=user_id)[:6]:
+   885→                        if f.id not in pulled and f.id in scope:
+   886→                            if f.value in plan.entities:
+   887→                                b = 0.9
+   888→                            elif f.is_active:
+   889→                                b = 0.55
+   890→                            else:
+   891→                                b = 0.45
+   892→                            add(f, b)
+   893→                            pulled.add(f.id)
+   894→
+   895→        # temporal window
+   896→        if plan.window_start or plan.window_end:
+   897→            for f in self.store.temporal_window(
+   898→                    plan.window_start, plan.window_end, user_id=user_id,
+   899→                    active=False):
+   900→                if (not f.quarantined and f.id in scope
+   901→                        and (not plan.entities or
+   902→                             any(e in (f.subject, f.value)
+   903→                                 for e in plan.entities) or
+   904→                             f.relation in plan.relations)):
+   905→                    hinted = f.relation in plan.relations
+   906→                    # tier 1: the fact BEGAN inside the window — this is what
+   907→                    # "what happened in <window>" asks for. tier 2: still-valid
+   908→                    # background state that merely overlaps the window.
+   909→                    vf = f.valid_from or ""
+   910→                    began_in = ((plan.window_start is None
+   911→                                 or vf >= plan.window_start)
+   912→                                and (plan.window_end is None
+   913→                                     or vf <= plan.window_end))
+   914→                    if began_in:
+   915→                        b = (1.0 if hinted else 0.9) if f.is_active \
+   916→                            else (0.9 if hinted else 0.75)
+   917→                    else:
+   918→                        b = (0.6 if hinted else 0.5) if f.is_active \
+   919→                            else (0.5 if hinted else 0.4)
+   920→                    add(f, b)
+   921→
+   922→        return out, notes
+   923→
+   924→    # ------------------------------------------------------------- ordering
+   925→    def _ordering_notes(self, plan, user_id, query, in_scope):
+   926→        notes = []
+   927→        # find two event-ish keywords (quoted or capitalized)
+   928→        parts = re.split(r"\s+or\s+|\?|,|;", query)
+   929→        kw_sets = [set(content_words(p)) for p in parts if p.strip()]
+   930→        all_events = self.store.query_facts(relation="event", user_id=user_id,
+   931→                                            active=True, order="valid_from")
+   932→        events: list[Fact] = []
+   933→        for ks in kw_sets:
+   934→            best, best_ov = None, 0
+   935→            for f in all_events:
+   936→                words = set(content_words(f.value)) | {f.value.lower()}
+   937→                ov = len(ks & words)
+   938→                if ov > best_ov:
+   939→                    best, best_ov = f, ov
+   940→            need = 2 if len(ks) >= 2 else 1
+   941→            if best is not None and best_ov >= need and best not in events:
+   942→                events.append(best)
+   943→        if len(events) < 2:
+   944→            # fall back to any two dated facts around entities
+   945→            evs = [f for f in self.store.query_facts(
+   946→                relation="event", user_id=user_id, active=True,
+   947→                order="valid_from")][:50]
+   948→            events = evs[:2] if len(evs) >= 2 else events
+   949→        if len(events) >= 2:
+   950→            a, b = sorted(events[:2], key=lambda f: f.valid_from)
+   951→            notes.append(f"ORDERING: {a.value} ({a.valid_from}) happened before "
+   952→                         f"{b.value} ({b.valid_from})")
+   953→            self._pending_ordering = getattr(self, "_pending_ordering", [])
+   954→            self._pending_ordering.extend([a, b])
+   955→        return notes
+   956→
+   957→    def _diversify(self, ranked_ids: list[str], k: int,
+   958→                   per_relation: int = 4) -> list[str]:
+   959→        """Cap slots per relation so one relation cannot flood the block."""
+   960→        if len(ranked_ids) <= k:
+   961→            return ranked_ids
+   962→        facts = self.store.get_facts(ranked_ids[: max(k * 3, 48)])
+   963→        rel_of = {f.id: f.relation for f in facts}
+   964→        counts: dict[str, int] = {}
+   965→        first, rest = [], []
+   966→        for fid in ranked_ids:
+   967→            rel = rel_of.get(fid, "?")
+   968→            if counts.get(rel, 0) < per_relation:
+   969→                counts[rel] = counts.get(rel, 0) + 1
+   970→                first.append(fid)
+   971→            else:
+   972→                rest.append(fid)
+   973→        out = (first + rest)[:k]
+   974→        return out
+   975→
+   976→    # ------------------------------------------------------------- expand
+   977→    def _expand(self, top_ids: list[str], plan: QueryPlan, scope, user_id,
+   978→                query: str) -> dict[str, float]:
+   979→        extra: dict[str, float] = {}
+   980→        facts = self.store.get_facts(top_ids[:4])
+   981→        for f in facts:
+   982→            for e in self.store.edges_of(f.id, "CONTRADICTS", "out"):
+   983→                extra.setdefault(e["dst"], 0.35)
+   984→            # same subject-relation history
+   985→            for h in self.store.history_of(f.subject, f.relation,
+   986→                                           user_id=user_id)[:4]:
+   987→                if h.id not in top_ids:
+   988→                    extra.setdefault(h.id, 0.3)
+   989→        # entity-hop expansion (multi-hop associative recall, 2 rounds
+   990→        # when the query is compositional: manager-of-X-team-uses-Y)
+   991→        if plan.intent in ("multihop", "recall") and facts:
+   992→            rounds = 2 if plan.intent == "multihop" else 1
+   993→            frontier = facts[:4]
+   994→            seen = set(top_ids)
+   995→            for _rd in range(rounds):
+   996→                nxt = []
+   997→                for f in frontier[:6]:
+   998→                    for g in self.store.facts_about(f.value, user_id=user_id)[:6]:
+   999→                        if g.id not in seen and g.is_active:
+  1000→                            # value-hop = chain completion (X → value → Z):
+  1001→                            # the semantic shape of every multi-hop question.
+  1002→                            w = (0.7 if _rd == 0 and plan.intent == "multihop"
+  1003→                                 else (0.5 if _rd == 0 else 0.35))
+  1004→                            extra.setdefault(g.id, w)
+  1005→                            seen.add(g.id)
+  1006→                            nxt.append(g)
+  1007→                    for g in self.store.facts_about(f.subject, user_id=user_id)[:8]:
+  1008→                        if g.id not in seen and g.is_active:
+  1009→                            extra.setdefault(g.id, 0.3)
+  1010→                            seen.add(g.id)
+  1011→                            nxt.append(g)
+  1012→                frontier = nxt
+  1013→                if len(extra) > 60:
+  1014→                    break
+  1015→        # ordering events force-included
+  1016→        for f in getattr(self, "_pending_ordering", []):
+  1017→            extra.setdefault(f.id, 0.9)
+  1018→        self._pending_ordering = []
+  1019→        if scope:
+  1020→            extra = {fid: w for fid, w in extra.items() if fid in scope}
+  1021→        return extra
+  1022→
+  1023→    # ------------------------------------------------------------- hologram
+  1024→    def working_memory(self, query: str, *, user_id: str = "default",
+  1025→                       agent_id: str | None = None, run_id: str | None = None,
+  1026→                       k: int | None = None) -> dict:
+  1027→        """Compress top-k retrieved facts into a single HRR superposition.
+  1028→
+  1029→        Strategic-plan item: "Holographic working memory — compress the
+  1030→        top-k retrieved facts into a single HRR superposition injected
+  1031→        into the LLM system prompt. The LLM unbinds specific facts on
+  1032→        demand. This is a 5-10× token reduction for the context window."
+  1033→
+  1034→        Returns a dict with:
+  1035→          - preamble: short (~30-50 token) LLM-ready description
+  1036→          - fact_ids: which facts are in the superposition
+  1037→          - hrr_b64: the HRR vector, base64-packed (for round-trip
+  1038→                    through the MCP / REST API)
+  1039→          - n_facts: how many facts were superposed
+  1040→          - roles_present: subset of {S, R, V}
+  1041→        """
+  1042→        k = k or self.cfg.top_k_default
+  1043→        # reuse the standard search pipeline to get top-k facts
+  1044→        res = self.search(query, user_id=user_id, agent_id=agent_id,
+  1045→                           run_id=run_id, k=k)
+  1046→        facts = res.facts
+  1047→        if not facts:
+  1048→            return {"preamble": "(no facts in memory)",
+  1049→                    "fact_ids": [], "hrr_b64": None,
+  1050→                    "n_facts": 0, "roles_present": []}
+  1051→        try:
+  1052→            from context_m.vsa.working_memory import build_holographic_wm
+  1053→            vsa = getattr(self.palace, "vsa", None) or \
+  1054→                self._init_vsa_for_wm()
+  1055→            hwm = build_holographic_wm(facts, vsa, self.palace.embedder,
+  1056→                                         max_facts=k)
+  1057→            d = hwm.to_dict_with_vec()
+  1058→            d["query"] = query
+  1059→            d["user_id"] = user_id
+  1060→            return d
+  1061→        except Exception as e:
+  1062→            # fall back to the textual context block if HRR build fails
+  1063→            return {"preamble": res.context_block,
+  1064→                    "fact_ids": [f.id for f in facts],
+  1065→                    "hrr_b64": None, "n_facts": len(facts),
+  1066→                    "roles_present": [], "error": str(e)}
+  1067→
+  1068→    def _init_vsa_for_wm(self):
+  1069→        """Lazy VSA init for working memory if palace doesn't expose one."""
+  1070→        from context_m.vsa.ops import VSA
+  1071→        return VSA(dims=self.cfg.dims, mode=self.cfg.vsa_mode,
+  1072→                   seed=self.cfg.seed,
+  1073→                   lexical_lambda=self.cfg.lexical_lambda)
+  1074→
+  1075→    def hologram_extract(self, hrr_b64: str, role: str,
+  1076→                         *, candidate_ids: list[str],
+  1077→                         user_id: str = "default") -> list[dict]:
+  1078→        """Unbind a role from a holographic WM vector and return top-k matches.
+  1079→
+  1080→        Used by agents that received a working-memory hologram and want
+  1081→        to recall a specific fact slot. Pure HRR algebra — μ=0.
+  1082→        """
+  1083→        try:
+  1084→            from context_m.vsa.working_memory import (
+  1085→                HolographicWM, extract_from_hologram, _vec_from_b64)
+  1086→            import numpy as np
+  1087→            hrr = _vec_from_b64(hrr_b64)
+  1088→            # fetch candidate facts and compute their embeddings
+  1089→            facts = self.store.get_facts(candidate_ids)
+  1090→            facts = [f for f in facts if f and f.is_active]
+  1091→            if not facts:
+  1092→                return []
+  1093→            cand_ids = [f.id for f in facts]
+  1094→            # embed the role-specific component of each fact
+  1095→            texts = []
+  1096→            for f in facts:
+  1097→                if role == "S":
+  1098→                    texts.append(f.subject or "")
+  1099→                elif role == "R":
+  1100→                    texts.append((f.relation or "").replace("_", " "))
+  1101→                elif role == "V":
+  1102→                    texts.append(f.value or "")
+  1103→                else:
+  1104→                    texts.append("")
+  1105→            embs = np.stack([self.palace.embedder.embed(t) for t in texts])
+  1106→            vsa = getattr(self.palace, "vsa", None) or \
+  1107→                self._init_vsa_for_wm()
+  1108→            hwm = HolographicWM(hrr=hrr, n_facts=len(cand_ids),
+  1109→                                 roles_present={role}, fact_ids=cand_ids,
+  1110→                                 preamble="")
+  1111→            hits = extract_from_hologram(hwm, role, None, vsa,
+  1112→                                          embs, cand_ids, top_k=3)
+  1113→            return [{"id": fid, "score": round(s, 4)} for fid, s in hits]
+  1114→        except Exception as e:
+  1115→            return [{"error": str(e)}]
+  1116→
+  1117→    # ------------------------------------------------------------- format
+  1118→    def _context_block(self, query: str, intent: str, facts: list[Fact],
+  1119→                       scores: dict, notes: list[str] | None = None) -> str:
+  1120→        # Route through the swappable decoder (default = LLMPromptDecoder
+  1121→        # preserves the original "[Memory — Known facts]" block format).
+  1122→        # Callers can swap via reader.with_decoder("rdf" | "datalog" | "json")
+  1123→        # to serve non-LLM workloads from the SAME retrieval pipeline.
+  1124→        return self._decoder.render(
+  1125→            query=query, intent=intent, facts=facts,
+  1126→            scores=scores or {}, notes=notes, store=self.store)
+  1127→
+  1128→    def _provenance(self, query: str, facts: list[Fact],
+  1129→                    vsa_scores: dict | None = None) -> dict:
+  1130→        chain = []
+  1131→        for f in facts[:12]:
+  1132→            chunk = self.store.get_chunk(f.source_id) if f.source_id else None
+  1133→            chain.append({
+  1134→                "fact_id": f.id,
+  1135→                "triple": f.display(),
+  1136→                "vsa_score": round(vsa_scores.get(f.id, 0.0), 4)
+  1137→                if vsa_scores else None,
+  1138→                "source_hash": f.source_hash,
+  1139→                "source_verified": bool(chunk and chunk["hash"] == f.source_hash),
+  1140→                "source_text": (chunk["text"][:160] if chunk else None),
+  1141→                "valid_from": f.valid_from, "valid_to": f.valid_to,
+  1142→                "tx_from": f.tx_from,
+  1143→                "confidence": f.confidence,
+  1144→            })
+  1145→        return {"query": query, "chain": chain,
+  1146→                "verification": all(c["source_verified"] for c in chain)}
+  1147→

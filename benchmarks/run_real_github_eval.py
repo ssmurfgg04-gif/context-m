@@ -29,13 +29,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from context_m import metrics  # noqa: E402
-from context_m.api.memory import Memory  # noqa: E402
-from context_m.bench.ood import T0  # noqa: E402
-from context_m.bridge.extractor import Extractor  # noqa: E402
-from context_m.bridge.patterns import ExtractionContext  # noqa: E402
-from context_m.config import Config  # noqa: E402
-from context_m.util import normalize  # noqa: E402
+from cortexm import metrics  # noqa: E402
+from cortexm.api.memory import Memory  # noqa: E402
+from cortexm.bench.ood import T0  # noqa: E402
+from cortexm.bridge.extractor import Extractor  # noqa: E402
+from cortexm.bridge.patterns import ExtractionContext  # noqa: E402
+from cortexm.config import Config  # noqa: E402
+from cortexm.util import normalize  # noqa: E402
 
 LLM_DIR = REPO / "benchmarks" / "llm"
 RG_DIR = REPO / "benchmarks" / "real_github"

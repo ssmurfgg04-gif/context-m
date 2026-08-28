@@ -10,18 +10,18 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from context_m.config import Config
-from context_m.api.memory import Memory
-from context_m.trace.edges import (
+from cortexm.config import Config
+from cortexm.api.memory import Memory
+from cortexm.trace.edges import (
     CAUSAL, REFERS_TO, ALL_KINDS, is_causal, is_truth_maintenance,
     is_semantic_ref, direction_convention,
     wire_causal_edge, wire_refers_to, find_causal_chain,
 )
-from context_m.trace.consolidate import consolidate, consolidation_report
-from context_m.trace.blob_arena import (
+from cortexm.trace.consolidate import consolidate, consolidation_report
+from cortexm.trace.blob_arena import (
     BlobArena, migrate_chunks_to_arena, get_chunk_text,
 )
-from context_m.bridge.decoders import (
+from cortexm.bridge.decoders import (
     LLMPromptDecoder, RDFDecoder, DatalogDecoder, JSONDecoder,
     get_decoder, DECODERS,
 )
@@ -45,10 +45,10 @@ class TestTypedEdges:
         assert direction_convention(REFERS_TO) == "ref_to_target"
 
     def test_wire_causal_edge(self):
-        from context_m.config import Config
+        from cortexm.config import Config
         mem = Memory(Config())
         # add two facts, wire causal between them
-        from context_m.trace.fact import make_fact
+        from cortexm.trace.fact import make_fact
         from datetime import datetime, timezone
         f1 = make_fact("alice", "works_at", "google", now=datetime.now(timezone.utc),
                        user_id="u1", source_id="", source_hash="")
@@ -62,9 +62,9 @@ class TestTypedEdges:
         assert edges[0]["dst"] == f1.id
 
     def test_find_causal_chain_ancestors(self):
-        from context_m.config import Config
+        from cortexm.config import Config
         mem = Memory(Config())
-        from context_m.trace.fact import make_fact
+        from cortexm.trace.fact import make_fact
         from datetime import datetime, timezone
         t = datetime.now(timezone.utc)
         fs = []
@@ -100,7 +100,7 @@ class TestDecoders:
             get_decoder("nonsense")
 
     def test_rdf_decoder(self):
-        from context_m.trace.fact import make_fact
+        from cortexm.trace.fact import make_fact
         from datetime import datetime, timezone
         f = make_fact("alice", "works_at", "Google", now=datetime.now(timezone.utc),
                       user_id="u1", source_id="", source_hash="")
@@ -113,7 +113,7 @@ class TestDecoders:
         assert out.endswith(" .")
 
     def test_datalog_decoder(self):
-        from context_m.trace.fact import make_fact
+        from cortexm.trace.fact import make_fact
         from datetime import datetime, timezone
         f = make_fact("alice", "works_at", "Google", now=datetime.now(timezone.utc),
                       user_id="u1", source_id="", source_hash="")
@@ -126,7 +126,7 @@ class TestDecoders:
             f"got {out!r}"
 
     def test_json_decoder(self):
-        from context_m.trace.fact import make_fact
+        from cortexm.trace.fact import make_fact
         from datetime import datetime, timezone
         f = make_fact("alice", "works_at", "Google", now=datetime.now(timezone.utc),
                       user_id="u1", source_id="", source_hash="")
@@ -179,7 +179,7 @@ class TestConsolidate:
         # lifecycle misses, e.g. 'Alice works at Google' vs
         # 'Alice is employed at Google' which both produce slightly
         # different fact values.)
-        from context_m.trace.fact import make_fact
+        from cortexm.trace.fact import make_fact
         from datetime import datetime, timezone
         t = datetime.now(timezone.utc)
         for _ in range(2):
@@ -196,7 +196,7 @@ class TestConsolidate:
 
     def test_report(self):
         mem = Memory(Config())
-        from context_m.trace.fact import make_fact
+        from cortexm.trace.fact import make_fact
         from datetime import datetime, timezone
         t = datetime.now(timezone.utc)
         for _ in range(2):
@@ -242,7 +242,7 @@ class TestBlobArena:
             stats = migrate_chunks_to_arena(mem.store, arena)
             assert stats["migrated"] >= 1
             # the chunk's text column now has a 64-byte preview
-            from context_m.trace.store import TraceStore
+            from cortexm.trace.store import TraceStore
             row = mem.store.conn.execute(
                 "SELECT text, blob_offset, blob_len FROM chunks "
                 "WHERE user_id=? LIMIT 1", ("u1",)).fetchone()
@@ -263,7 +263,7 @@ class TestBlobArena:
 
 class TestChaosMode:
     def test_chaos_ingest(self):
-        from context_m.api.chaos import chaos_ingest
+        from cortexm.api.chaos import chaos_ingest
         mem = Memory(Config())
         n = chaos_ingest(mem, [
             "yo im alice n i work @ google rn as a swe",

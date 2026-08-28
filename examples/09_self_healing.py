@@ -1,6 +1,6 @@
 """9 — Self-healing memory: bit flips detected, TMR majority vote, re-encode."""
-from context_m.config import Config
-from context_m import Memory
+from cortexm.config import Config
+from cortexm import Memory
 
 m = Memory(Config(codec="binary", tmr=True))
 m.add("My name is Ada Lovelace. I work on the Analytical Engine.",

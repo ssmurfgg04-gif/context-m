@@ -1,6 +1,6 @@
 # LLM-judge evaluation
 
-_backend: `gemini` — generated 2026-08-28 11:13 UTC_
+_backend: `gemini` — generated 2026-08-28 14:46 UTC_
 
 ### OOD judge cross-check
 
@@ -14,10 +14,10 @@ _backend: `gemini` — generated 2026-08-28 11:13 UTC_
 ### Real-GitHub track — μ=0 extractor vs LLM reference extractor
 
 - threads: **5**, comments: **150**
-- μ=0: **16 facts**, 1.02 ms/comment, $0.0 cost
-- LLM reference: **173 facts**, 0.26 ms/comment, 89748 tokens, model `gemini:gemini-3.5-flash-lite`
-- recall vs LLM reference: **0.0058**
-- precision vs LLM reference: **0.0625**
+- μ=0: **258 facts**, 8.81 ms/comment, $0.0 cost
+- LLM reference: **173 facts**, 0.33 ms/comment, 89748 tokens, model `gemini:gemini-3.5-flash-lite`
+- recall vs LLM reference: **0.052**
+- precision vs LLM reference: **0.0581**
 
 ### Real-GitHub track — retrieval graded by the LLM judge
 

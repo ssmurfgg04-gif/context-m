@@ -22,7 +22,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-from context_m.federation import (  # noqa: E402
+from cortexm.federation import (  # noqa: E402
     FederationNode,
     InMemoryMesh,
     fact_key,

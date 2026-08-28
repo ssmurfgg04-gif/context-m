@@ -1,6 +1,6 @@
 """3 — Zep-compatible bi-temporal queries: valid time vs transaction time."""
 import datetime as dt
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 t0 = dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc)

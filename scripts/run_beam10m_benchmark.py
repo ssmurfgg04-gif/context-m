@@ -52,9 +52,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.bench.beam_loader import (
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.bench.beam_loader import (
     load_beam_rows, beam_rows_to_personas)
 
 
@@ -204,12 +204,12 @@ def run_single_config(personas, config_name, args):
     use_unmess = "unmess" in config_name or "full_v3" in config_name
     use_dissim = "dissim" in config_name or "full_v3" in config_name
     if use_unmess:
-        from context_m.text.embedder import HashingEmbedder
-        from context_m.text.idiolect import PerUserIdiolectNormalizer
+        from cortexm.text.embedder import HashingEmbedder
+        from cortexm.text.idiolect import PerUserIdiolectNormalizer
         idiolect = PerUserIdiolectNormalizer(
             HashingEmbedder(mem.palace.dims, mem.palace.cfg.seed))
     if use_dissim:
-        from context_m.text.dissim import DisSimSplitter
+        from cortexm.text.dissim import DisSimSplitter
         dissim = DisSimSplitter(max_depth=2)
 
     print(f"[beam10m-bench] ingesting {len(personas)} personas...")

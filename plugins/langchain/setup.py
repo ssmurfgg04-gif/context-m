@@ -27,7 +27,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="context-m-langchain",
-    version="0.2.0",
+    version = "0.3.0",
     description="LangChain BaseMemory adapter for Context-M — the "
                 "Universal Neuro-Symbolic Memory Fabric.",
     long_description=(

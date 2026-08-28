@@ -13,13 +13,13 @@ import datetime as dt
 import json
 from datetime import timezone
 
-from context_m.config import Config
-from context_m.api.memory import Memory
-from context_m.security.zk_sql import ZkSqlProver
-from context_m.trace.fact import make_fact
-from context_m.trace.store import TraceStore
-from context_m.security.hashes import HashProvider
-from context_m.mcp.server import MCPServer
+from cortexm.config import Config
+from cortexm.api.memory import Memory
+from cortexm.security.zk_sql import ZkSqlProver
+from cortexm.trace.fact import make_fact
+from cortexm.trace.store import TraceStore
+from cortexm.security.hashes import HashProvider
+from cortexm.mcp.server import MCPServer
 
 
 T0 = dt.datetime(2026, 3, 1, tzinfo=dt.timezone.utc)
@@ -105,7 +105,7 @@ def main():
 
     # ---------- tampering demo ----------
     print("\n[tamper]  Flip claimed_result 4 -> 99, re-verify …")
-    from context_m.security.zk_sql import ZkSqlProof
+    from cortexm.security.zk_sql import ZkSqlProof
     tampered = ZkSqlProof(
         query=proof.query, claimed_result=99.0,
         merkle_root=proof.merkle_root,
@@ -132,7 +132,7 @@ def main():
         ("Alice", "prefers", "vim", "alice"),
         ("Bob",   "prefers", "emacs", "bob"),
     ]:
-        from context_m.trace.fact import make_fact as _mk
+        from cortexm.trace.fact import make_fact as _mk
         f = _mk(subject, relation, value, now=T0, user_id=user_id,
                  source_hash=mem.store.hasher.hash_text(
                      f"{subject}|{relation}|{value}"))

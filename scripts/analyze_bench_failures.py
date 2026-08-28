@@ -20,13 +20,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.bench.beam_loader import (
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.bench.beam_loader import (
     load_beam_rows, beam_rows_to_personas)
-from context_m.text.embedder import HashingEmbedder
-from context_m.text.idiolect import PerUserIdiolectNormalizer
-from context_m.text.dissim import DisSimSplitter
+from cortexm.text.embedder import HashingEmbedder
+from cortexm.text.idiolect import PerUserIdiolectNormalizer
+from cortexm.text.dissim import DisSimSplitter
 
 
 def main():

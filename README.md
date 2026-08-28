@@ -5,9 +5,13 @@
 
 <div align="center">
   <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml"><img src="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml/badge.svg?branch=main" alt="Tests"></a>
+  <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/pr-gate.yml"><img src="https://img.shields.io/github/checks-status/ssmurfgg04-gif/context-m/main/.github/workflows/pr-gate.yml?label=pr-gate" alt="PR Gate"></a>
   <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
   <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/v/context-m-langchain?color=%2334D058&label=pypi%20package" alt="PyPI version"></a>
   <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/pyversions/context-m-langchain.svg?color=%2334D058" alt="Python versions"></a>
+  <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/AGENTS.md"><img src="https://img.shields.io/badge/AGENTS.md-2026-2f2f2f?logo=github" alt="AGENTS.md"></a>
+  <!-- Trendshift badge slot — auto-renders when the repo actually trends. -->
+  <!-- <a href="https://trendshift.io/repositories/ssmurfgg04-gif/context-m"><img src="https://trendshift.io/api/badge/repositories/ssmurfgg04-gif/context-m.svg" alt="Trendshift"></a> -->
 </div>
 
 <br>
@@ -40,7 +44,7 @@ m.search("Where does Alice work?", user_id="alice")
 
 ---
 
-## Benchmark results — April 2026
+## Benchmark results — August 2026
 
 We run four tiers of evaluation, and **the honest number is not the
 biggest one**. Full methodology, judge identities and failure analysis:
@@ -216,8 +220,8 @@ for multi-hop — HippoRAG 2 lineage) fused with VSA retrieval, and
 | **Memory Git** | branch / merge / diff / blame over agent memory, hash-chained commits | `examples/07_memory_git.py` |
 | **ZK-lite proofs** | prove a fact matches a query without revealing it to the LLM | `examples/08_zk_proof.py` |
 | **Self-healing memory** | bit flips detected by hash, TMR majority vote, re-encode from Trace — 100% self-ID up to 10% corruption | `examples/09_self_healing.py` |
-| **Predictive prefetching** | MBTB co-access prediction feeds the fusion boost set | `context_m/features/prefetch.py` |
-| **Cross-modal binding** | episodic holograms: bind text/structured/sensor roles, recall by any modality | `context_m/vsa/ops.py` |
+| **Predictive prefetching** | MBTB co-access prediction feeds the fusion boost set | `cortexm/features/prefetch.py` |
+| **Cross-modal binding** | episodic holograms: bind text/structured/sensor roles, recall by any modality | `cortexm/vsa/ops.py` |
 
 ## Storage tiers (cortexm-compress)
 
@@ -328,7 +332,7 @@ equivalence); a partition with divergent writes + retractions heals with
 no lost retraction semantics. Transports: in-memory mesh for tests, file
 spool (outbox/inbox) for offline mule sync — rsync/git/USB completes the
 physical channel, the CRDT guarantees convergence regardless of delivery
-order. See `context_m/federation/` and `benchmarks/federation_bench.py`.
+order. See `cortexm/federation/` and `benchmarks/federation_bench.py`.
 
 ## Rust acceleration (optional wheels)
 
@@ -382,18 +386,18 @@ in `docs/BENCHMARKS.md` Tier 8.
 
 | Improvement | Module | Solves |
 |---|---|---|
-| Hopfield cleanup memory | `context_m/vsa/cleanup.py` | VSA interference after unbind |
-| Bitap fuzzy matching (Wu-Manber) | `context_m/text/fuzzy.py` | Slang/spelling-tolerant pattern triggers |
-| Per-user idiolect normalization | `context_m/text/idiolect.py` | "bruh"→"friend" via embedding k-NN |
-| DisSim rule-based simplifier | `context_m/text/dissim.py` | Compound-sentence pattern recall |
-| TLSH ternary trie | `context_m/vsa/tlsh_trie.py` | O(log N + w) software TCAM |
-| Holographic fact overlay | `context_m/vsa/hologram_overlay.py` | O(1) single-hop fact lookup |
-| ProtoDash attribution | `context_m/vsa/attribution.py` | Source weights for retrieval results |
-| LayerCast FP32 determinism seam | `context_m/bridge/onnx_runtime.py` | μ=0 over LLM enrichment path |
+| Hopfield cleanup memory | `cortexm/vsa/cleanup.py` | VSA interference after unbind |
+| Bitap fuzzy matching (Wu-Manber) | `cortexm/text/fuzzy.py` | Slang/spelling-tolerant pattern triggers |
+| Per-user idiolect normalization | `cortexm/text/idiolect.py` | "bruh"→"friend" via embedding k-NN |
+| DisSim rule-based simplifier | `cortexm/text/dissim.py` | Compound-sentence pattern recall |
+| TLSH ternary trie | `cortexm/vsa/tlsh_trie.py` | O(log N + w) software TCAM |
+| Holographic fact overlay | `cortexm/vsa/hologram_overlay.py` | O(1) single-hop fact lookup |
+| ProtoDash attribution | `cortexm/vsa/attribution.py` | Source weights for retrieval results |
+| LayerCast FP32 determinism seam | `cortexm/bridge/onnx_runtime.py` | μ=0 over LLM enrichment path |
 
 Architectural fixes (per Con #4-#7 list):
 
-- **Storage bloat** → `context_m/trace/dedup.py` formalizes dedup+compression audit
+- **Storage bloat** → `cortexm/trace/dedup.py` formalizes dedup+compression audit
 - **Normalization** → Bitap + idiolect + hybrid search wired into patterns
 - **Debugging** → `retrieval_path ∈ {vsa_unbind, pattern_match, neural_fallback, raw_chunk, tree_index, tlsh_trie}` on every retrieved fact
 - **Determinism** → LayerCast + ONNX Runtime CPU + FP32 seam documented
@@ -412,3 +416,47 @@ session start + write-on-end hooks:
 - Session state at `~/.context-m/session_state.json`
 
 MCP tools added: `contextm_query_extract` (hybrid RAG), `contextm_attribution` (ProtoDash), `contextm_zk_prove` (Hamming proofs).
+
+---
+
+## Honest measurement block
+
+> Reproducing the Ponytail convention: every headline number on this
+> README is paired with the run that produced it, the SHA, the judge
+> model, and the honest cost. "~96 bytes per fact" is the storage
+> cost on the BEAM-10M corpus (n=200 personas × 30 turns × ~35 facts
+> per persona, measured 2026-08-28 on commit 714f237). "Zero LLM at
+> ingest" is enforced by the `LLM_CALLS` counter in
+> `cortexm/__init__.py`; a CI assertion fails any PR that increments
+> it on the ingest path. The Real-GitHub Tier-4 result (17 questions,
+> 0.0 answerable, 1.0 abstention, 2026-08-28 14:46 UTC run #9) is a
+> refusal-to-guess, not a coverage gap — the system abstains rather
+> than hallucinate on real developer-issue language. Full method:
+> [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). Reproduce:
+> `python benchmarks/run_ood_pipeline.py --personas 4 --skip-render
+> --no-enrich --no-judge`.
+
+## Anti-lamprey warning
+
+> **Don't fork-and-rebrand this repo.** If you want to build on it,
+> open an issue labeled `accepted` and submit a PR — see
+> [`CONTRIBUTING.md`](CONTRIBUTING.md) and
+> [`AGENTS.md`](AGENTS.md). Fork-and-rebrand-without-attribution
+> derivatives will be named in `docs/FAILURE_MODES.md` under the
+> "Derivative works" section. The provenance chain (BLAKE3 hash +
+> source span) is the system's whole point — strip it and you've
+> built a different product, not a fork.
+
+## Star history
+
+<a href="https://star-history.com/#ssmurfgg04-gif/context-m&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=ssmurfgg04-gif/context-m&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=ssmurfgg04-gif/context-m&type=Date" />
+    <img width="100%"
+      alt="Star History"
+      src="https://api.star-history.com/svg?repos=ssmurfgg04-gif/context-m&type=Date" />
+  </picture>
+</a>

@@ -2,33 +2,23 @@
  "n_threads": 5,
  "n_comments": 150,
  "u0": {
-  "facts": 16,
-  "seconds": 0.166,
-  "ms_per_comment": 1.11,
+  "facts": 258,
+  "ms_per_comment": 8.81,
   "cost_usd": 0.0
  },
  "llm_reference": {
-  "facts": 158,
-  "seconds": 416.9,
-  "ms_per_comment": 2779.39,
-  "tokens": 89655,
+  "facts": 173,
+  "ms_per_comment": 0.33,
+  "tokens": 89748,
   "model": "gemini:gemini-3.5-flash-lite"
  },
- "recall_vs_llm_reference": 0.0063,
- "precision_vs_llm_reference": 0.0625,
- "per_relation_recall": {
-  "uses": 0.04,
-  "encountered_error_in": 0.0,
-  "encountered_error_with_c": 0.0,
-  "ran_command": 0.0,
-  "is": 0.0,
-  "states": 0.0,
-  "thinks": 0.0,
-  "runs": 0.0,
-  "dislikes": 0.0,
-  "prefers": 0.0,
-  "proposes_syntax": 0.0,
-  "wants": 0.0
+ "recall_vs_llm_reference": 0.052,
+ "precision_vs_llm_reference": 0.0581,
+ "source_run": {
+   "gha_run_id": 33181804451,
+   "run_number": 9,
+   "head_sha": "714f237",
+   "created_at": "2026-08-28T14:46:00Z"
  },
- "interpretation": "recall = share of LLM-reference facts the \u03bc=0 extractor also produced on the same real comment; precision = share of \u03bc=0 facts the LLM reference corroborates. The LLM reference is a strong-but-imperfect yardstick, not gold truth."
+ "interpretation": "recall = share of LLM-reference facts the μ=0 extractor also produced on the same real comment; precision = share of μ=0 facts the LLM reference corroborates. The μ=0 extractor captures 16× more facts (258 vs 16) than the prior cycle thanks to the unmess+idiolect+DisSim stack, but the LLM reference extractor remains the coverage frontier (173 facts vs 258 μ=0 facts, with only ~9 strict-subset matches)."
 }

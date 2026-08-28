@@ -30,12 +30,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from context_m.bench.generator import make_persona  # noqa: E402
-from context_m.bench.ood import (T0, build_ood_corpus, export_judge_items,  # noqa: E402
+from cortexm.bench.generator import make_persona  # noqa: E402
+from cortexm.bench.ood import (T0, build_ood_corpus, export_judge_items,  # noqa: E402
                                  export_manifest, extraction_recall,
                                  run_ood_eval)
-from context_m.bench.generator import Corpus  # noqa: E402
-from context_m.config import Config  # noqa: E402
+from cortexm.bench.generator import Corpus  # noqa: E402
+from cortexm.config import Config  # noqa: E402
 
 OOD_DIR = REPO / "benchmarks" / "ood"
 RESULTS_DIR = REPO / "benchmarks" / "results" / "ood"
@@ -107,7 +107,7 @@ def main() -> None:
     print(f"rendered rows: {len(rows)}")
 
     # ---- per-style evaluation --------------------------------------------
-    from context_m.bridge.enrich import NodeLLMExtractor
+    from cortexm.bridge.enrich import NodeLLMExtractor
 
     summary: dict = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

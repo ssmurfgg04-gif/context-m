@@ -7,8 +7,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from context_m.config import Config
-from context_m.api.memory import Memory
+from cortexm.config import Config
+from cortexm.api.memory import Memory
 
 
 def test_unmess_dissim_compound_sentence():
@@ -32,7 +32,7 @@ def test_bitap_trigger_widens_misspellings():
     scan the pattern library; the patterns themselves provide precision.
     So we only assert the positive direction (misspellings DO fire).
     """
-    from context_m.bridge.extractor import _bitap_trigger_match
+    from cortexm.bridge.extractor import _bitap_trigger_match
     # positive: misspelled trigger words should fire
     assert _bitap_trigger_match("i wrk at google", max_edits=2)
     assert _bitap_trigger_match("i livs in seattle", max_edits=2)
@@ -42,10 +42,10 @@ def test_bitap_trigger_widens_misspellings():
 def test_fade_sweep_deactivates_low_retention():
     """FadeMem sweep should compute scores and (with aggressive threshold)
     deactivate most facts."""
-    from context_m.trace.fade import fade_sweep, fade_retention_score
+    from cortexm.trace.fade import fade_sweep, fade_retention_score
     import datetime as _dt
-    from context_m.util import iso
-    from context_m.trace.fact import make_fact
+    from cortexm.util import iso
+    from cortexm.trace.fact import make_fact
 
     cfg = Config()
     m = Memory(cfg)
@@ -60,7 +60,7 @@ def test_fade_sweep_deactivates_low_retention():
 
 def test_tmt_builds_hierarchy():
     """TMT should emit L2/L3/L4 derived facts when there's enough data."""
-    from context_m.trace.tmt import tmt_build
+    from cortexm.trace.tmt import tmt_build
     cfg = Config(unmess_enabled=False)
     m = Memory(cfg)
     # one big session (10+ facts to clear L2 threshold)
@@ -111,9 +111,9 @@ def test_mind_diversity_runs_on_search():
 
 def test_mind_flags_poisoned_cluster():
     """A retrieval set of near-identical facts should be flagged."""
-    from context_m.security.mind import mind_check
-    from context_m.text.embedder import HashingEmbedder
-    from context_m.trace.fact import make_fact
+    from cortexm.security.mind import mind_check
+    from cortexm.text.embedder import HashingEmbedder
+    from cortexm.trace.fact import make_fact
     import datetime as _dt
     now = _dt.datetime.now(_dt.timezone.utc)
     embedder = HashingEmbedder(768, 0x0C0FFEE)

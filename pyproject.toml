@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "context-m"
+name = "cortexm"
 version = "0.2.0"
 description = "Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest."
 readme = "README.md"
@@ -25,13 +25,13 @@ test = ["pytest>=7"]
 cortexm = "context_m.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/context-m/context-m"
+Homepage = "https://github.com/ssmurfgg04-gif/context-m"
 
 [tool.setuptools]
-py-modules = ["cortexm"]
+py-modules = ["context_m"]
 
 [tool.setuptools.packages.find]
-include = ["context_m*"]
+include = ["cortexm*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

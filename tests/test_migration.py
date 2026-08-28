@@ -12,9 +12,9 @@ import datetime as dt
 import json
 import sqlite3
 
-from context_m import Memory
-from context_m.config import Config
-from context_m.migrate.importers import (MIGRATORS, import_chroma,
+from cortexm import Memory
+from cortexm.config import Config
+from cortexm.migrate.importers import (MIGRATORS, import_chroma,
                                          import_mem0, import_zep)
 
 TS = dt.datetime(2026, 1, 10, tzinfo=dt.timezone.utc)
@@ -89,7 +89,7 @@ def test_migrate_mem0_memories_schema(tmp_path):
 def test_migrate_mem0_missing_store(tmp_path):
     m = _mk()
     import pytest
-    from context_m.errors import MigrationError
+    from cortexm.errors import MigrationError
     with pytest.raises(MigrationError):
         import_mem0(m, str(tmp_path / "nope.db"))
     m.close()
@@ -156,7 +156,7 @@ def test_migrators_registry_covers_plan_targets():
 
 def test_cli_migrate_end_to_end(tmp_path):
     """The literal command from the plan: cortexm migrate --from mem0."""
-    from context_m.cli import main as cli_main
+    from cortexm.cli import main as cli_main
     db = str(tmp_path / "mem0.db")
     conn = sqlite3.connect(db)
     conn.execute("CREATE TABLE history (id INTEGER PRIMARY KEY, data TEXT, "

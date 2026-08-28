@@ -14,7 +14,7 @@ pip install cortexm
 ```
 
 ```python
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory(db_path="/data/memory.db",
            pii_mode="redact",            # GDPR write-path guard

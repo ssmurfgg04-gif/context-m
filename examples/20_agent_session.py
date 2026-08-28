@@ -14,10 +14,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timezone
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.trace.fact import Fact
-from context_m.util import new_id, iso
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.trace.fact import Fact
+from cortexm.util import new_id, iso
 
 
 def _add_fact(store, subject, relation, value, user_id="alice",
@@ -119,7 +119,7 @@ def main():
     # We need (Emily, father, Bob) — the conversation said "husband is Bob"
     # so let's add a manual mapping for demo clarity
     _add_fact(mem.store, "Emily", "father", "Bob", user_id="alice")
-    from context_m.trace.structural import structural_query
+    from cortexm.trace.structural import structural_query
     res = structural_query(
         mem.store, mem.palace,
         start_entity="Emily",
@@ -139,7 +139,7 @@ def main():
     # ---- Show provenance export --------------------------------------
     print("[Provenance export] W3C VC + COSE Sign1 + SCITT receipt")
     cfg.provenance_enabled = True
-    from context_m.mcp.server import MCPServer
+    from cortexm.mcp.server import MCPServer
     server = MCPServer(mem)
     out = server._provenance_export(user_id="alice")
     if out.get("disabled"):

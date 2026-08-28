@@ -30,9 +30,9 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 
-from context_m import accel  # noqa: E402
-from context_m.util import h64 as py_h64  # noqa: E402
-from context_m.vsa.ops import VSA  # noqa: E402
+from cortexm import accel  # noqa: E402
+from cortexm.util import h64 as py_h64  # noqa: E402
+from cortexm.vsa.ops import VSA  # noqa: E402
 
 
 def bench(fn, n_iter: int, warmup: int = 5) -> tuple[float, float]:
@@ -110,7 +110,7 @@ def main() -> None:
           f"({mean_py/mean_rs:5.1f}x)")
 
     # ----------------------------------------------------------------- SLB
-    from context_m.vsa.slb import SemanticLookasideBuffer as PySLB
+    from cortexm.vsa.slb import SemanticLookasideBuffer as PySLB
     py_slb = PySLB(entries=64, threshold=0.97, dims=D)
     rs_slb = accel._core.SemanticLookasideBuffer(64, 0.97, D)
     sigs = rng.standard_normal((64, D)).astype(np.float32)

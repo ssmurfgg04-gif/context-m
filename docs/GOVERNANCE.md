@@ -20,7 +20,7 @@ Following the plan's Phase 4 governance track:
 | Milestone | Trigger | Commitment |
 |---|---|---|
 | Governance board (informal) | 500+ stars or first external maintainer | PUBLIC decision log in this repo; RFC process for breaking changes (`docs/rfcs/`) |
-| Foundation donation | Month 18, or 5K stars, or first paying pilot — whichever comes first | Donate `context_m/` core + benchmarks to a neutral foundation (Apache Foundation or Linux Foundation sandbox); trademark transfers with the code |
+| Foundation donation | Month 18, or 5K stars, or first paying pilot — whichever comes first | Donate `cortexm/` core + benchmarks to a neutral foundation (Apache Foundation or Linux Foundation sandbox); trademark transfers with the code |
 | Enterprise tier boundary | At donation | Only these stay commercial: hosted federation plane, audit UI, SSO/SCIM integrations, SLA support. The fabric, the benchmark harness, the MCP server, the leaderboard remain open forever |
 
 ## 3. What the enterprise tier may never take back
@@ -78,7 +78,7 @@ Honesty about scope: managed cloud infrastructure, billing, hosted
 dashboards, a Discord server, and the CRDT federation plane are not in
 this repository. The first four require budget and standing
 infrastructure this project does not have; the CRDT sync layer is
-specified (`context_m/federation.py` ships the k-anonymous schema
+specified (`cortexm/federation.py` ships the k-anonymous schema
 aggregation it builds on) but the conflict-resolution plane itself is
 roadmapped, not shipped. See `docs/ROADMAP.md` for the honest gaps
 ledger.

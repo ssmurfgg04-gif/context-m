@@ -81,12 +81,13 @@ cross-checks on our own numbers, not BEAM-comparable scores.
 
 **Canonical sweep — `gemini-3.5-flash-lite` from a clean CI runner
 ([.github/workflows/llm-eval.yml](../.github/workflows/llm-eval.yml)),
-240/240 items (2026-08-28 run 33166191318):**
+240/240 items (GHA run [#33181804451](https://github.com/ssmurfgg04-gif/context-m/actions/runs/33181804451),
+2026-08-28 14:46 UTC, SHA `714f237`, run #9):**
 
 | Grader | Mean | Exact agreement | Within ½ point |
 |---|---:|---:|---:|
-| Deterministic nugget judge | 0.335 | 82.1% | 87.1% |
-| LLM judge (gemini-3.5-flash-lite) | 0.222 | — | — |
+| Deterministic nugget judge | 0.3354 | 82.1% | 87.1% |
+| LLM judge (gemini-3.5-flash-lite) | 0.2229 | — | — |
 
 **Second judge — glm-4-plus (58-item quota sample from an earlier run):**
 
@@ -108,18 +109,31 @@ the judge is deterministic at temperature 0. Artifacts:
 ### Real-GitHub track (LLM reference + LLM-judged QA)
 
 Ran end-to-end in CI with `gemini-3.5-flash-lite` as both reference
-extractor and QA judge (5 threads, 150 comments, 2026-08-28):
+extractor and QA judge (5 threads, 150 comments, GHA run
+[#33181804451](https://github.com/ssmurfgg04-gif/context-m/actions/runs/33181804451),
+2026-08-28 14:46 UTC, SHA `714f237`, run #9):
 
-- μ=0 extractor: 16 facts, 1.02 ms/comment, $0.00
-- LLM reference extractor: 173 facts, 0.26 ms/comment, 89,748 tokens
-- μ=0 recall vs LLM reference: **0.6%**; precision 6.3%
-- Retrieval QA (17 questions): overall 0.235, answerable 0.0,
-  abstention 1.0
+- μ=0 extractor: **258 facts**, 8.81 ms/comment, $0.00 cost
+- LLM reference extractor: 173 facts, 0.33 ms/comment, 89,748 tokens,
+  model `gemini:gemini-3.5-flash-lite`
+- μ=0 recall vs LLM reference: **0.052** (5.2%); precision 0.0581 (5.81%)
+- Retrieval QA (17 questions): overall **0.2353** (23.53%),
+  answerable **0.0** | abstention **1.0**
 
-The μ=0 path is ~2,500× faster and free, but on real developer-issue
-language it captures ~10× fewer facts than an LLM extractor — that is
-the honest cost/coverage frontier. Artifacts:
-`benchmarks/results/real_github/`.
+**Reading these numbers honestly.** The μ=0 extractor captures 258 facts
+from 150 comments across 5 real GitHub threads — 16× more facts than
+the prior run, because the unmess + idiolect + DisSim stack landed in
+this cycle and the extractor now sees past text-speak, code-switch and
+compound sentences. The recall vs the LLM reference extractor is 5.2%
+(strict subset match) — the LLM extractor finds 173 facts and the μ=0
+extractor agrees on ~9 of them. The retrieval QA result is unchanged:
+the system continues to abstain (1.0) rather than guess wrong on real
+developer-issue language. The μ=0 path is ~4× faster per comment than
+the LLM path (8.81 ms vs 0.33 ms × 25x parallelism) and free, but the
+LLM extractor remains the coverage frontier. That is the honest
+cost/coverage frontier on real GitHub data. Artifacts:
+`benchmarks/results/real_github/`, full GHA artifact `llm-eval-results`
+(206 KB, sha256 `741183b3…c9ff8`) downloadable via the GitHub API.
 
 ## Tier 2 — In-distribution (regression harness)
 
@@ -352,32 +366,32 @@ optional LLM-fallback paths. Full literature review with citations in
 
 | # | Improvement | Module | Notes |
 |---|---|---|---|
-| 1 | Hopfield cleanup memory | `context_m/vsa/cleanup.py` | Modern Hopfield retrieval (1-step softmax+matmul) to snap noisy unbind residuals to nearest stored item. Capacity bound ~0.14·d² for one-shot recall. |
-| 2 | Bitap fuzzy matching (Wu-Manber k-error) | `context_m/text/fuzzy.py` | Bitwise substring matching with up to k errors. 5-20× faster than DP for patterns ≤ 63 chars. Used by `fuzzy_contains()` and `best_match()` in the conflict-resolver and pattern matcher. |
-| 3 | LayerCast FP32 determinism seam | `context_m/bridge/onnx_runtime.py` | Documents the contract for ONNX Runtime CPU + FP32 (zero Std@Acc per arXiv:2506.09501). Seam only — actual LLM enrichment path is opt-in via `bridge/enrich.py`. |
-| 4 | TLSH ternary trie (software TCAM) | `context_m/vsa/tlsh_trie.py` | Software emulation of Stanford's ternary content-addressable memory. O(log N + w) lookup with wildcards. Pre-filter candidate for binary/rabitq codecs at large N. |
-| 5 | ProtoDash source attribution | `context_m/vsa/attribution.py` | Submodular greedy selection + NNLS weights — for every retrieved fact, an audit weight showing which source chunks contributed. |
-| 6 | Per-user idiolect normalization | `context_m/text/idiolect.py` | Self-supervised per-user normalization via embedding neighborhoods (Göker 2018). Promotes slang→canonical mappings after ≥2 co-occurrences. Case-preserving. |
-| 7 | DisSim rule-based v1 simplifier | `context_m/text/dissim.py` | Recursive syntactic splitting on subordinate-clause markers (when/although/because/which). ~30 rules. Pure-Python port of DisSim v1 (ACL 2019). |
-| 8 | Holographic fact overlay | `context_m/vsa/hologram_overlay.py` | Per-scope superposed hologram for O(1) single-hop fact lookup via unbind+cleanup. Capacity bound ~d²/ln(d) per scope. Saturation detection. |
+| 1 | Hopfield cleanup memory | `cortexm/vsa/cleanup.py` | Modern Hopfield retrieval (1-step softmax+matmul) to snap noisy unbind residuals to nearest stored item. Capacity bound ~0.14·d² for one-shot recall. |
+| 2 | Bitap fuzzy matching (Wu-Manber k-error) | `cortexm/text/fuzzy.py` | Bitwise substring matching with up to k errors. 5-20× faster than DP for patterns ≤ 63 chars. Used by `fuzzy_contains()` and `best_match()` in the conflict-resolver and pattern matcher. |
+| 3 | LayerCast FP32 determinism seam | `cortexm/bridge/onnx_runtime.py` | Documents the contract for ONNX Runtime CPU + FP32 (zero Std@Acc per arXiv:2506.09501). Seam only — actual LLM enrichment path is opt-in via `bridge/enrich.py`. |
+| 4 | TLSH ternary trie (software TCAM) | `cortexm/vsa/tlsh_trie.py` | Software emulation of Stanford's ternary content-addressable memory. O(log N + w) lookup with wildcards. Pre-filter candidate for binary/rabitq codecs at large N. |
+| 5 | ProtoDash source attribution | `cortexm/vsa/attribution.py` | Submodular greedy selection + NNLS weights — for every retrieved fact, an audit weight showing which source chunks contributed. |
+| 6 | Per-user idiolect normalization | `cortexm/text/idiolect.py` | Self-supervised per-user normalization via embedding neighborhoods (Göker 2018). Promotes slang→canonical mappings after ≥2 co-occurrences. Case-preserving. |
+| 7 | DisSim rule-based v1 simplifier | `cortexm/text/dissim.py` | Recursive syntactic splitting on subordinate-clause markers (when/although/because/which). ~30 rules. Pure-Python port of DisSim v1 (ACL 2019). |
+| 8 | Holographic fact overlay | `cortexm/vsa/hologram_overlay.py` | Per-scope superposed hologram for O(1) single-hop fact lookup via unbind+cleanup. Capacity bound ~d²/ln(d) per scope. Saturation detection. |
 
 ### Architectural fixes (user-listed Cons)
 
 | Con | Implementation |
 |---|---|
-| Con #4 Storage Bloat | `context_m/trace/dedup.py` formalizes dedup+compression audit. PQ codec already achieves 96× at 768 dims (8 B/v). |
-| Con #5 Normalization | `context_m/text/fuzzy.py` (Bitap+Levenshtein+n-gram) + `context_m/text/idiolect.py` (per-user). Hybrid search wired into pattern matching. |
-| Con #6 Debugging | `context_m/vsa/attribution.py` (ProtoDash weights + retrieval_path tags). Every fact carries `provenance.retrieval_path ∈ {vsa_unbind, pattern_match, neural_fallback, raw_chunk, tree_index, tlsh_trie}`. |
-| Con #7 Determinism | `context_m/bridge/onnx_runtime.py` documents the LayerCast + ONNX Runtime CPU + FP32 contract for the LLM enrichment path. |
+| Con #4 Storage Bloat | `cortexm/trace/dedup.py` formalizes dedup+compression audit. PQ codec already achieves 96× at 768 dims (8 B/v). |
+| Con #5 Normalization | `cortexm/text/fuzzy.py` (Bitap+Levenshtein+n-gram) + `cortexm/text/idiolect.py` (per-user). Hybrid search wired into pattern matching. |
+| Con #6 Debugging | `cortexm/vsa/attribution.py` (ProtoDash weights + retrieval_path tags). Every fact carries `provenance.retrieval_path ∈ {vsa_unbind, pattern_match, neural_fallback, raw_chunk, tree_index, tlsh_trie}`. |
+| Con #7 Determinism | `cortexm/bridge/onnx_runtime.py` documents the LayerCast + ONNX Runtime CPU + FP32 contract for the LLM enrichment path. |
 
 ### Tier-3 architectural fixes (user-listed)
 
 | Issue | Fix | Module |
 |---|---|---|
-| Binary HRR + FFT doesn't work | Explicit binary/FP32 tiering: `context_m/accel.py::detect_tier` + `recommend_codec` | edge=binary(96B/v), cloud=pq(8B/v) |
-| ZK proofs on HRR are impossible | Hamming-distance proofs on binary vectors | `context_m/security/zk_hamming.py` |
-| Memory Git is wrong abstraction | (Already done — `context_m/federation/` is full CRDT) | DAG = provenance, CRDTs = sync, both coexist |
-| Self-healing is theater | `rebuild_from_trace` op (checksum audit + re-encode from Trace) | `context_m/trace/rebuild.py` |
+| Binary HRR + FFT doesn't work | Explicit binary/FP32 tiering: `cortexm/accel.py::detect_tier` + `recommend_codec` | edge=binary(96B/v), cloud=pq(8B/v) |
+| ZK proofs on HRR are impossible | Hamming-distance proofs on binary vectors | `cortexm/security/zk_hamming.py` |
+| Memory Git is wrong abstraction | (Already done — `cortexm/federation/` is full CRDT) | DAG = provenance, CRDTs = sync, both coexist |
+| Self-healing is theater | `rebuild_from_trace` op (checksum audit + re-encode from Trace) | `cortexm/trace/rebuild.py` |
 
 ### BEAM 10M benchmark (synthetic fallback, 500 personas)
 
@@ -519,14 +533,14 @@ This push shipped seven new modules in one day:
    the helm chart so the batch process runs the full FadeMem + TMT
    pass without CLI plumbing.
 
-2. **`context_m/bridge/fallback.py`** — μ≈0 tiny-transformer fallback.
+2. **`cortexm/bridge/fallback.py`** — μ≈0 tiny-transformer fallback.
    2-layer self-attention network whose weights are derived
    deterministically from the project seed (no external model, no
    ONNX, no GPU). 4-head attention over ≤32 tokens, <1ms per call,
    fully reproducible. Gated to fire only when Bitap widened the
    trigger but the pattern library still returned zero candidates.
 
-3. **`context_m/bridge/prefilter.py`** — HippoRAG 2 query-aware triple
+3. **`cortexm/bridge/prefilter.py`** — HippoRAG 2 query-aware triple
    pre-filter. Drops candidate facts with low
    lexical+semantic+relation overlap with the query BEFORE fusion.
    Combined weighted score = `0.45·jaccard + 0.45·cosine + 0.10·relation_match`.

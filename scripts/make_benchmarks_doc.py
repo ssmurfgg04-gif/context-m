@@ -212,8 +212,8 @@ def main():
 
     w("---")
     w("")
-    w("Reproduce: `python -m context_m.bench.run --buckets 128k,500k,1m,10m` "
-      "and `python -m context_m.bench.run --micro`. Runs are deterministic "
+    w("Reproduce: `python -m cortexm.bench.run --buckets 128k,500k,1m,10m` "
+      "and `python -m cortexm.bench.run --micro`. Runs are deterministic "
       "for a given seed and process-independent (score ties break on fact "
       "content, not random ids). Full JSON: `benchmarks/results/`.")
     w("")

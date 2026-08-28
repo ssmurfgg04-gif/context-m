@@ -26,7 +26,7 @@ audits the whole store (chunk hashes + vector record hashes);
 completeness across all benchmark buckets, ~6 ms per audited
 retrieval.
 
-## 2. InjecMEM quarantine (`context_m/security/injection.py`)
+## 2. InjecMEM quarantine (`cortexm/security/injection.py`)
 
 High-risk patterns — "ignore all previous instructions", system-prompt
 exfiltration probes, identity overrides, jailbreaks, credential
@@ -46,7 +46,7 @@ through the front door. The first-order pattern quarantine above misses
 exactly this case — the write-back is a paraphrase or a lightly-edited
 quote that defeats every regex.
 
-Countermeasure (`contagion_scan` in `context_m/security/injection.py`):
+Countermeasure (`contagion_scan` in `cortexm/security/injection.py`):
 quarantined source text is treated as a **tainted corpus**. Every ingest
 is compared against it sentence-by-sentence:
 
@@ -88,7 +88,7 @@ exactly what changed between any two points; branches allow isolating
 an experiment (or quarantining a poisoning attempt) without touching
 main. Enterprise rollback = checkout.
 
-## 6. ZK-lite proofs (`context_m/features/zk.py`)
+## 6. ZK-lite proofs (`cortexm/features/zk.py`)
 
 For contexts where content must not reach the LLM (patient records,
 financial positions): `Memory.prove(query)` returns a Merkle membership

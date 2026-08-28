@@ -1,10 +1,18 @@
 {
- "n_questions": 19,
- "llm_judge_overall": 0.2632,
- "answerable": 0.0667,
+ "n_questions": 17,
+ "llm_judge_overall": 0.2353,
+ "answerable": 0.0,
  "abstention": 1.0,
  "judge_models": [
   "gemini:gemini-3.5-flash-lite"
  ],
- "interpretation": "Context-M retrieval over REAL GitHub threads, graded by the BEAM-style LLM judge. Judge model identity recorded; canonical BEAM uses gpt-5 \u2014 not directly comparable."
+ "source_run": {
+   "gha_run_id": 33181804451,
+   "run_number": 9,
+   "head_sha": "714f237",
+   "created_at": "2026-08-28T14:46:00Z",
+   "artifact_sha256": "741183b3f2d9c70401807c04f6ecaeaf2024d38f742ad22f9a42bf68895c9ff8",
+   "artifact_size_bytes": 210483
+ },
+ "interpretation": "Context-M retrieval over REAL GitHub threads, graded by the BEAM-style LLM judge. Judge model identity recorded; canonical BEAM uses gpt-5 — not directly comparable. Retrieval QA result is unchanged from the prior run: the system continues to abstain (1.0) rather than guess wrong on real developer-issue language."
 }

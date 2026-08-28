@@ -1,6 +1,6 @@
 """7 — Memory Git: branch an agent personality, merge, diff, blame."""
 import datetime as dt
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 m.add("I prefer concise answers.", user_id="dev",

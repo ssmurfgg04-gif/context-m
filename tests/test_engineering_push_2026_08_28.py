@@ -16,8 +16,8 @@ import os
 
 import pytest
 
-from context_m import Memory
-from context_m.config import Config
+from cortexm import Memory
+from cortexm.config import Config
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ def test_env_flip_for_cron():
 # ---------------------------------------------------------------------------
 
 def test_tiny_transformer_fallback_produces_embedding():
-    from context_m.bridge.fallback import get_default, TinyTransformerFallback
+    from cortexm.bridge.fallback import get_default, TinyTransformerFallback
     tt = get_default()
     emb = tt.embed("Alice calls home every weekend")
     assert emb.shape == (768,)
@@ -59,7 +59,7 @@ def test_tiny_transformer_fallback_produces_embedding():
 
 def test_tiny_transformer_fallback_extracts_when_pattern_misses():
     """A sentence the pattern library misses should yield a fallback candidate."""
-    from context_m.bridge.fallback import get_default
+    from cortexm.bridge.fallback import get_default
     tt = get_default()
     # "Alice calls home every weekend" — no trigger pattern matches
     cands = tt.extract_candidates("Alice calls home every weekend",
@@ -95,8 +95,8 @@ def test_tiny_transformer_fallback_disabled_in_bench():
 # ---------------------------------------------------------------------------
 
 def test_prefilter_drops_irrelevant_candidates():
-    from context_m.bridge.prefilter import prefilter_triples
-    from context_m.text.embedder import HashingEmbedder
+    from cortexm.bridge.prefilter import prefilter_triples
+    from cortexm.text.embedder import HashingEmbedder
 
     class FakeFact:
         def __init__(self, subject, relation, value, id="x"):
@@ -123,7 +123,7 @@ def test_prefilter_drops_irrelevant_candidates():
 
 
 def test_prefilter_never_returns_more_than_input():
-    from context_m.bridge.prefilter import prefilter_triples
+    from cortexm.bridge.prefilter import prefilter_triples
     cands = []  # empty input
     filtered, stats = prefilter_triples(cands, "anything")
     assert filtered == []
@@ -158,9 +158,9 @@ def test_working_memory_compresses_top_k_into_hrr():
 
 
 def test_working_memory_returns_empty_for_no_facts():
-    from context_m.vsa.working_memory import build_holographic_wm
-    from context_m.vsa.ops import VSA
-    from context_m.text.embedder import HashingEmbedder
+    from cortexm.vsa.working_memory import build_holographic_wm
+    from cortexm.vsa.ops import VSA
+    from cortexm.text.embedder import HashingEmbedder
     vsa = VSA()
     emb = HashingEmbedder()
     hwm = build_holographic_wm([], vsa, emb)
@@ -173,7 +173,7 @@ def test_working_memory_returns_empty_for_no_facts():
 # ---------------------------------------------------------------------------
 
 def test_mcp_server_exposes_reconstruct_and_consolidate_tools():
-    from context_m.mcp.server import TOOLS
+    from cortexm.mcp.server import TOOLS
     names = {t["name"] for t in TOOLS}
     assert "contextm_reconstruct" in names
     assert "contextm_consolidate" in names
@@ -183,8 +183,8 @@ def test_mcp_server_exposes_reconstruct_and_consolidate_tools():
 
 def test_mcp_consolidate_tool_runs():
     """End-to-end: MCP server's consolidate handler must work."""
-    from context_m import Memory
-    from context_m.mcp.server import MCPServer
+    from cortexm import Memory
+    from cortexm.mcp.server import MCPServer
     m = Memory(Config())
     m.add("Alice lives in Toronto.", user_id="alice",
           timestamp="2026-01-01T00:00:00Z")

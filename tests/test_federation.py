@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from context_m.federation import (
+from cortexm.federation import (
     FederationError,
     FederationNode,
     FileTransport,
@@ -17,7 +17,7 @@ from context_m.federation import (
     InMemoryMesh,
     fact_key,
 )
-from context_m.federation.crdt import FederationState
+from cortexm.federation.crdt import FederationState
 
 KEY = "default\x1falice\x1fworks_at"
 
@@ -253,7 +253,7 @@ class TestSecurity:
         a, b = mk("a"), mk("b")
         env = {"type": "digest", "from": "mallory", "clock": "1.0.mallory",
                "digest": {}}
-        from context_m.federation.node import sign_envelope
+        from cortexm.federation.node import sign_envelope
         env["sig"] = sign_envelope(env, "test-key")
         with pytest.raises(FederationError, match="unknown sender"):
             b.delta_envelope_for(env)
@@ -333,9 +333,9 @@ class TestState:
 class TestFabricBridge:
     def test_store_roundtrip(self):
         """fabric -> CRDT -> federate -> new fabric: identical active view."""
-        from context_m.trace.fact import make_fact
-        from context_m.trace.store import TraceStore
-        from context_m.federation import (apply_to_store,
+        from cortexm.trace.fact import make_fact
+        from cortexm.trace.store import TraceStore
+        from cortexm.federation import (apply_to_store,
                                           node_from_store)
 
         t0 = __import__("datetime").datetime(
@@ -368,9 +368,9 @@ class TestFabricBridge:
         assert ("Carol", "speaks", "French") in live2
 
     def test_bidirectional_fabric_federation(self):
-        from context_m.trace.fact import make_fact
-        from context_m.trace.store import TraceStore
-        from context_m.federation import (apply_to_store,
+        from cortexm.trace.fact import make_fact
+        from cortexm.trace.store import TraceStore
+        from cortexm.federation import (apply_to_store,
                                           export_to_crdt,
                                           node_from_store)
 

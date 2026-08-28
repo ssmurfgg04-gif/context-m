@@ -61,7 +61,7 @@ were designed as the porting surface.
   semantics under its own name
 
 ```python
-from context_m import Memory
+from cortexm import Memory
 from context_m.config import Config
 m = Memory(Config(codec="binary", tmr=True))   # edge profile
 ```

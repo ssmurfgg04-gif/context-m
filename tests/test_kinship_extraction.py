@@ -23,37 +23,37 @@ sys.path.insert(0, str(REPO))
 
 import pytest
 
-from context_m.api.memory import Memory
-from context_m.config import Config
+from cortexm.api.memory import Memory
+from cortexm.config import Config
 
 
 # ----------------------------------------------------------- section→relation
 class TestKinshipSectionMap:
     def test_parents_section(self):
-        from context_m.bridge.patterns import _KINSHIP_SECTIONS
+        from cortexm.bridge.patterns import _KINSHIP_SECTIONS
         assert _KINSHIP_SECTIONS["PARENTS & GUARDIANS"] == "parent"
         assert _KINSHIP_SECTIONS["PARENTS"] == "parent"
         assert _KINSHIP_SECTIONS["GUARDIANS"] == "parent"
 
     def test_partner_section(self):
-        from context_m.bridge.patterns import _KINSHIP_SECTIONS
+        from cortexm.bridge.patterns import _KINSHIP_SECTIONS
         assert _KINSHIP_SECTIONS["ROMANTIC PARTNER"] == "partner"
         assert _KINSHIP_SECTIONS["PARTNER"] == "partner"
 
     def test_children_section(self):
-        from context_m.bridge.patterns import _KINSHIP_SECTIONS
+        from cortexm.bridge.patterns import _KINSHIP_SECTIONS
         assert _KINSHIP_SECTIONS["CHILDREN"] == "child"
 
     def test_siblings_section(self):
-        from context_m.bridge.patterns import _KINSHIP_SECTIONS
+        from cortexm.bridge.patterns import _KINSHIP_SECTIONS
         assert _KINSHIP_SECTIONS["SIBLINGS"] == "sibling"
 
     def test_friends_section(self):
-        from context_m.bridge.patterns import _KINSHIP_SECTIONS
+        from cortexm.bridge.patterns import _KINSHIP_SECTIONS
         assert _KINSHIP_SECTIONS["FRIENDS"] == "friend"
 
     def test_colleagues_section(self):
-        from context_m.bridge.patterns import _KINSHIP_SECTIONS
+        from cortexm.bridge.patterns import _KINSHIP_SECTIONS
         assert _KINSHIP_SECTIONS["COLLEAGUES"] == "colleague"
 
 
@@ -203,21 +203,21 @@ class TestKinshipTrigger:
     or the pattern won't even be attempted."""
 
     def test_trigger_matches_parents(self):
-        from context_m.bridge.extractor import _TRIGGER
+        from cortexm.bridge.extractor import _TRIGGER
         assert _TRIGGER.search("PARENTS & GUARDIANS:")
 
     def test_trigger_matches_children(self):
-        from context_m.bridge.extractor import _TRIGGER
+        from cortexm.bridge.extractor import _TRIGGER
         assert _TRIGGER.search("CHILDREN:")
 
     def test_trigger_matches_siblings(self):
-        from context_m.bridge.extractor import _TRIGGER
+        from cortexm.bridge.extractor import _TRIGGER
         assert _TRIGGER.search("SIBLINGS:")
 
     def test_trigger_matches_friends(self):
-        from context_m.bridge.extractor import _TRIGGER
+        from cortexm.bridge.extractor import _TRIGGER
         assert _TRIGGER.search("FRIENDS:")
 
     def test_trigger_matches_colleagues(self):
-        from context_m.bridge.extractor import _TRIGGER
+        from cortexm.bridge.extractor import _TRIGGER
         assert _TRIGGER.search("COLLEAGUES:")

@@ -1,5 +1,5 @@
 """2 — Mem0-compatible drop-in: same API surface, neuro-symbolic core."""
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 m.add([{"role": "user", "content": "I work at Google"},

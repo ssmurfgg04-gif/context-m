@@ -1,6 +1,6 @@
 """5 — Truth maintenance: supersessions with full history."""
 import datetime as dt
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 m.add("I work at Stripe.", user_id="sam",

@@ -20,16 +20,16 @@ import time
 
 import pytest
 
-from context_m import Memory
-from context_m.config import Config
+from cortexm import Memory
+from cortexm.config import Config
 
 TS = dt.datetime(2026, 1, 10, tzinfo=dt.timezone.utc)
 
 WORKER = textwrap.dedent("""
     import datetime as dt, sys
     sys.path.insert(0, {repo!r})
-    from context_m import Memory
-    from context_m.config import Config
+    from cortexm import Memory
+    from cortexm.config import Config
 
     NAMES = ["Alice", "Boris", "Carla", "Dev", "Elena", "Farid",
              "Gina", "Hugo", "Ines", "Jamal", "Katya", "Liam",

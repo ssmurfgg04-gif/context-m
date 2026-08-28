@@ -20,13 +20,13 @@ from datetime import timezone
 
 import pytest
 
-from context_m.config import Config
-from context_m.errors import VerificationError
-from context_m.security.hashes import HashProvider
-from context_m.security.zk_sql import (ZkSqlProver, ZkSqlProof, CircuitGate,
+from cortexm.config import Config
+from cortexm.errors import VerificationError
+from cortexm.security.hashes import HashProvider
+from cortexm.security.zk_sql import (ZkSqlProver, ZkSqlProof, CircuitGate,
                                          GATE_TYPES)
-from context_m.trace.fact import make_fact
-from context_m.trace.store import TraceStore
+from cortexm.trace.fact import make_fact
+from cortexm.trace.store import TraceStore
 
 
 # ---------------------------------------------------------------- fixtures

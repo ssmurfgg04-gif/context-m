@@ -34,9 +34,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.bench.generator import make_persona
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.bench.generator import make_persona
 
 
 # --------------------------------------------------------------- corpus

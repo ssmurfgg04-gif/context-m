@@ -27,9 +27,9 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.server.sparql import (
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.server.sparql import (
     parse_sparql, execute_sparql, edge_triples, SparqlServer,
     is_edge_predicate, _merge_filter_tokens,
 )
@@ -276,7 +276,7 @@ def _free_port() -> int:
 
 def _start_rest(mem, *, sparql_port=None):
     """Start the REST server in a background thread; return (httpd, port)."""
-    from context_m.server.rest import serve
+    from cortexm.server.rest import serve
     port = _free_port()
     httpd = serve(mem, host="127.0.0.1", port=port,
                   sparql_port=sparql_port, sparql_host="127.0.0.1")
@@ -304,7 +304,7 @@ def _http_post(url, body, headers=None):
 
 class TestRestSparqlEndpoint:
     def test_openapi_lists_sparql_chaos_consolidate_export(self):
-        from context_m.server.rest import openapi_spec
+        from cortexm.server.rest import openapi_spec
         spec = openapi_spec()
         paths = set(spec["paths"].keys())
         for p in ("/v1/sparql", "/v1/chaos",
@@ -639,7 +639,7 @@ class TestPerEndpointRateLimit:
 
     def test_tier_classification(self):
         """_tier_for_path maps known routes to the right tier."""
-        from context_m.server.rest import _tier_for_path
+        from cortexm.server.rest import _tier_for_path
         assert _tier_for_path("/healthz") == "fast"
         assert _tier_for_path("/readyz") == "fast"
         assert _tier_for_path("/metrics") == "fast"
@@ -657,7 +657,7 @@ class TestPerEndpointRateLimit:
 
     def test_buckets_isolated_per_tier(self):
         """A key hitting the 'slow' tier does NOT consume 'medium' budget."""
-        from context_m.server.rest import TieredTokenBuckets
+        from cortexm.server.rest import TieredTokenBuckets
         tb = TieredTokenBuckets({
             "fast":   (200.0, 400),
             "medium": (50.0,  100),
@@ -682,8 +682,8 @@ class TestPerEndpointRateLimit:
     def test_sparql_does_not_starve_healthz(self, mem):
         """End-to-end: hammer /v1/sparql until 429, /healthz still 200."""
         import threading
-        from context_m.server import rest as rest_mod
-        from context_m.server.rest import serve, FabricState, build_handler
+        from cortexm.server import rest as rest_mod
+        from cortexm.server.rest import serve, FabricState, build_handler
         port = _free_port()
         # tiny SPARQL tier so we hit 429 quickly: 1 rps / burst 2
         old_tiers = rest_mod.RATE_LIMIT_TIERS

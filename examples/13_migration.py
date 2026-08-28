@@ -11,7 +11,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from context_m import Memory
+from cortexm import Memory
 
 TS = dt.datetime(2026, 1, 10, tzinfo=dt.timezone.utc)
 td = Path(tempfile.mkdtemp())
@@ -38,7 +38,7 @@ conn.commit()
 conn.close()
 
 # --- migrate ----------------------------------------------------------------
-from context_m.migrate.importers import import_mem0
+from cortexm.migrate.importers import import_mem0
 
 m = Memory()
 report = import_mem0(m, str(mem0_db), user_id="marco")

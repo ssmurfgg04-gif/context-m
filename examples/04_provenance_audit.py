@@ -1,5 +1,5 @@
 """4 — Cryptographic provenance: query → VSA → dereference → hash → source."""
-from context_m import Memory
+from cortexm import Memory
 
 m = Memory()
 m.add("My name is Alan Turing. I work on the Enigma project at Bletchley.",

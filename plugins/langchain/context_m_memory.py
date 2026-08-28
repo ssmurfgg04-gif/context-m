@@ -6,7 +6,7 @@ adapters; Context-M needs one too — otherwise the LangChain community
 defaults to those competitors.
 
 Usage:
-    from context_m.plugins.langchain import ContextMMemory
+    from cortexm.plugins.langchain import ContextMMemory
     memory = ContextMMemory(user_id="alice")
     # in an agent setup:
     #   agent = initialize_agent(tools, llm, memory=memory)

@@ -21,7 +21,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from context_m.text.labse import PolyglotEncoder
+from cortexm.text.labse import PolyglotEncoder
 
 
 # Mixed-language corpus — six scripts × a few short sentences each.

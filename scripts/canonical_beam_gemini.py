@@ -49,10 +49,10 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from context_m.api.memory import Memory
-from context_m.config import Config
-from context_m.trace.fact import Fact
-from context_m.util import new_id, iso
+from cortexm.api.memory import Memory
+from cortexm.config import Config
+from cortexm.trace.fact import Fact
+from cortexm.util import new_id, iso
 from datetime import datetime, timezone
 
 

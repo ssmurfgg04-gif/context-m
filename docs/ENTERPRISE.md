@@ -38,7 +38,7 @@ Personal data is stopped **before** extraction, so raw PII never reaches
 facts, chunks, vector codes, or the SLB cache.
 
 ```python
-from context_m import Memory
+from cortexm import Memory
 m = Memory(pii_mode="redact")          # off | redact | block | tag
 m.add("My email is alice@corp.com and I work at Google.")
 # facts/chunks contain: «PII:EMAIL:0001» … Google

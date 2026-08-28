@@ -15,7 +15,7 @@ Abstention, Contradiction Resolution, Event Ordering, Information
 Extraction, Instruction Following, Knowledge Update, Multi-Hop
 Reasoning, Preference Following, Summarization, Temporal Reasoning.
 
-## Corpus generation (`context_m/bench/generator.py`)
+## Corpus generation (`cortexm/bench/generator.py`)
 
 - **Personas** carry ground-truth timelines: employment chains with
   explicit left/joined events, residence moves, preference flips,
@@ -36,7 +36,7 @@ Reasoning, Preference Following, Summarization, Temporal Reasoning.
 ## Protocol
 
 1. **Ingest** the corpus under the μ=0 protocol. The process-wide LLM
-   call counter (`context_m.metrics`) is asserted to be zero; the
+   call counter (`cortexm.metrics`) is asserted to be zero; the
    report prints the count.
 2. **Probe** with ability-targeted questions built from ground truth
    (identical question sets for all systems).

@@ -38,18 +38,18 @@ sys.path.insert(0, str(REPO))
 
 import numpy as np
 
-from context_m.config import Config
-from context_m.api.memory import Memory
-from context_m.bench.generator import make_persona, Corpus
-from context_m.bench.ood import build_ood_corpus
-from context_m.text.embedder import HashingEmbedder
-from context_m.text.dissim import DisSimSplitter
-from context_m.text.idiolect import PerUserIdiolectNormalizer
-from context_m.text.fuzzy import best_match, fuzzy_contains
-from context_m.vsa.cleanup import HopfieldCleanup
-from context_m.vsa.hologram_overlay import HolographicFactOverlay
-from context_m.vsa.attribution import ProtoDashAttributer
-from context_m.bridge.query_extract import QueryTimeExtractor
+from cortexm.config import Config
+from cortexm.api.memory import Memory
+from cortexm.bench.generator import make_persona, Corpus
+from cortexm.bench.ood import build_ood_corpus
+from cortexm.text.embedder import HashingEmbedder
+from cortexm.text.dissim import DisSimSplitter
+from cortexm.text.idiolect import PerUserIdiolectNormalizer
+from cortexm.text.fuzzy import best_match, fuzzy_contains
+from cortexm.vsa.cleanup import HopfieldCleanup
+from cortexm.vsa.hologram_overlay import HolographicFactOverlay
+from cortexm.vsa.attribution import ProtoDashAttributer
+from cortexm.bridge.query_extract import QueryTimeExtractor
 
 
 # --- HuggingFace BEAM 10M attempt --------------------------------------
@@ -334,7 +334,7 @@ def main():
     # this flag the clean corpus floors every config at ~1.0 recall and
     # the arxiv improvements look pointless.
     if args.messy and source == "synthetic_fallback":
-        from context_m.bench.messy import messify_persona_dict
+        from cortexm.bench.messy import messify_persona_dict
         messy_rng = random.Random(1337)
         n_before = len(personas)
         personas = [messify_persona_dict(p, messy_rng) for p in personas]
