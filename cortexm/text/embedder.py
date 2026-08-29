@@ -152,4 +152,67 @@ class HashingEmbedder:
     def embed_many(self, texts: list[str]) -> np.ndarray:
         if not texts:
             return np.zeros((0, self.dims), dtype=np.float32)
-        return np.stack([self.embed(t) for t in texts])
+        
+        # FIX 3: Batched embedding - process all texts in a single pass
+        # to avoid Python loop overhead and leverage numpy vectorization
+        n = len(texts)
+        vecs = np.zeros((n, self.dims), dtype=np.float32)
+        
+        # Pre-compute which texts go to polyglot vs standard path
+        polyglot_indices = []
+        standard_indices = []
+        for i, text in enumerate(texts):
+            if self.labse_enabled and self._non_ascii_ratio(text) > 0.30:
+                polyglot_indices.append(i)
+            else:
+                standard_indices.append(i)
+        
+        # Batch process polyglot texts
+        if polyglot_indices:
+            poly_texts = [texts[i] for i in polyglot_indices]
+            poly_vecs = self.polyglot.encode_many(poly_texts)
+            for idx, vec in zip(polyglot_indices, poly_vecs):
+                vecs[idx] = vec
+        
+        # Batch process standard texts - vectorized feature extraction
+        if standard_indices:
+            # Build all tokens and features in batch
+            all_tokens = {}
+            for i in standard_indices:
+                toks = words(texts[i])
+                for t in toks:
+                    all_tokens[t] = True
+            
+            # Pre-compute all features
+            token_features = {}
+            for tok in all_tokens:
+                token_features[tok] = self._feature(tok)
+            
+            # Build vectors in batch
+            for i in standard_indices:
+                vec = np.zeros(self.dims, dtype=np.float32)
+                toks = words(texts[i])
+                if not toks:
+                    vecs[i] = vec
+                    continue
+                counts = {}
+                for t in toks:
+                    counts[t] = counts.get(t, 0.0) + 1.0
+                for tok, tf in counts.items():
+                    idx, sign, base = token_features[tok]
+                    vec[idx] += sign * base * (1.0 + math.log(tf))
+                    for cidx, csign, cw in self._char_features(tok):
+                        vec[cidx] += csign * cw * (1.0 + math.log(tf)) * 0.35
+                if self.use_bigrams:
+                    toks = words(texts[i])
+                    for a, b in zip(toks, toks[1:]):
+                        if a in STOPWORDS and b in STOPWORDS:
+                            continue
+                        idx, sign, base = self._feature(f"{a}_{b}")
+                        vec[idx] += sign * base * 0.7
+                n = float(np.linalg.norm(vec))
+                if n > 0:
+                    vec /= n
+                vecs[i] = vec
+        
+        return vecs

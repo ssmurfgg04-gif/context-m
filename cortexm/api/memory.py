@@ -53,13 +53,15 @@ class Memory:
             config = dataclasses.replace(config, **changes)
         self.config = config
         self.store = TraceStore(config.db_path, HashProvider(config.hash_provider),
-                               wal_sync=getattr(config, "wal_sync", "normal"),
-                               pragma_cache_mb=getattr(config, "pragma_cache_mb", 64),
-                               pragma_mmap_mb=getattr(config, "pragma_mmap_mb", 256),
-                               pragma_threads=getattr(config, "pragma_threads", 4),
-                               pragma_temp_in_memory=getattr(config, "pragma_temp_in_memory", True),
-                               pragma_locking_exclusive=getattr(config, "pragma_locking_exclusive", False))
-        self.palace = MemoryPalace(config, self.store)
+                                wal_sync=getattr(config, "wal_sync", "normal"),
+                                pragma_cache_mb=getattr(config, "pragma_cache_mb", 64),
+                                pragma_mmap_mb=getattr(config, "pragma_mmap_mb", 256),
+                                pragma_threads=getattr(config, "pragma_threads", 4),
+                                pragma_temp_in_memory=getattr(config, "pragma_temp_in_memory", True),
+                                pragma_locking_exclusive=getattr(config, "pragma_locking_exclusive", False))
+        # FIX 2: Allow passing a shared embedder for persistent workers
+        shared_embedder = getattr(config, "_shared_embedder", None)
+        self.palace = MemoryPalace(config, self.store, embedder=shared_embedder)
         self.extractor = Extractor(config)
         self.prefetcher = Prefetcher()
         self.writer = MemoryWriter(config, self.store, self.palace, self.extractor)
@@ -156,6 +158,51 @@ class Memory:
         # windows, so allow_inactive=True retrieval still serves them.
         self._maybe_run_fade_under_pressure(user_id)
         return out
+
+    def add_batch(self, messages_list, *, user_id: str | None = None,
+                  agent_id: str | None = None, run_id: str | None = None,
+                  metadata: dict | None = None, timestamp=None, **kw) -> dict:
+        """μ=0 batch ingest. Accepts a list of messages (each str | list[str] | dict).
+        
+        Wraps the entire batch in a single transaction — much faster than
+        calling add() repeatedly. All messages share the same user_id/agent_id/run_id.
+        
+        Returns the same dict format as add()."""
+        user_id = user_id or self.config.default_user_id
+        ts = parse_ts(timestamp) if timestamp else None
+        if self.pii_guard.mode != "off":
+            # Apply PII to each message list
+            processed = []
+            for msgs in messages_list:
+                processed.append(self._apply_pii(msgs))
+                if processed[-1] is None:
+                    self.audit_log.log("memory.add_batch", resource=user_id,
+                                   outcome="blocked_pii",
+                                   meta={"reason": "pii_mode=block"})
+                    return {"results": [], "blocked": "pii_policy"}
+            messages_list = processed
+        
+        # Single transaction for the entire batch
+        self.store.begin_batch()
+        try:
+            all_results = []
+            total_facts = 0
+            for messages in messages_list:
+                out = self.writer.add(messages, user_id=user_id, agent_id=agent_id,
+                                      run_id=run_id, ts=ts, metadata=metadata, **kw)
+                all_results.extend(out.get("results", []))
+                total_facts += out.get("stats", {}).get("facts_inserted", 0)
+            self.store.end_batch()
+            self.reader.invalidate_caches()
+            if self.config.audit_actions == "all":
+                self.audit_log.log("memory.add_batch", resource=user_id,
+                               meta={"facts": total_facts})
+            return {"event": "ADD_BATCH", "results": all_results,
+                    "stats": {"messages": sum(len(m) for m in messages_list),
+                              "facts_inserted": total_facts, "llm_calls": 0}}
+        except Exception:
+            self.store.rollback()
+            raise
 
     # ------------------------------------------------------------ mem.edit()
     def edit(self, fact_id: str, new_text: str, *,

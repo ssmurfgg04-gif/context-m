@@ -360,7 +360,42 @@ class PolyglotEncoder:
         """
         if not texts:
             return np.zeros((0, self.dims), dtype=np.float32)
-        return np.stack([self.encode(t) for t in texts])
+        
+        # FIX 3: Batched encoding - pre-tokenize all texts, then batch process
+        n = len(texts)
+        vecs = np.zeros((n, self.dims), dtype=np.float32)
+        
+        # Pre-tokenize all texts
+        all_tokens = []
+        for text in texts:
+            tokens = self._tokenize(text)
+            all_tokens.append(tokens)
+        
+        # Batch process tokens - collect all features first
+        for i, tokens in enumerate(all_tokens):
+            if not tokens:
+                continue
+            for tok in tokens:
+                # Char n-grams (weight 0.5 each)
+                for feat in self._char_features(tok):
+                    idx, sign = self._hash(feat)
+                    vec[i][idx] += sign * 0.5
+                
+                # Per-token structural features
+                tl = len(tok)
+                vec[i][self._tok_idx] += self._tok_sign * 0.3
+                if len(tok) <= 4:
+                    vec[i][self._tok_short_idx] += self._tok_short_sign * 0.2
+                else:
+                    vec[i][self._tok_long_idx] += self._tok_long_sign * 0.2
+        
+        # L2-normalize all vectors (batch)
+        norms = np.sqrt(np.sum(vecs * vecs, axis=1))
+        non_zero = norms > 0
+        if np.any(non_zero):
+            vecs[non_zero] /= norms[non_zero, np.newaxis]
+        
+        return vecs
 
 
 def encode(text: str, dims: int = 768) -> np.ndarray:

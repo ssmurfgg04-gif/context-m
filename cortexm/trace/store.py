@@ -187,8 +187,10 @@ class SafeConnection:
             self._conn.commit()
 
     def rollback(self):
+        """Rollback the current batch transaction."""
         with self._lock:
             self._conn.rollback()
+            self._batching = False
 
     def close(self):
         with self._lock:

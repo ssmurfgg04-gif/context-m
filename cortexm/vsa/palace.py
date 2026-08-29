@@ -1,4 +1,4 @@
-"""The Memory Palace — VSA hologram store with codec-quantized vectors.
+﻿"""The Memory Palace — VSA hologram store with codec-quantized vectors.
 
 One hologram per fact: role-bound subject/relation/value fillers plus a
 λ-weighted lexical superposition (see vsa.ops). Storage is codec-
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS vectors (
 
 
 class MemoryPalace:
-    def __init__(self, config: Config, store: TraceStore) -> None:
+    def __init__(self, config: Config, store: TraceStore, embedder: HashingEmbedder | None = None) -> None:
         self.cfg = config
         self.store = store
         self.dims = config.dims
@@ -45,8 +45,9 @@ class MemoryPalace:
         self.codec = make_codec(config.codec, config.dims, config.seed,
                                 tmr=config.tmr)
         self.vsa = VSA(config.dims, config.vsa_mode, config.seed,
-                       config.lexical_lambda)
-        self.embedder = HashingEmbedder(config.dims, config.seed)
+                        config.lexical_lambda)
+        # Allow injecting a shared embedder for FIX 2 (persistent worker embedder)
+        self.embedder = embedder or HashingEmbedder(config.dims, config.seed)
         store.conn.execute(VEC_TABLE)
         store.conn.commit()
 

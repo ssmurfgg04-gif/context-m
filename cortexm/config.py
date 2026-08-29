@@ -1,4 +1,4 @@
-"""Central configuration for the memory fabric.
+﻿"""Central configuration for the memory fabric.
 
 Every knob the strategic plan calls out is expressed here so the whole
 system is reproducible from one dataclass. Codec selection implements the
@@ -538,6 +538,9 @@ class Config:
         if _env("LABSE") is not None:
             cfg.labse_enabled = _env_bool_dual("LABSE", cfg.labse_enabled)
         return cfg
+
+    # FIX 2: Shared embedder for persistent workers (set by benchmark script)
+    _shared_embedder: any = field(default=None, repr=False, init=False)
 
     def to_dict(self) -> dict:
         return asdict(self)
