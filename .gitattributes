@@ -1,0 +1,20 @@
+# Tell GitHub Linguist to exclude self-contained HTML viewers from the
+# language bar. These files are single-file demos (inline CSS+JS+SVG)
+# that GitHub Linguist counts by line count, drowning out the Python
+# code. Marking them linguist-generated=true + linguist-detectable=false
+# keeps them in the repo (searchable, viewable) but removes them from
+# the "X% HTML" calculation.
+*.html linguist-generated=true
+*.html linguist-detectable=false
+
+# Specifically mark the trajectory viewer + leaderboard as documentation
+# (searchable, not in language bar) — overrides the broad rule above
+# for the files users may want to find via GitHub search.
+cortexm/trajectory_view.py linguist-language=Python
+leaderboard/build.py    linguist-language=Python
+
+# Markdown docs are docs, not code
+docs/*.md linguist-documentation=true
+
+# Auto-generated JSON artifacts (judge results, benchmarks)
+benchmarks/results/**/*.json linguist-generated=true

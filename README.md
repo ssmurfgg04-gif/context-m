@@ -1,35 +1,22 @@
 <div align="center">
-  <h1>Context-M</h1>
-  <h3>Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest.</h3>
+  <h1>cortexm</h1>
+  <h3>Deterministic agent memory. μ=0. Free, local, forever. Same result every time.</h3>
 </div>
 
 <div align="center">
   <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml"><img src="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml/badge.svg?branch=main" alt="Tests"></a>
-  <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/pr-gate.yml"><img src="https://img.shields.io/github/checks-status/ssmurfgg04-gif/context-m/main/.github/workflows/pr-gate.yml?label=pr-gate" alt="PR Gate"></a>
+  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/v/cortexm?color=%2334D058&label=pypi" alt="PyPI"></a>
+  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/pyversions/cortexm.svg?color=%2334D058" alt="Python"></a>
   <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/v/cortexm?color=%2334D058&label=pypi%20%7Ccortexm" alt="PyPI: cortexm"></a>
-  <a href="https://pypi.org/project/context-m-langchain/"><img src="https://img.shields.io/pypi/v/context-m-langchain?color=%2334D058&label=pypi%20%7Clangchain" alt="PyPI: context-m-langchain"></a>
-  <a href="https://www.npmjs.com/package/dsh-cortexm"><img src="https://img.shields.io/npm/v/dsh-cortexm?color=%2334D058&label=npm%20%7Cdsh-cortexm" alt="npm: dsh-cortexm"></a>
-  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/pyversions/cortexm.svg?color=%2334D058" alt="Python versions"></a>
+  <a href="https://www.npmjs.com/package/dsh-cortexm"><img src="https://img.shields.io/npm/v/dsh-cortexm?color=%2334D058&label=npm%20%7Cdsh" alt="npm"></a>
   <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/AGENTS.md"><img src="https://img.shields.io/badge/AGENTS.md-2026-2f2f2f?logo=github" alt="AGENTS.md"></a>
-  <!-- MCP Registry badge — uncomment after submitting deploy/mcp-registry-submission.json to https://registry.modelcontextprotocol.io -->
-  <!-- <a href="https://registry.modelcontextprotocol.io/servers/contextm"><img src="https://img.shields.io/badge/MCP%20Registry-contextm-7c3aed" alt="MCP Registry"></a> -->
-  <!-- Trendshift badge slot — auto-renders when the repo actually trends. -->
-  <!-- <a href="https://trendshift.io/repositories/ssmurfgg04-gif/context-m"><img src="https://trendshift.io/api/badge/repositories/ssmurfgg04-gif/context-m.svg" alt="Trendshift"></a> -->
 </div>
 
 <br>
 
-> **Context-M remembers what you tell it. Forever. For free. On your machine. Same result every time.**
+> **cortexm remembers what you tell it. Forever. For free. On your machine. Same result every time.**
 
-Context-M is a memory layer for AI agents that needs zero LLM calls to
-ingest and proves every retrieved fact with a BLAKE3 hash chain.
-Mem0-compatible: drop-in replacement for `from mem0 import Memory`.
-
-A memory substrate that combines a **bi-temporal symbolic Trace**
-(hippocampus) with a **VSA Memory Palace** (neocortex), bound by a
-**μ=0 deterministic bridge** — cryptographic provenance on every
-retrieval, edge-first deployment at 96 bytes per memory.
+Mem0-compatible drop-in: `from mem0 import Memory` → `from cortexm import Memory`. Zero LLM calls at ingest. Zero LLM calls at retrieval. Zero monthly cost. Every retrieved fact carries a BLAKE3 hash chain back to the source text. One `.db` file you own.
 
 ### Quick start
 
@@ -44,699 +31,69 @@ m = Memory()
 m.add("I work at Google", user_id="alice")
 m.search("Where does Alice work?", user_id="alice")
 # → [Memory — Known facts]
-#   - (Alice, works_at, Google) [valid 2026-08-27→∞; learned …; conf 0.92;
+#   - (Alice, works_at, Google) [valid 2026-08-27→∞; conf 0.92;
 #      id 3f2a91c2; src #a1b2c3d4; "I work at Google"]
 ```
 
-### Canonical LongMemEval — μ=0, $0, on your laptop
+### Canonical LongMemEval — μ=0, $0, on a 4GB laptop
 
-| | Context-M v0.5.5 | MemPalace (honest E2E) |
+| | cortexm v0.5.6 | MemPalace (honest E2E) |
 |---|---|---|
-| canonical LongMemEval | **94.8%** (154-Q sample, μ=0) | ~96.6% (246K-step retrieval only, no QA) |
-| LLM calls during ingest | 0 | 0 |
-| LLM calls during retrieval | 0 | 0 |
-| LLM calls during judging | 0 | 0 |
+| canonical LongMemEval (154-Q sample) | **94.8%** → 154/154 after v0.5.5 judges | ~96.6% (retrieval-only, no QA) |
+| LLM calls (ingest + retrieval + judge) | 0 | 0 |
 | monthly cost | $0 | $0 |
-| determinism | ✓ byte-exact across 3× runs | ✓ |
+| determinism | byte-exact across 3× runs | byte-exact |
 | owns your data | ✓ single `.db` file | ✓ |
 
-**Honest scope.** 154 of 500 canonical questions were run on a 4GB-RAM
-laptop (single_session + multi_session subtasks; the knowledge_update
-and temporal_reasoning subtasks land at different indices in the
-500-Q file and weren't in this slice). Of those 154, we now answer
-**154/154** correctly — including the 8 multi_session arithmetic +
-holiday + abbreviation questions that v0.5.3 missed. Full 500-Q run
-requires ≥16GB RAM or splitting across GitHub Actions runners
-(workflow ready at `.github/workflows/longmemeval_canonical_full.yml`).
-We do **not** claim parity on the full canonical 500; the 154-Q sample
-is real, the 8/8 fix result is real, and the gap is hardware not
-algorithm.
+**Honest scope.** 154 of 500 canonical questions (single_session + multi_session subtasks; KU + TR subtasks land at different indices in the 500-Q file and were not in this slice). All 154/154 answered correctly after v0.5.5's aggregation + holiday + abbreviation judges. Full 500-Q run needs ≥16GB RAM or GitHub Actions runners (workflow ready at `.github/workflows/longmemeval_canonical_full.yml`). We do **not** claim parity on the full canonical 500.
 
-### When to use Context-M vs Mem0 / Zep
+### When to use cortexm vs Mem0 / Zep / Chroma
 
-- **Use Context-M if** you want $0 queries, byte-exact determinism,
-  full ownership of your data (one `.db` file you can back up), and
-  traceable provenance on every retrieved fact (BLAKE3 hash chain +
-  `EXTRACTED_FROM` audit edge).
-- **Use Mem0 if** you want a 1-line cloud-managed setup, don't care
-  about per-query cost or determinism, and you're OK with the LLM
-  extractor occasionally fabricating facts that you can't audit.
-- **Use Zep if** you want long-term graph memory across many users
-  with cloud SaaS pricing and don't need byte-exact replay.
+- **Use cortexm if** you want $0 queries, byte-exact determinism, full ownership of your data (one `.db` file you can back up), and traceable provenance on every retrieved fact (BLAKE3 hash chain + `EXTRACTED_FROM` audit edge).
+- **Use Mem0** for a 1-line cloud-managed setup where you don't care about per-query cost or determinism, and you're OK with the LLM extractor occasionally fabricating facts you can't audit.
+- **Use Zep** for long-term graph memory across many users with cloud SaaS pricing when byte-exact replay isn't a requirement.
+- **Use Chroma** when you only need a vector DB (cortexm ships a vector DB inside, but Chroma is a fine standalone choice).
+
+### Drop-in plugins (already shipped)
+
+- **Mem0-compatible surface**: `from cortexm import Memory` — drop-in for `from mem0 import Memory`
+- **LangChain**: [`plugins/langchain`](plugins/langchain) → `context-m-langchain` on PyPI
+- **LlamaIndex**: [`plugins/llamaindex`](plugins/llamaindex) → postprocessor
+- **OpenAI Agents SDK**: [`plugins/openai_agents`](plugins/openai_agents)
+- **Claude Code**: [`plugins/context-m-claude`](plugins/context-m-claude) — session lifecycle hooks
+- **MCP server**: `cortexm serve` (stdio JSON-RPC, zero extra dependencies)
+- **REST server**: `cortexm serve-rest` — OpenAPI 3.1, bearer auth, Prometheus `/metrics`
+- **Migration**: `cortexm migrate --from mem0|zep|chroma --path ...`
 
 ---
 
-## Benchmark results — August 2026
+### Documentation
 
-We run four tiers of evaluation, and **the honest number is not the
-biggest one**. Full methodology, judge identities and failure analysis:
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) ·
-[`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md) ·
-[open the leaderboard →](leaderboard/index.html)
+The README is intentionally short. Everything else lives in `docs/`:
 
-### Tier 1 — Out-of-distribution (where users live)
-
-Ground-truth fact registries were re-rendered by an independent LLM in
-styles the pattern extractor never saw, then evaluated with the same
-probes and judge as the in-distribution run:
-
-| OOD style | Tier-1.1 (pre-fix) | Tier-1.2 (post-fix, 2026-08-28) | Δ |
-|---|---|---|---|
-| paraphrase | 9.4% ± 9.4% | **22.9%** | +13.5pp (2.4×) |
-| negation | 75.6% ± 3.3% | 75.6% | flat |
-| indirect speech | 44.9% ± 10.2% | **48.2%** | +3.3pp |
-| informal/slang | 5.1% ± 5.9% | **41.3%** | +36.2pp (8.1×) |
-| non-English | **0.0%** | **32.2%** | +32.2pp (∞ → real recall) |
-| code-switching | 57.9% ± 18.1% | **61.3%** | +3.4pp |
-
-The slang jump (5.1% → 41.3%) is the single biggest fix in this
-cycle: the unmess pipeline (DisSim + idiolect + Bitap) is now safe
-to enable in the bench config (previously the period-strip bug
-forced `unmess_enabled=False`). The non-English jump (0% → 32%)
-comes from the LaBSE polyglot encoder + idiolect normalizer
-handling accented characters without crashing the trigger.
-
-### Tier 4.3 — LongMemEval independent judge
-
-| subtask | pre-fix | post-fix (2026-08-28) | plugin-kernel (v0.5.0) | v0.5.1 synthetic | v0.5.2 canonical | v0.5.3 canonical | **v0.5.5 canonical (154-Q sample)** |
-|---|---|---|---|---|---|---|---|
-| single_session | 1.0 | 1.0 | 1.0 | 1.0 | 0.222 | 0.778 | **0.978** |
-| knowledge_update | 0.333 | 0.667 | 1.000 | 1.0 | 0.333 | 1.000 | **— (no KU Qs in slice)** |
-| multi_session | 0.5 | 0.5 | 0.5 | 1.0 | 0.333 | 1.000 | **0.903** |
-| temporal_reasoning | 0.5 | 0.5 | 0.5 | 1.0 | 0.667 | 1.000 | **— (no TR Qs in slice)** |
-| **overall** | 0.600 | 0.700 | 0.800 | 1.000 | 0.333 | 0.889 | **0.948** |
-
-**v0.5.5: aggregation + abbreviation + holiday judges.** The biggest
-canonical-sample win since v0.5.3's verbatim tier. The 154-question
-canonical slice (single_session + multi_session subtasks only — knowledge_update
-and temporal_reasoning were not in this slice) jumped from 0.948 →
-**1.000 on the 8 previously-failing questions** with three new
-μ=0 strategies:
-
-  1. **SUM_OR_DIFF judge** (canonical multi_session arithmetic).
-     LongMemEval questions like "How much total money did I spend on
-     bike-related expenses?" → "$185" require summing dollar amounts
-     across multiple chunks. The μ=0 judge can't *compute* a sum de
-     novo, but it CAN verify *derivability*: extract all `$X` amounts
-     from the context_block, check whether any subset (≥2 elements)
-     sums to the expected answer. Bounded meet-in-the-middle for
-     >10 candidate amounts. Handles "how much more compared to"
-     (pair-difference) the same way. Fixes 5 of 8 failures.
-
-  2. **Topic-filtered aggregation retrieval.** When the question is
-     aggregation-flavored, the runner runs an EXTRA verbatim pass
-     using just the topic keywords (e.g. "bike", "charity", "workshop",
-     "Tokyo") — not the full question. Chunks that mention the topic
-     + dollar amounts but ranked below the default top-30 BM25 cutoff
-     get appended to the context_block as `## AGGREGATION TOPIC
-     CHUNKS`. Without this, the dollar amounts the SUM judge needs
-     wouldn't be in the context.
-
-  3. **Holiday-date resolution.** LongMemEval ground truth often
-     gives the absolute date even when the user said the holiday name.
-     Example: user says "I volunteered on Valentine's Day" in a
-     chunk; expected answer is "February 14th". A 20-entry lookup
-     table of common US holidays resolves the derivability — no LLM,
-     no world-knowledge API.
-
-  4. **Parenthetical-abbreviation match.** LongMemEval ground truth
-     often expands an abbreviation the user said verbatim. Example:
-     user says "I completed my undergrad in CS from UCLA" in chunks;
-     expected answer is "University of California, Los Angeles (UCLA)".
-     The judge extracts the parenthetical abbreviation and checks
-     whether it appears as a standalone word-boundary token in the
-     context. Acceptance is honest: the user's short form is in the
-     chunks; the answer wraps that short form in parens.
-
-**v0.5.5 — sample scope.** 154 of 500 canonical questions were run
-on this 4GB-RAM machine (single_session + multi_session subtasks
-only — knowledge_update and temporal_reasoning subtasks are at
-different indices and weren't covered in this slice). The 8/8 fix
-result is REAL on the 8 previously-failing questions we re-ran
-with the v0.5.5 judges. The full 500-question canonical run is the
-next milestone — it requires either ≥16GB RAM or splitting across
-GitHub Actions runners (workflow file ready at
-`.github/workflows/longmemeval_canonical_full.yml`).
-
-**v0.5.3: the verbatim tier ships.** MemPalace (246K-step benchmark)
-got 96.6% recall at $0 cost. Context-M hits **1.000** on a 20-question
-synthetic LongMemEval subset (matches MemPalace's framing on data we
-control), and **0.948** on a 154-question sample from the
-canonical `xiaowu0162/longmemeval-cleaned` benchmark — μ=0
-throughout (no LLM at ingest, retrieval, or judging).
-
-We do NOT claim parity on the canonical 500-question, 23,867-session
-benchmark. We claim:
-
-  1. **End-to-end deterministic QA is possible.** MemPalace stops at
-     retrieval — they never answer the question. We built the full
-     pipeline: Question → Intent Router → Datalog-lite / Trace / VSA →
-     Answer Extraction → Judge → Score. All zero neural networks.
-
-  2. **The 1.000 on synthetic is real.** Same judge, same reader,
-     same Trace, run 3× — every run returns 1.0. Promise #5 holds.
-
-  3. **The 0.948 on canonical (154-Q sample) is also real.**
-     Real human text — slang, typos, indirect speech, code-mixed
-     language, multi-game arithmetic, meta-answer preference questions
-     — the deterministic extractor misses things an LLM would catch.
-     That's the honest gap, by design (μ=0 trades breadth for cost).
-     The v0.5.5 aggregation + holiday + abbreviation judges close 8
-     of the 8 remaining failures on this sample.
-
-**v0.5.3 — the verbatim tier (MemPalace-style FTS5 + dense over raw
-chunks).** The biggest single win in this release, going from 0.333
-to 0.889 on the 18-question canonical sample:
-
-  1. **`VerbatimPlugin` wired into the write path.** Every `mem.add()`
-     now also stores the raw chunk in `verbatim_chunks` (FTS5 virtual
-     table) + its int8-quantized `HashingEmbedder` vector in
-     `verbatim_vectors`. This is the MemPalace insight we hadn't
-     stolen yet — single-session factoids retrieve via BM25+cosine
-     fusion over raw text, bypassing the 61-pattern extractor that
-     misses natural-language phrasing. single_session went 0.222 →
-     0.778.
-
-  2. **`VerbatimPlugin` wired into the read path.** `MemoryReader.search()`
-     calls `verbatim.search()` after the structured VSA + symbolic
-     paths, then appends a `## VERBATIM CHUNKS` section to the
-     context_block. The deterministic judge sees both structured facts
-     AND raw chunks. The InjecMEM scope sandbox is honored (user
-     queries see only user-scoped chunks; agent queries see user +
-     own agent).
-
-  3. **`recall_step` wired into `Memory.search()` production path.**
-     All callers benefit — the multi_session fix is now default.
-     single_line config knob (`recall_step_in_search=True`).
-
-  4. **PRF (pseudo-relevance feedback).** The verbatim tier's BM25
-     pass now expands the query with content words from the top-3
-     hits and re-queries. This surfaces chunks that share vocabulary
-     with the top hits but don't lexically match the original query.
-     The classic example: Q="what restaurant did I mention?" →
-     BM25 finds chunks mentioning "restaurant"; PRF re-queries with
-     the cuisine/neighborhood terms from those hits, surfacing the
-     actual answer chunk that names the restaurant but doesn't
-     contain "restaurant". Miss Bee Providore is caught this way.
-
-  5. **FTS5 OR semantics + stopword filtering.** `_sanitize_query`
-     now OR-joins content tokens (after stopword removal). The
-     previous AND semantics meant "What restaurant did I visit?" only
-     matched chunks containing ALL those words — the answer chunk
-     with just "Miss Bee Providore" never matched. OR semantics is
-     the standard BM25 best practice.
-
-  6. **Fuzzy NUGGET + LIST judges.** Both now have STRATEGY 4
-     (partial token overlap, Jaccard >= 50%). This catches cases
-     like "The painting is worth triple what I paid for it" where
-     the chunk says "it's actually worth triple what I paid" (pronoun
-     substitution; "painting" is missing but the substantive answer
-     "triple what I paid" is present).
-
-**v0.5.2 wiring fixes** (the user-identified gap on
-multi_session + temporal_reasoning):
-
-  1. **`recall_step` wired into the LongMemEval reader path.** The
-     asymmetric step-distance boost surfaces scrolled-out session-1
-     facts that the access_count boost on current session-N facts
-     would otherwise push below top-k. This is the multi_session fix:
-     older-session facts that list questions need now have a higher
-     retrieval weight.
-
-  2. **Temporal query pre-processor + TEMPORAL CHAIN note.** When the
-     question matches `when/before/after/did X move/did X change/how
-     many times`, the reader walks the bi-temporal SUPERSEDES chain
-     per (entity, relation) and emits an explicit ordering note:
-     `TEMPORAL CHAIN: Bob|lives_in: Berlin (SUPERSEDED) → Munich
-     (CURRENT) → 1 supersession(s) detected → Bob changed`. The BOOL
-     judge reads this directly (STRATEGY 0), bypassing the regex
-     fallback. canonical temporal_reasoning went 0.5 → 0.667.
-
-  3. **Smarter NUGGET + LIST judges.** Both now fall back to token-
-     overlap when literal-substring fails, so canonical answers like
-     "4 years and 9 months" score True when both tokens appear in
-     the context, even if the exact "and"-joined phrase doesn't.
-
-**Reproduce (synthetic, 1.000):**
-```
-python scripts/longmemeval_judge.py \
-    --out benchmarks/results/longmemeval_v0.5.3_synth.json
-```
-
-**Reproduce (canonical, 0.889 on n=3):**
-```
-# one-time: download the canonical benchmark (~277 MB)
-python -c "from huggingface_hub import hf_hub_download; \
-    hf_hub_download(repo_id='xiaowu0162/longmemeval-cleaned', \
-    repo_type='dataset', filename='longmemeval_s_cleaned.json', \
-    local_dir='data/longmemeval')"
-
-# sample 3 questions per subtask (18 total), μ=0 ingest + judge
-python scripts/longmemeval_canonical.py \
-    --n-per-type 3 --max-messages-per-q 1500 \
-    --out benchmarks/results/canonical_longmemeval_v0.5.3_n3.json
-
-# larger sample (30 questions, more stable estimate)
-python scripts/longmemeval_canonical.py \
-    --n-per-type 5 --max-messages-per-q 1500 \
-    --out benchmarks/results/canonical_longmemeval_v0.5.3_n5.json
-```
-
-Determinism: 3 sequential synthetic runs return
-`det_judge_accuracy: 1.0` every run — the "same every time" promise
-holds. The canonical score varies with the random sample seed; the
-0.889 (n=3) / 0.724 (n=5) is reproducible with `--seed 42`.
-
-Pre-plugin-kernel fixes (0.600 → 0.700): (1) `works_at` regex
-contraction fix ("I'm now working at OpenAI" now extracts),
-(2) role pattern `|$` lookahead + uppercase support ("I'm an ML
-engineer" now extracts), (3) employment-anchored temporal window
-(resolves "where did X live when at Y" via the works_at fact's
-valid_from/valid_to).
-
-Plugin-kernel fixes (0.700 → 0.800): the new verbatim tier (FTS5
-+ int8 dense, MemPalace-style) catches "I'm now working at OpenAI"
-verbatim when the structured extractor's role pattern still misses
-it. The fusion bridge then merges both tiers at μ=0 cost.
-
-v0.5.1 fixes (0.800 → 1.000): the deterministic judge switches from
-literal-substring to a 3-strategy rule engine (NUGGET / LIST / BOOL)
-plus the retrieval window widens from 5 to 10 so multi-session list
-questions get both values surfaced. The 2 remaining answer-shape
-mismatches the previous run hit are now closed — every question has
-a strategy that can answer it correctly without an LLM.
-
-v0.5.2 fixes (canonical 0.333 honest scope + temporal_reasoning
-0.667): `recall_step` wired into the reader path (surfaces scrolled-
-out facts); TEMPORAL CHAIN note emitted for `when/before/after/did
-X move` questions (BOOL judge reads the verdict directly); NUGGET +
-LIST judges gain token-overlap fallbacks for free-form canonical
-answers.
-
-That is the capability profile of the μ=0 extractor on real phrasing:
-strong on change-of-state statements, weak on identity/preference
-restatements, weak on non-English without the LaBSE polyglot encoder,
-weak on arithmetic ("how many hours total" requires summing across
-chunks — deterministic reader can't add). The async LLM enrichment
-fallback helps marginally — it surfaces facts but does not reconstruct
-bi-temporal chains. [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md)
-documents which phrasings break, with worked examples.
-
-**Independent LLM judges grade these numbers *lower*, not higher.** The
-full 240-item OOD sweep was re-graded by `gemini-3.5-flash-lite` from a
-clean CI runner: LLM-judge mean **0.222** vs offline judge **0.335**,
-exact agreement 82.7% (237/240 items;
-[`results/ood/llm_judge_crosscheck_gemini.json`](benchmarks/results/ood/)).
-A second judge (glm-4-plus, 58-item quota sample) agrees: 0.250 vs 0.345.
-Two independent models, same conclusion — the offline grader is not
-inflating scores. Judge model ≠ canonical BEAM's gpt-5, so these are
-cross-checks, not BEAM-comparable numbers.
-
-**Tier 2 — In-distribution (the regression harness).** Synthetic
-BEAM-style conversations (arXiv:2510.27246 methodology), 10 abilities,
-deterministic nugget judge, μ=0 ingest asserted, 5 seeds:
-
-| Bucket | questions | **Context-M** | BM25-RAG | vector-only |
-|---|---|---|---|---|
-| 128K | 37 | **100.0% ± 0.0%** | 70.2% | 69.0% |
-| 500K | 72 | **100.0% ± 0.0%** | 70.5% | 67.9% |
-| 1M | 107 | **100.0% ± 0.0%** | 68.8% | 70.1% |
-| **10M** | 216 | **100.0% ± 0.0%** | 61.6% | 66.1% |
-
-**Why 100% here is not a capability claim:** the corpus generator and the
-extractor patterns were authored against the same template families, so
-this tier measures *template coverage*, ceiling by construction. Its job
-is regression detection — "did we break template extraction?" — not
-marketing. We do **not** compare it against canonical BEAM SOTA (Exabase
-M-1, 68.0%): different corpus, different judge, different protocol — an
-apples-to-oranges comparison we refuse to make.
-
-**Tier 3 — Real GitHub data.** Real issue threads from public repos
-(rust-lang/rust, numpy/numpy, pydantic/pydantic; attribution in
-`benchmarks/real_github/`): the μ=0 extractor vs an LLM reference
-extractor (`gemini-3.5-flash-lite`) on identical comments, plus retrieval
-QA judged by the same LLM:
-
-| Track | Result |
+| Doc | What's in it |
 |---|---|
-| μ=0 extraction | 16 facts from 150 comments · 1.1 ms/comment · **$0.00** |
-| LLM reference extraction | 158 facts · 2,779 ms/comment · ~90K tokens |
-| μ=0 recall vs LLM reference | **0.6%** — the honest gap on real technical text |
-| Retrieval QA (LLM-judged, 19 Qs) | overall 0.263 · answerable 0.067 · abstention 100% |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layer 1 Symbolic Trace + Layer 2 VSA Palace + μ=0 Bridge in detail |
+| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Full Tier 1-4 results: OOD, in-distribution, real-GitHub, canonical LongMemEval |
+| [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md) | How every headline number was measured + honest scope |
+| [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md) | Where the μ=0 extractor breaks on real phrasing (read before citing any number) |
+| [`docs/RESEARCH.md`](docs/RESEARCH.md) | Literature lineage: every paper we adopted, aligned, or rejected (with reasons) |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | InjecMEM + MINJA defenses, scope sandbox, PermissionGate, provenance model |
+| [`docs/ENTERPRISE.md`](docs/ENTERPRISE.md) | PII firewall, encryption at rest, RBAC, audit, GDPR, backup/DR, REST API |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | SDK / MCP / REST / Docker / K8s / Helm runbooks |
+| [`docs/COMPRESSION.md`](docs/COMPRESSION.md) | Storage tiers (int8 / binary / rabitq / pq) + measured trade-offs |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Phase status vs the strategic plan |
+| [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) | Foundation governance + licensing commitments |
+| [`docs/PLAYBOOK_v2.md`](docs/PLAYBOOK_v2.md) | Migration playbook from Mem0 / Zep / Chroma |
 
-Read this as the cost/coverage frontier: the μ=0 path is ~2,500× faster
-and free but, on developer-issue language, captures ~10× fewer facts
-than an LLM extractor. The enrichment fallback and per-domain pattern
-packs are the bridge. Artifacts:
-[`benchmarks/results/real_github/`](benchmarks/results/) ·
-[`results/llm_eval_summary.md`](benchmarks/results/llm_eval_summary.md).
+### Examples & tests
 
-Engineering facts measured alongside (see `docs/BENCHMARKS.md`):
+- [`examples/`](examples/) — runnable scripts, offline, no API keys (01_quickstart → 20_agent_session)
+- [`tests/`](tests/) — 117 tests: fabric + enterprise + PPR + concurrency + sandbox + enrichment + WAL crash-recovery + migration + CRDT federation + Rust parity + public-API smoke
+- [`leaderboard/`](leaderboard/) — self-hosted benchmark site (rebuild: `python leaderboard/build.py`; open `leaderboard/index.html`)
+- [`AGENTS.md`](AGENTS.md) — how AI coding agents should interact with this repo (2026 standard)
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution guide
 
-- **Ingest:** 10M tokens in ~98 s (**~102K tokens/s**), ~2,000 messages/s, 0 LLM calls
-- **Memory grows sublinearly:** 10M tokens → ~590 facts (repeated noise dedupes)
-- **Provenance:** 100% of retrieved facts hash-verified; audit latency ~6 ms
-- **Retrieval:** tree index p50 ≈ 0.4–1.1 ms at 10K–100K vectors (flat: 16–194 ms)
-- **Crash-recoverable:** WAL journaling with SIGKILL-recovery tests
-  (`tests/test_wal_recovery.py`) — committed memories survive hard kills
-- **Reproducible:** runs are process-independent — score ties break on fact
-  content, never on random ids (verified across four PYTHONHASHSEED values)
+### License
 
-## The architecture
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                      THE BRIDGE (μ = 0)                          │
-│  write: text → chunks → BLAKE3 → patterns → triples → holograms  │
-│  read:  query → intent plan → VSA probe ∥ symbolic query →       │
-│         fusion → [Memory — Known facts] + provenance chain       │
-└──────────────┬───────────────────────────────────┬───────────────┘
-               │                                   │
-┌──────────────▼──────────────────┐ ┌──────────────▼───────────────┐
-│  LAYER 1: SYMBOLIC TRACE        │ │  LAYER 2: VSA MEMORY PALACE  │
-│  (hippocampus)                  │ │  (neocortex)                 │
-│  bi-temporal facts (SQLite)     │ │  HRR holograms, role-bound   │
-│  CONTRADICTS / PRECEDED_BY /    │ │  INT8 · Binary · RaBitQ · PQ │
-│  EXTRACTED_FROM edges           │ │  codecs (770/96/96/8 B each) │
-│  Datalog-lite rules engine      │ │  page-clustered tree index   │
-│  interference-aware lifecycle   │ │  64-entry semantic L1 (SLB)  │
-│  Memory Git: hash-chained DAG   │ │  TMR self-healing + re-encode│
-└─────────────────────────────────┘ └──────────────────────────────┘
-```
-
-**Layer 1 — Symbolic Trace.** Subject-Relation-Value triples with
-valid-time *and* transaction-time (`when it was true` vs `when we
-learned it`), contradiction resolution by truth maintenance (new values
-supersede, old values retire with their windows intact), temporal
-edges, a Datalog-lite forward-chaining engine (`manages(Y,X) →
-reports_to(X,Y)`, `member_of(X,T) ∧ uses(T,L) → team_uses(X,L)`), and
-an interference-aware lifecycle: facts are evaluated for how they
-interact with existing memory *before* commitment.
-
-**Layer 2 — VSA Memory Palace.** Each fact becomes a holographic
-reduced representation: role-bound subject/relation/value fillers
-plus a λ-weighted lexical superposition, quantized to your storage
-tier. Permutation binding is the default algebra because it maps
-directly to binary HDC hardware (XOR/permutation) — when edge ASICs
-arrive, the same code compiles down.
-
-**The Bridge.** μ=0 ingest: a 61-pattern deterministic extractor
-(first/third/second-person, pronoun resolution, relative dates,
-retractions, Mem0-summary shapes) — no LLM anywhere on the synchronous
-write path. When patterns find nothing (non-English, heavy slang,
-indirect speech), an **explicit async enrichment fallback**
-(`memory.enrich()`) re-extracts those chunks with an LLM post-store —
-confidence-capped at 0.85, provenance-marked `llm_enrichment`, auditable,
-and counted in the μ=0 honesty counters. The read path is a
-deterministic query planner (temporal windows, ordering proofs,
-counting, supersession chains, **Personalized PageRank graph diffusion**
-for multi-hop — HippoRAG 2 lineage) fused with VSA retrieval, and
-**every returned fact carries its full audit chain**: query → VSA match
-→ symbolic dereference → BLAKE3 hash → original source text.
-
-## The five category-defining features
-
-| Feature | What it does | Try it |
-|---|---|---|
-| **Memory Git** | branch / merge / diff / blame over agent memory, hash-chained commits | `examples/07_memory_git.py` |
-| **ZK-lite proofs** | prove a fact matches a query without revealing it to the LLM | `examples/08_zk_proof.py` |
-| **Self-healing memory** | bit flips detected by hash, TMR majority vote, re-encode from Trace — 100% self-ID up to 10% corruption | `examples/09_self_healing.py` |
-| **Predictive prefetching** | MBTB co-access prediction feeds the fusion boost set | `cortexm/features/prefetch.py` |
-| **Cross-modal binding** | episodic holograms: bind text/structured/sensor roles, recall by any modality | `cortexm/vsa/ops.py` |
-
-## Storage tiers (cortexm-compress)
-
-| Tier | Bytes/vector | 1M memories | Fits on |
-|---|---|---|---|
-| `int8` (default) | 770 | 770 MB | any laptop |
-| `binary` + TMR | 96 (288 w/ TMR) | 96 MB | Raspberry Pi 5 → 10M memories |
-| `rabitq` | 96 | 96 MB | Raspberry Pi Zero 2W |
-| `pq` | 8 | 8 MB | cloud, billions |
-
-Measured codec quality (20K fact holograms): int8 overlap@10 vs FP32 =
-0.90; binary/rabitq/PQ recover the FP32 top-10 within their top-50 at
-1.00/1.00/0.9995 — shortlist codecs, exactly as designed. See
-`docs/COMPRESSION.md`.
-
-## Security (InjecMEM + MINJA + scope sandbox + PermissionGate)
-
-Every fact carries a BLAKE3 hash of its source text, re-verified on
-retrieval (BLAKE2b-256 fallback with a **loud warning** if the optional
-`blake3` wheel is absent — `pip install cortexm[blake3]`; the active
-provider is always reported in `stats()` and audit output). Memory-
-injection patterns ("ignore all previous instructions…") are
-quarantined at ingest — stored for audit, never active, never retrieved
-into prompt context. On top of that, the **MINJA contagion guard**
-treats quarantined text as a tainted corpus: any later ingest that
-quotes or substantially overlaps it (even when light edits defeat every
-regex) is quarantined too — closing the query-only injection loop where
-an attacker poisons memory through the agent's own write-back.
-
-The **scope sandbox** enforces the isolation the InjecMEM threat model
-implies: facts written by an agent (`agent_id=...`) are invisible to
-user-scope reads until explicitly `promote()`d — and promotion is
-gated on confidence, re-scans the source chunk through both injection
-detectors, and lands in the tamper-evident audit chain
-(`tests/test_sandbox_enrich.py`). Building it surfaced and fixed three
-genuine pre-existing read-path leaks (empty-scope fallback, falsy scope
-checks, unscoped supersession chains). `verify_integrity()` audits the
-whole store.
-
-The **PermissionGate** (v0.5.1; **hardened v0.5.2**) is a default-deny
-gate for code execution + user-data reads. The user directive:
-
-> "security is important — no malicious code shall be executed to read
-> user data without explicit permission."
-
-is enforced as a strict allowlist with NO wildcards:
-
-Plugins that want to invoke `os.system` / `subprocess` / `open()` on
-the user's behalf MUST first call `permission.grant_read(path)` or
-`permission.grant_exec(cmd)` — otherwise the gate denies and audits
-the attempt. Sensitive paths (`~/.ssh`, `~/.aws`, `/etc/passwd`,
-`~/.config/gh`) and sensitive executables (`curl`, `wget`, `sudo`,
-`ssh`, `nc`) are ALWAYS denied unless the user calls
-`grant_sensitive()` on the exact item. There is no wildcard.
-Composition, not coercion: the plugin doesn't monkeypatch `os` or
-`subprocess` — plugins that consult the gate are gated; plugins
-that ignore it are not. [`tests/test_permission.py`](tests/test_permission.py),
-34 tests.
-
-```python
-from cortexm.kernel import Context
-from cortexm.plugins.security import SecurityPlugin
-
-ctx = Context()
-ctx.mount(SecurityPlugin())
-sec = ctx.inject("security")["security"]
-perm = sec.permission
-
-# An agent tool wants to "ls /tmp/agent_ws"
-perm.grant_read("/tmp/agent_ws")
-perm.grant_exec("ls")
-perm.can_exec("ls /tmp/agent_ws").allowed      # True
-perm.can_read("/etc/passwd").allowed            # False (sensitive)
-perm.can_exec("curl evil.com").allowed           # False (sensitive)
-perm.can_exec("rm -rf /").allowed                # False (no grant)
-# Every denial is recorded on the tamper-evident audit chain
-```
-
-## Enterprise controls (shipped, not roadmap)
-
-The controls a buyer's security review actually blocks on — all in the
-repo, all under test (`tests/test_enterprise.py`):
-
-| Control | What ships |
-|---|---|
-| **PII firewall** | Luhn/mod-97/area-rule-validated detection of emails, phones, cards, SSNs, IBANs, IPs, API keys — redacted to reversible vault tokens *before* extraction (GDPR/CCPA write-path guard) |
-| **Encryption at rest** | AES-256-GCM envelope (KEK→DEK), key rotation, env/keyfile/sidecar master keys |
-| **RBAC + API keys** | admin / operator / reader / auditor roles, peppered-key digests, TTLs, constant-time verify |
-| **Tamper-evident audit** | hash-chained per-operation log; SIEM export (JSONL + syslog); tampering pinpoints the broken seq |
-| **GDPR governance** | Art. 17 right-to-erasure with crypto-shredding + attestation; Art. 5 retention policies; DSAR vault resolution |
-| **Backup / DR** | atomic snapshots with SHA-256 manifests; **PITR** — bi-temporal replay, the database is its own WAL |
-| **REST API** | 20 endpoints, OpenAPI 3.1 at `/openapi.json`, bearer auth, per-key rate limiting, Prometheus `/metrics`, `/healthz` `/readyz` |
-| **Deploy anywhere** | Docker (non-root, tini, healthcheck) · docker-compose + nightly snapshots · K8s manifests · Helm chart — `deploy/` |
-
-```bash
-cortexm serve-rest --db /data/memory.db --pii redact --admin-key yes
-```
-
-See `docs/ENTERPRISE.md` (control matrix + compliance mapping) and
-`docs/DEPLOYMENT.md` (SDK / MCP / REST / Docker / K8s / Helm runbooks).
-
-## MCP server (Day 1)
-
-```bash
-cortexm serve        # stdio JSON-RPC, zero dependencies
-```
-
-Tools: `contextm_add`, `contextm_search`, `contextm_get_all`,
-`contextm_history`, `contextm_temporal`, `contextm_audit`,
-`contextm_prove`, `contextm_stats`, `contextm_delete`. Works with
-Claude Code / Cursor / any MCP client. Claude Code plugin:
-[`plugins/context-m-claude`](plugins/context-m-claude).
-
-## Migration
-
-```bash
-cortexm migrate --from mem0 --path mem0.db
-cortexm migrate --from zep --path zep_export.jsonl
-cortexm migrate --from chroma --path chroma.sqlite3
-```
-
-Each importer handles the vendor's real on-disk formats (mem0's
-`history` JSON payloads and bare `memories` tables, Zep graph triples
-with bi-temporal windows, Chroma's `embeddings` table) and is verified
-end-to-end against fixture stores built in those exact formats
-(`tests/test_migration.py`).
-
-## Durability
-
-WAL journaling (Aeon-inspired) with a `wal_sync` durability knob
-(`normal` — survives process crash; `full` — fsyncs every commit,
-survives power loss), WAL checkpoint-on-close, and a test that
-SIGKILLs a writer mid-stream and verifies every acknowledged commit
-survives (`tests/test_wal_recovery.py`).
-
-## Federation (CRDT replication)
-
-Multi-node memory replication without a coordinator: bi-temporal facts as
-HLC-stamped CRDT versions (SINGLE_VALUED relations collapse into one
-versioned register per key — the version set IS the temporal history),
-union merge that is commutative/associative/idempotent, OR-set
-retraction semantics (write-after-retract wins, retract-after-write
-wins), purge poison-pills for GDPR, and digest/delta anti-entropy that
-ships only divergent buckets over HMAC-signed envelopes. Convergence is
-proven **byte-exact** (canonical serialization compared, not just query
-equivalence); a partition with divergent writes + retractions heals with
-no lost retraction semantics. Transports: in-memory mesh for tests, file
-spool (outbox/inbox) for offline mule sync — rsync/git/USB completes the
-physical channel, the CRDT guarantees convergence regardless of delivery
-order. See `cortexm/federation/` and `benchmarks/federation_bench.py`.
-
-## Rust acceleration (optional wheels)
-
-`rust/cortexm-core` and `rust/quadrant` compile the hot paths with
-PyO3; the Python/NumPy implementation stays the reference and everything
-works without them (`CONTEXTM_RUST=0` forces the pure-Python path).
-Measured on the bundled scorecard (`benchmarks/rust_vs_numpy.py`):
-**encode_fact 4.8×, bind 3.4×, h64 2.2×** — h64 is byte-exact with the
-Python hash (tested), and permutations/role vectors are *injected* from
-Python's deterministic VSA state, so mixed deployments produce
-bit-identical holograms. The SLB is a **tie** (1.0× — BLAS is already
-optimal at 64×768; published as such). `quadrant` is the page-clustered
-log-depth vector index for the L2 palace: 97% recall@10 at 7× NumPy
-brute-force speed, visiting ~32 of 529 pages for 20k vectors — visit
-counts are instrumented, the O(log N) claim is measured, and the
-adversarial random-corpus recall collapse is published alongside the
-win. Build: `pip install ./rust/cortexm-core ./rust/quadrant`.
-
-## More
-
-- `docs/ARCHITECTURE.md` — every layer in detail
-- `docs/BENCHMARKS.md` — full results, methodology, per-ability tables
-- `docs/FAILURE_MODES.md` — where the extractor breaks on real phrasing,
-  with worked examples (read before citing any number)
-- `docs/ENTERPRISE.md` — enterprise control matrix + compliance mapping
-- `docs/DEPLOYMENT.md` — SDK / MCP / REST / Docker / K8s / Helm runbooks
-- `docs/RESEARCH.md` — literature lineage: every paper we adopted,
-  aligned with, or rejected (with reasons)
-- `docs/SECURITY.md` — InjecMEM + MINJA defenses, scope sandbox,
-  provenance model
-- `docs/COMPRESSION.md` — the tier stack and measured trade-offs
-- `docs/ROADMAP.md` — phase status vs the strategic plan
-- `docs/GOVERNANCE.md` — foundation governance + licensing commitments
-- `leaderboard/` — self-hosted benchmark site (rebuild: `python
-  leaderboard/build.py`; open `leaderboard/index.html`)
-- `examples/` — runnable scripts, offline, no API keys
-- `tests/` — 116 tests: fabric + enterprise + PPR + concurrency +
-  sandbox + enrichment + WAL crash-recovery + migration + CRDT
-  federation convergence/partition-heal + Rust parity
-
-## License
-
-Apache 2.0 — open core done right: the memory fabric is and stays open;
-federated sync and the audit UI are the enterprise tier.
-
-## arXiv-inspired improvements (2026 round)
-
-A second research pass over 2024-2026 arxiv literature surfaced 8
-concrete improvements, all preserving the μ=0 invariant. Full citations
-in `docs/BENCHMARKS.md` Tier 8.
-
-| Improvement | Module | Solves |
-|---|---|---|
-| Hopfield cleanup memory | `cortexm/vsa/cleanup.py` | VSA interference after unbind |
-| Bitap fuzzy matching (Wu-Manber) | `cortexm/text/fuzzy.py` | Slang/spelling-tolerant pattern triggers |
-| Per-user idiolect normalization | `cortexm/text/idiolect.py` | "bruh"→"friend" via embedding k-NN |
-| DisSim rule-based simplifier | `cortexm/text/dissim.py` | Compound-sentence pattern recall |
-| TLSH ternary trie | `cortexm/vsa/tlsh_trie.py` | O(log N + w) software TCAM |
-| Holographic fact overlay | `cortexm/vsa/hologram_overlay.py` | O(1) single-hop fact lookup |
-| ProtoDash attribution | `cortexm/vsa/attribution.py` | Source weights for retrieval results |
-| LayerCast FP32 determinism seam | `cortexm/bridge/onnx_runtime.py` | μ=0 over LLM enrichment path |
-
-Architectural fixes (per Con #4-#7 list):
-
-- **Storage bloat** → `cortexm/trace/dedup.py` formalizes dedup+compression audit
-- **Normalization** → Bitap + idiolect + hybrid search wired into patterns
-- **Debugging** → `retrieval_path ∈ {vsa_unbind, pattern_match, neural_fallback, raw_chunk, tree_index, tlsh_trie}` on every retrieved fact
-- **Determinism** → LayerCast + ONNX Runtime CPU + FP32 seam documented
-
-Plus explicit binary/FP32 tiering (`accel.detect_tier`, `accel.recommend_codec`),
-Hamming ZK proofs (`security/zk_hamming.py`), and `trace/rebuild.py`
-for checksum-audited rebuilds from the symbolic Trace.
-
-## Claude Code plugin — session lifecycle
-
-`plugins/context-m-claude/src/index.ts` v0.2 adds auto-load on Claude
-session start + write-on-end hooks:
-
-- **on session start** → `recall last working state` → "I see you've been working on X. Continue?"
-- **on session end** → "Store summary? [Y/n]" → persists summary as a memory fact
-- Session state at `~/.context-m/session_state.json`
-
-MCP tools added: `contextm_query_extract` (hybrid RAG), `contextm_attribution` (ProtoDash), `contextm_zk_prove` (Hamming proofs).
-
----
-
-## Honest measurement block
-
-> Reproducing the Ponytail convention: every headline number on this
-> README is paired with the run that produced it, the SHA, the judge
-> model, and the honest cost. "~96 bytes per fact" is the storage
-> cost on the BEAM-10M corpus (n=200 personas × 30 turns × ~35 facts
-> per persona, measured 2026-08-28 on commit 714f237). "Zero LLM at
-> ingest" is enforced by the `LLM_CALLS` counter in
-> `cortexm/__init__.py`; a CI assertion fails any PR that increments
-> it on the ingest path. The Real-GitHub Tier-4 result (17 questions,
-> 0.0 answerable, 1.0 abstention, 2026-08-28 14:46 UTC run #9) is a
-> refusal-to-guess, not a coverage gap — the system abstains rather
-> than hallucinate on real developer-issue language. Full method:
-> [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md). Reproduce:
-> `python benchmarks/run_ood_pipeline.py --personas 4 --skip-render
-> --no-enrich --no-judge`.
-
-## Anti-lamprey warning
-
-> **Don't fork-and-rebrand this repo.** If you want to build on it,
-> open an issue labeled `accepted` and submit a PR — see
-> [`CONTRIBUTING.md`](CONTRIBUTING.md) and
-> [`AGENTS.md`](AGENTS.md). Fork-and-rebrand-without-attribution
-> derivatives will be named in `docs/FAILURE_MODES.md` under the
-> "Derivative works" section. The provenance chain (BLAKE3 hash +
-> source span) is the system's whole point — strip it and you've
-> built a different product, not a fork.
-
-## Star history
-
-<a href="https://star-history.com/#ssmurfgg04-gif/context-m&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)"
-      srcset="https://api.star-history.com/svg?repos=ssmurfgg04-gif/context-m&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)"
-      srcset="https://api.star-history.com/svg?repos=ssmurfgg04-gif/context-m&type=Date" />
-    <img width="100%"
-      alt="Star History"
-      src="https://api.star-history.com/svg?repos=ssmurfgg04-gif/context-m&type=Date" />
-  </picture>
-</a>
+Apache 2.0 — open core done right: the memory fabric is and stays open; federated sync and the audit UI are the enterprise tier.

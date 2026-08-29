@@ -4,15 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortexm"
-version = "0.5.6"
+version = "0.5.7"
 description = "Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest."
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Context-M Contributors" }]
 keywords = [
-    "memory", "agents", "llm", "neuro-symbolic", "vsa", "hrr", "hdc",
-    "knowledge-graph", "temporal", "provenance", "mcp", "edge", "rag",
+    "agent-memory", "llm-memory", "long-term-memory", "mem0", "memgpt",
+    "letta", "zep", "chroma", "deterministic-ai", "local-first",
+    "vector-symbolic-architecture", "provenance", "bi-temporal",
+    "hippocampus", "context-engineering", "rag", "mcp", "neuro-symbolic",
+    "hrr", "hdc", "self-hosted",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+    "Typing :: Typed",
 ]
 dependencies = ["numpy>=1.24"]
 
@@ -26,6 +43,10 @@ cortexm = "cortexm.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ssmurfgg04-gif/context-m"
+Documentation = "https://github.com/ssmurfgg04-gif/context-m/tree/main/docs"
+Repository = "https://github.com/ssmurfgg04-gif/context-m"
+Issues = "https://github.com/ssmurfgg04-gif/context-m/issues"
+Changelog = "https://github.com/ssmurfgg04-gif/context-m/releases"
 
 [tool.setuptools]
 py-modules = ["context_m"]

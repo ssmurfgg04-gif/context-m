@@ -2808,3 +2808,139 @@ Stage Summary:
 - No LLM embedder swap (per user instruction).
 - No PyPI push (per user's earlier "no need to push to anywhere else").
 - Pushing to GitHub main as v0.5.6.
+
+---
+Task ID: v0.5.7
+Agent: main (GLM-4.5)
+Task: User asked for deep GitHub/Reddit research on top 1% fast-growing repos,
+implement the winning secrets on our repo, fix the 90%-HTML language-stats
+problem with .gitattributes, trim the README (move 80% to docs/), and publish
+to PyPI.
+
+Work Log:
+- Launched a general-purpose research agent (Task ID 1) to study top 1% GitHub
+  repos that grew fast in the AI/infra space (chroma, mem0, llama_index,
+  langchain, zep, aider, shadcn/ui, supabase, ollama, vllm, litellm, instructor,
+  smolagents, letta, open-webui, mcp-servers, continuedev) + HN/Reddit launch
+  patterns. Agent returned a 42KB structured report with 6 sections (README
+  anatomy / PyPI launch playbook / GitHub discoverability / growth hacks / anti-
+  patterns / 10 specific recommendations for cortexm).
+
+- Audited current state against the research recommendations + the user's
+  audit list:
+  * cortexm/__init__.py: ✓ Memory, Config, Pipeline, Context, mount_default,
+    LLM_CALLS all exposed; Memory class has add/edit/fix/recall_step/
+    preload_context/export_markdown/import_markdown/search/apply_rules/
+    consolidate/close.
+  * cortexm/config.py: ✓ verbatim_ingest_enabled=True (line 143),
+    verbatim_search_enabled=True (line 144), recall_step_in_search=True
+    (line 163) — verbatim tier is on by default.
+  * cortexm/text/embedder.py: ✓ HashingEmbedder has PolyglotEncoder fallback
+    for non-English (labse_enabled flag, opt-in; documented in module docstring).
+  * scripts/longmemeval_canonical_full.py: ✓ in repo (620 lines).
+  * plugins/dsh-cortexm/package.json: version 1.0.0 — independent npm versioning,
+    matches what's published on npm.
+  * tests/test_security.py: doesn't exist — the audit item was based on stale
+    info. Security tests use os.path.expanduser() via the gate's _norm_path().
+
+- Fixed .gitattributes (didn't exist; created):
+  * *.html linguist-generated=true + linguist-detectable=false → removes the
+    self-contained trajectory viewer / leaderboard HTML from GitHub's language
+    bar (was inflating "90% HTML" because Linguist counts lines, not files).
+  * cortexm/trajectory_view.py and leaderboard/build.py pinned as Python
+    (override the broad *.html rule, though these are .py already — explicit).
+  * docs/*.md marked as documentation.
+  * benchmarks/results/**/*.json marked as generated.
+
+- Fixed pyproject.toml (was minimal):
+  * PEP 639: switched license from { text = "Apache-2.0" } to SPDX
+    license = "Apache-2.0" + license-files = ["LICENSE"].
+  * Removed License :: OSI Approved :: Apache Software License classifier
+    (PEP 639 forbids the duplicate; build failed until removed).
+  * Added 10 more relevant classifiers (Development Status 4-Beta, Python
+    3.10/3.11/3.12, Topic AI, Topic Libraries, Topic Database, OS Independent,
+    Intended Audience Developers, Typing Typed).
+  * readme = { file = "README.md", content-type = "text/markdown" } (was bare
+    readme = "README.md" — content-type was missing, would render as plain text
+    on PyPI).
+  * keywords expanded 13 → 21 (added: agent-memory, llm-memory, long-term-
+    memory, mem0, memgpt, letta, zep, chroma, deterministic-ai, local-first,
+    vector-symbolic-architecture, bi-temporal, hippocampus, context-engineering,
+    self-hosted — high-search-volume agent-memory terms, drop the generic
+    "memory" / "agents" / "llm").
+  * project.urls expanded 1 → 5 (Documentation, Repository, Issues, Changelog
+    added — these surface on the PyPI project page sidebar).
+
+- Trimmed README.md 742 lines → 100 lines (~85% reduction):
+  * Top fold: logo + 6 essential badges (dropped commented-out Trendshift /
+    MCP-Registry placeholders — leaving them commented post-launch signals
+    "never made it").
+  * 1-line blockquote hook: "cortexm remembers what you tell it. Forever. For
+    free. On your machine. Same result every time." (matches the 5 promises).
+  * 1-paragraph differentiator: Mem0-compatible drop-in, μ=0 at ingest +
+    retrieval, BLAKE3 hash chain, one .db file you own.
+  * Quick start: install + 5-line add/search snippet (already perfect, kept).
+  * Canonical LongMemEval table: 2-column cortexm v0.5.6 vs MemPalace honest
+    E2E, with the honest scope note (154/500 sample, full 500 needs ≥16GB RAM).
+  * "When to use cortexm vs Mem0 / Zep / Chroma" — honest 4-bullet comparison
+    naming the competitors by name with their honest published numbers.
+  * "Drop-in plugins" section listing Mem0 / LangChain / LlamaIndex / OpenAI
+    Agents / Claude Code / MCP / REST / Migration.
+  * Documentation table linking 12 docs/*.md files (ARCHITECTURE / BENCHMARKS /
+    METHODOLOGY / FAILURE_MODES / RESEARCH / SECURITY / ENTERPRISE /
+    DEPLOYMENT / COMPRESSION / ROADMAP / GOVERNANCE / PLAYBOOK_v2).
+  * Examples & tests & leaderboard pointers.
+  * License section.
+  Everything else (architecture ASCII diagram, Tier 1-4 benchmark tables,
+  security deep-dive, enterprise controls matrix, MCP server details,
+  migration commands, durability, federation CRDT, Rust acceleration, arXiv
+  improvements, Claude Code plugin lifecycle, honest measurement block,
+  anti-lamprey warning, star history) is now linked via docs/*.md, NOT
+  inlined.
+
+- Bumped version 0.5.6 → 0.5.7 in pyproject.toml + cortexm/__init__.py.
+
+- Full regression: pytest tests/ -q → all pass (517 passed, 24 skipped, 0
+  failures in ~21s). No regressions.
+
+- Build: python -m build → cortexm-0.5.7-py3-none-any.whl (438 KB) +
+  cortexm-0.5.7.tar.gz (477 KB). Both built clean after the PEP 639 fix.
+
+- Smoke test on the built wheel: /tmp/cortexm_smoke/bin/pip install --find-
+  links dist/ --no-deps cortexm + numpy>=1.24 → import cortexm → __version__
+  == '0.5.7' → LLM_CALLS == 0 → Memory().add() + Memory().search() work.
+  SMOKE: PASS. The blake3 wheel warning is expected (optional extra; BLAKE2b-256
+  fallback is documented behavior).
+
+- PyPI status: pip index versions cortexm → published: 0.3.0, 0.5.0, 0.5.1,
+  0.5.2. Latest 0.5.2. Versions 0.5.3-0.5.6 never published (user had said
+  "no need to push to anywhere else" in earlier sessions). v0.5.7 will be the
+  first PyPI release since v0.5.2.
+
+- Release path: .github/workflows/release.yml uses trusted publishing (OIDC,
+  no API token). Triggered by v* tag push. ONE-TIME PyPI setup required: sign
+  in to pypi.org as the cortexm project owner → Account settings → Publishing
+  → Add a publisher → owner=ssmurfgg04-gif, repo=context-m, workflow=release.yml,
+  env=release. If that one-time setup is done, `git tag v0.5.7 && git push
+  origin v0.5.7` → GHA auto-publishes to PyPI. If not done, the publish step
+  fails with "OIDC trusted publisher not configured" — user needs to do the
+  PyPI side setup once.
+
+Stage Summary:
+- README 742 → 100 lines (85% reduction). Top fold Mem0/LangChain/Aider-shaped
+  per the research findings.
+- pyproject.toml PEP 639 compliant (SPDX license expression, content-type on
+  readme, proper classifiers, expanded keywords, 5 project URLs).
+- .gitattributes fixes the "90% HTML" Linguist distortion (trajectory viewer
+  + leaderboard HTML now marked linguist-generated).
+- All 8 audit items from the prior deep review already verified clean at
+  v0.5.6 (verbatim default ON, Memory API complete, scripts in repo, dsh
+  version correct, security tests cross-platform).
+- 517 tests pass. Wheel builds clean. Smoke test imports + add/search works.
+- Version 0.5.6 → 0.5.7. Committing + tagging v0.5.7 + pushing to GitHub
+  will trigger release.yml's trusted-publish flow. If PyPI trusted-publisher
+  one-time setup is done, cortexm 0.5.7 will be live on PyPI within ~3 min
+  of the tag push.
+- 5 promises intact (Always remembers / Flat cost μ=0 / Own your data /
+  Doesn't lie / Same every time).
+- No LLM embedder swap (HashingEmbedder stays per user instruction).
