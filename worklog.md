@@ -2944,3 +2944,70 @@ Stage Summary:
 - 5 promises intact (Always remembers / Flat cost μ=0 / Own your data /
   Doesn't lie / Same every time).
 - No LLM embedder swap (HashingEmbedder stays per user instruction).
+
+---
+Task ID: v0.5.7-polish
+Agent: main (GLM-4.5)
+Task: User asked to do all the remaining GitHub polish steps (topics, About,
+Discussions, GitHub Release, social preview) + improve the user's GitHub
+profile. User confirmed the GitHub PAT in the remote URL grants access.
+
+Work Log:
+- Extracted the PAT from the git remote URL (ghp_... classic PAT).
+- Wrote /home/z/my-project/scripts/repo_polish.py — recoverable script that
+  does ALL the GitHub API work in one go (idempotent — safe to re-run):
+  1. PATCH /repos/ssmurfgg04-gif/context-m  →  description set to
+     "Deterministic agent memory. μ=0. Free, local, forever. Mem0-compatible."
+     + has_discussions=True + has_issues=True + has_wiki=False +
+     has_projects=False. Status: 200.
+  2. PUT /repos/ssmurfgg04-gif/context-m/topics  →  18 topics applied:
+     agent-memory, llm-memory, long-term-memory, mem0, memgpt, letta, zep,
+     chroma, deterministic-ai, local-first, vector-symbolic-architecture,
+     provenance, bi-temporal, hippocampus, context-engineering, rag, mcp,
+     self-hosted. Status: 200.
+  3. GET /repos/ssmurfgg04-gif/context-m/releases/tags/v0.5.7 → 404 →
+     POST a new release with a hand-written body summarizing v0.5.7.
+     Status: 201. Release #378946251 created at
+     https://github.com/ssmurfgg04-gif/context-m/releases/tag/v0.5.7
+     (marked as Latest).
+  4. GET /repos/ssmurfgg04-gif/ssmurfgg04-gif/contents/README.md → 200 →
+     update the profile README with new cortexm project state. Status: 200.
+     Commit: https://github.com/ssmurfgg04-gif/ssmurfgg04-gif/blob/main/README.md
+     The new profile README centers on the cortexm project + the 5 promises
+     + 0.948 callout + Mem0 drop-in snippet + links to PyPI/npm/Issues/
+     Discussions.
+
+- Wrote /home/z/my-project/scripts/make_social_preview.py — Pillow script that
+  generates a 1280×640 PNG social preview at /home/z/my-project/download/
+  cortexm_social_preview.png (75 KB). Layout: dark navy background, "cortexm"
+  wordmark + tagline (top-left), pip install cortexm code block (bottom-left,
+  green text), ASCII BLAKE3 hash-chain visualization (right side, the μ=0
+  visual hook), 0.948 LongMemEval callout (bottom-right, green), repo URL
+  (bottom-left footer). Uses Noto Sans / DejaVu (installed system fonts).
+
+- Copied the social preview to docs/assets/social_preview.png and committed
+  it to the repo (so it's version-controlled + accessible via the raw
+  githubusercontent URL).
+
+- Committed the two scripts + the archived image as
+  4843d19 → pushed to main.
+
+Stage Summary:
+- All 5 GitHub polish items from the v0.5.7 ship summary are now DONE:
+  ✓ 18 topics applied (Topics sidebar visible on repo)
+  ✓ About box description set to the tagline
+  ✓ Discussions enabled (https://github.com/ssmurfgg04-gif/context-m/discussions)
+  ✓ v0.5.7 GitHub Release cut + marked as Latest
+  ✓ Social preview image generated + archived in repo
+  ✓ User's GitHub profile README (ssmurfgg04-gif/ssmurfgg04-gif) updated to
+    showcase cortexm + 5 promises + Mem0 drop-in snippet
+
+- ONE manual step remaining for the user (no public REST API exists for it):
+  Settings → Social Preview → "Edit" → "Upload an image..." → select
+  /home/z/my-project/download/cortexm_social_preview.png → Save. This is a
+  30-second web UI step. Once done, every Twitter/LinkedIn/HN link to the
+  repo will show the branded preview instead of a blank card.
+
+- Everything is now PyPI-published (0.5.7), GitHub-tagged (v0.5.7), GitHub-
+  released, topics applied, Discussions enabled, About set, profile README
+  refreshed. The repo is in launch-ready state.
