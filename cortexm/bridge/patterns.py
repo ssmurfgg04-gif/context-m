@@ -156,7 +156,8 @@ def _works(m, ctx, sp, ts, sent):
 
 
 @pattern("joined_org",
-         rf"\bi\s+(?:joined|started(?:\s+working)?\s+at|got a job at|moved to a job at)\s+{WORK_AT}")
+         rf"\bi\s+(?:(?:just|finally|recently|recently\s+just)?\s+)?"
+         rf"(?:joined|started(?:\s+working)?\s+at|got a job at|moved to a job at)\s+{WORK_AT}")
 def _joined(m, ctx, sp, ts, sent):
     v = clean_value(m.group("val"))
     return [Candidate("SELF", "works_at", v, 0.92, "joined_org",
@@ -387,6 +388,22 @@ def _is_my(m, ctx, sp, ts, sent):
 def _pet(m, ctx, sp, ts, sent):
     return [Candidate("SELF", "has_pet", f"{m.group('kind')} named {clean_value(m.group('val'))}",
                       0.88, "pet")]
+
+
+# v0.6.1: "my dog's name is Charlie" / "my dog is named Charlie" /
+# "my dog is called Charlie" — the apostrophe-s + "name is" surface form
+# (LongMemEval canonical Q). The base _pet pattern above requires the
+# is-named/called verb form; this pattern catches the possessive variant.
+@pattern("pet_named",
+         rf"\bmy\s+(?P<kind>dog|cat|bird|rabbit)"
+         rf"(?:'s\s+(?:name\s+is|is\s+named|is\s+called)"
+         rf"|\s+is\s+(?:named|called))"
+         rf"\s+(?P<val>{NAME})")
+def _pet_named(m, ctx, sp, ts, sent):
+    return [Candidate(
+        "SELF", "has_pet",
+        f"{m.group('kind')} named {clean_value(m.group('val'))}",
+        0.88, "pet_named")]
 
 
 @pattern("hobby", rf"\bmy hobby is\s+(?P<val>[a-z][a-z ]{{2,40}})|\bin my free time\s+i\s+(?P<val2>[a-z][a-z ]{{2,40}})")

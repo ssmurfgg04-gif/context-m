@@ -132,7 +132,18 @@ class RuleEngine:
         Derived facts inherit the USER SCOPE of their premises — without
         this, ``team_uses(X, L) :- member_of(X, T), uses(T, L)`` derives a
         fact under ``default`` that user0's reader can never see (scope
-        filter drops it), silently losing every multi-hop answer."""
+        filter drops it), silently losing every multi-hop answer.
+
+        v0.6.1 fix: the dedup check now looks at ALL facts (active OR
+        retired) with the same (subject, relation, value, scope). Before
+        this, the rule ``lives_in(X, C) :- moved_to(X, C)`` would re-
+        derive ``lives_in=Berlin`` AFTER the candidate ``lives_in=Munich``
+        fired SUPERSEDE on it — because the retired Berlin fact was
+        invisible to ``active=True`` filter and the rule happily re-
+        created it, undoing the supersession. With this fix, once a
+        (subject, relation, value) tuple has been derived (and possibly
+        later retired by a SUPERSEDE), the rule won't re-materialize it.
+        """
         now = now or _dt.datetime.now(_dt.timezone.utc)
         derived_new: list[Fact] = []
         seen: set[tuple] = set()
@@ -149,8 +160,12 @@ class RuleEngine:
                     if key in seen:
                         continue
                     seen.add(key)
-                    if self.store.query_facts(subject=s, relation=rel, value=v,
-                                              user_id=scope, active=True):
+                    # v0.6.1: dedup against ALL facts (active OR retired)
+                    # — re-deriving a fact that was just superseded
+                    # would silently undo the supersession.
+                    if self.store.query_facts(subject=s, relation=rel,
+                                              value=v, user_id=scope,
+                                              active=None):
                         continue
                     f = Fact(
                         id=new_id(), subject=s, relation=rel, value=v,

@@ -399,6 +399,24 @@ class Config:
     # (Config.labse_enabled) handles the embedding for non-English text.
     multilingual_routing_enabled: bool = True
 
+    # Shannon entropy-weighted storage (tiered precision compromise).
+    # Pure entropy filter — "skip storing redundant facts" — violates
+    # the "doesn't forget" promise: a fact with VSA overlap > 0.9 to
+    # existing memory gets dropped, and later you ask "what's my
+    # dog's name?" and the system has forgotten. The safer compromise
+    # is TIERED PRECISION: store the verbatim chunk + structured fact
+    # (still findable by BM25 + symbolic query) but SKIP the VSA
+    # palace.add for high-overlap facts. This deduplicates the
+    # holographic superposition (smaller palace = faster retrieval)
+    # without losing any information.
+    #
+    # Cold-start guard: skip the overlap check until the user has at
+    # least ``shannon_min_facts`` facts (default 10) so the first few
+    # noisy facts don't get spuriously tiered-down.
+    shannon_tiered_storage: bool = True
+    shannon_overlap_threshold: float = 0.9
+    shannon_min_facts: int = 10
+
     # IR fundamentals (Lucene/Solr-grade primitives). See
     # cortexm/bridge/ir_pro.py for the implementations.
     #   * query_cache: LRU on (query, user_id, k) — invalidated on add()

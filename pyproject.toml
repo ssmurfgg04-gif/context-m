@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortexm"
-version = "0.6.0"
+version = "0.6.1"
 description = "Deterministic agent memory. 96 bytes per fact. Zero LLM at ingest."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"

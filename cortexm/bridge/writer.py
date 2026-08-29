@@ -499,6 +499,56 @@ class MemoryWriter:
         return derived
 
     # ------------------------------------------------------------------
+    def _max_vsa_overlap(self, fact: Fact, user_id: str) -> float:
+        """Shannon tiered storage: compute the max cosine similarity
+        of this fact's VSA hologram vs. existing facts in the user's
+        scope. Returns 0.0 on cold-start (<shannon_min_facts facts)
+        or any failure. μ=0: deterministic cosine over the user's
+        palace vectors; no LLM, no statistics.
+
+        Used to gate ``palace.add()`` in the COMMIT/COEXIST and
+        SUPERSEDE branches of ``_apply_decision``. If the overlap
+        is above ``shannon_overlap_threshold`` (default 0.9), we
+        store the structured fact + chunk + edges (still findable
+        by BM25 + symbolic query) but SKIP the VSA palace.add — the
+        holographic superposition stays clean and retrieval stays
+        fast. Verbatim tier is unchanged; "doesn't forget" holds.
+        """
+        if not getattr(self.cfg, "shannon_tiered_storage", True):
+            return 0.0
+        try:
+            existing = self.store.query_facts(
+                user_id=user_id, active=True, limit=500)
+            if len(existing) < int(getattr(
+                    self.cfg, "shannon_min_facts", 10)):
+                return 0.0  # cold-start: not enough signal yet
+            new_vec = self.palace.encode_fact(fact)
+            best = 0.0
+            # Scan in chunks of 64 to bound memory on the 4GB box.
+            for f in existing:
+                # Skip self (in case fact is already partially committed)
+                if f.id == fact.id:
+                    continue
+                try:
+                    # encode each existing fact once and cosine-compare
+                    ev = self.palace.encode_fact(f)
+                    # cosine via dot product on normalized vectors
+                    a = new_vec.ravel()
+                    b = ev.ravel()
+                    na = float((a @ a) ** 0.5) or 1.0
+                    nb = float((b @ b) ** 0.5) or 1.0
+                    sim = float((a @ b) / (na * nb))
+                    if sim > best:
+                        best = sim
+                        if best >= 0.99:
+                            break  # near-identical — no need to scan more
+                except Exception:
+                    continue
+            return best
+        except Exception:
+            return 0.0
+
+    # ------------------------------------------------------------------
     def _apply_decision(self, fact: Fact, decision, commit, chunk_id,
                         results) -> int:
         action = decision.action
@@ -551,14 +601,47 @@ class MemoryWriter:
                     reason=f"superseded: {decision.note}")
             self.store.insert_fact(fact, commit)
             self.store.add_edge(fact.id, chunk_id, "EXTRACTED_FROM")
-            self.palace.add(fact.id, self.palace.encode_fact(fact))
-            results.append(self._result(fact, "SUPERSEDED", decision.note))
+            # v0.6.1: Shannon tiered storage. For SUPERSEDE we usually
+            # palace.add (the new fact is the canonical value now).
+            # But if the new fact has high VSA overlap to existing
+            # memory, skip the palace.add — the holographic signal
+            # is already there.
+            overlap = self._max_vsa_overlap(fact, fact.user_id or "default")
+            if overlap > float(getattr(self.cfg, "shannon_overlap_threshold", 0.9)):
+                fact.provenance = {
+                    **fact.provenance,
+                    "shannon_tier": "verbatim_only",
+                    "shannon_overlap": round(overlap, 3),
+                }
+                results.append(self._result(
+                    fact, "SUPERSEDED",
+                    f"{decision.note}; shannon_tier=verbatim_only "
+                    f"(overlap={overlap:.3f})"))
+            else:
+                self.palace.add(fact.id, self.palace.encode_fact(fact))
+                results.append(self._result(fact, "SUPERSEDED", decision.note))
             return 1
         # COMMIT / COEXIST
         self.store.insert_fact(fact, commit)
         self.store.add_edge(fact.id, chunk_id, "EXTRACTED_FROM")
-        self.palace.add(fact.id, self.palace.encode_fact(fact))
-        results.append(self._result(fact, "ADD", decision.note))
+        # v0.6.1: Shannon tiered storage. For brand-new COMMIT/COEXIST
+        # facts, check VSA overlap before adding the hologram. High
+        # overlap (≥0.9) → store the fact + chunk + edges but skip
+        # palace.add (verbatim tier still catches exact-match via BM25).
+        overlap = self._max_vsa_overlap(fact, fact.user_id or "default")
+        if overlap > float(getattr(self.cfg, "shannon_overlap_threshold", 0.9)):
+            fact.provenance = {
+                **fact.provenance,
+                "shannon_tier": "verbatim_only",
+                "shannon_overlap": round(overlap, 3),
+            }
+            results.append(self._result(
+                fact, "ADD",
+                f"shannon_tier=verbatim_only "
+                f"(overlap={overlap:.3f}; verbatim tier still findable)"))
+        else:
+            self.palace.add(fact.id, self.palace.encode_fact(fact))
+            results.append(self._result(fact, "ADD", decision.note))
         return 1
 
     # ------------------------------------------------------------------

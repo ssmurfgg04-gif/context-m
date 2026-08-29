@@ -334,35 +334,44 @@ class VerbatimPlugin:
         # expansion, so the existing BM25 + cosine path is preserved
         # (additive). Expansions run additional BM25 passes; results
         # are unioned by rowid with dedup.
-        queries = [query]
-        if self.query_rewrite_enabled:
-            if self._query_rewriter is None:
-                from cortexm.bridge.query_rewrite import QueryRewriter
-                self._query_rewriter = QueryRewriter(
-                    max_expansions=self.max_expansions)
-            try:
-                queries = self._query_rewriter.rewrite(query)
-            except Exception:
-                queries = [query]  # rewriter failure → fall back to original
-
-        # Run the existing search path on the FIRST query (original).
-        # Then for any additional expansions, run BM25-only and append
-        # new rowids to the result pool. The dense cosine path runs
-        # once on the original query (cheaper, and the fused score is
-        # most meaningful for the original query embedding).
+        #
+        # v0.6.1: LAZY expansion. The QueryRewriter adds ~2–4ms to every
+        # search() call. The 95% of queries that hit on the first try
+        # don't need expansion. So we try the original query FIRST; only
+        # if it returns empty do we fall back to the rewritten variants.
+        # This restores the v0.5.x 1.6ms read p50 for the common case
+        # while keeping the v0.6.0 synonym/FST/slang safety net for the
+        # long-tail paraphrase queries.
         primary = self._search_single(
-            query=queries[0], user_id=user_id, k=k,
+            query=query, user_id=user_id, k=k,
             session_id=session_id, agent_id=agent_id)
-        if len(queries) <= 1:
+        if primary or not self.query_rewrite_enabled:
+            if self.query_cache_enabled:
+                self._query_cache.put(cache_key, primary)
+            return primary
+        # Primary returned empty — fall back to expansions
+        if self._query_rewriter is None:
+            from cortexm.bridge.query_rewrite import QueryRewriter
+            self._query_rewriter = QueryRewriter(
+                max_expansions=self.max_expansions)
+        try:
+            queries = self._query_rewriter.rewrite(query)
+        except Exception:
+            queries = [query]
+        # Drop the original (already tried); expansions only
+        if queries and queries[0] == query:
+            queries = queries[1:]
+        if not queries:
             if self.query_cache_enabled:
                 self._query_cache.put(cache_key, primary)
             return primary
         # Additional expansions: BM25-only, dedup against primary rowids
+        # (primary is empty here, but keep the guard for safety)
         seen_rowids = {h.chunk_id for h in primary}
         extra: list = []
         # Cap total candidates at 2*k so the union stays bounded.
         budget = max(0, 2 * k - len(primary))
-        for q in queries[1:budget + 1]:
+        for q in queries[:budget + 1]:
             if budget <= 0:
                 break
             extra_hits = self._bm25_only(
