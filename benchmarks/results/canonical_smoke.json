@@ -1,0 +1,103 @@
+{
+  "summary": {
+    "n_questions": 5,
+    "slice_start": 0,
+    "slice_end": 5,
+    "seed": 42,
+    "data_source": "xiaowu0162/longmemeval-cleaned (longmemeval_s)",
+    "det_judge_accuracy": 0.8,
+    "by_subtask": {
+      "single_session": 0.8
+    },
+    "by_strategy": {
+      "nugget": 0.8
+    },
+    "judged_by": "deterministic_rule",
+    "mempalace_target": 0.966,
+    "mempalace_parity": false,
+    "honest_scope_note": "Slice [0:5] = 5 questions of the canonical 500. \u03bc=0 throughout \u2014 no LLM at ingest, retrieval, or judging. The score is REAL for this slice. Use scripts/longmemeval_canonical_aggregate.py to merge slices into a full-500 score.",
+    "errors": 0
+  },
+  "results": [
+    {
+      "qid": "e47becba",
+      "global_idx": 0,
+      "question_type": "single-session-user",
+      "subtask": "single_session",
+      "question": "What degree did I graduate with?",
+      "expected_answer": "Business Administration",
+      "n_messages_ingested": 273,
+      "ingest_s": 3.13,
+      "retrieve_s": 0.25,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- What are some must-visit wineries and vineyards in Tuscany and Umbria that I should consider adding to my itinerary?\n- How can I make tender and flavorful chicken breast for my weeknight meals, and what cooking methods should I avoid using to prevent dryness?\n- I'm happy to share that I usually use my cashback earnings to offset my household expenses or save up for future purchases. It's always nice to have a little extra cash on hand to cover unexpected expenses or splurge on something I've been wanting.\n- I'm thinking of adding some bookshelves to the office, and I'm wondering if you have any recommendations for bookshelf styles or designs that would fit well with the room's current aesthetic.\n- I need to leave for work at 8:45 am on regular days, and around 8:15 am on days with morning meetings. It usually takes me about 45 minutes to get ready. I'd like to spend about 30 minutes eating my oatmeal and enjoying my breakfast.\n- I didn't know ",
+      "det_correct": true,
+      "verbatim_hits": 1,
+      "recall_step": "ran"
+    },
+    {
+      "qid": "118b2229",
+      "global_idx": 1,
+      "question_type": "single-session-user",
+      "subtask": "single_session",
+      "question": "How long is my daily commute to work?",
+      "expected_answer": "45 minutes each way",
+      "n_messages_ingested": 241,
+      "ingest_s": 2.55,
+      "retrieve_s": 0.26,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- I've been listening to audiobooks during my daily commute, which takes 45 minutes each way.\n- I'm looking for some new fiction audiobook recommendations. I've been enjoying audiobooks a lot lately, especially during my daily commute.\n- I'm looking for some advice on how to take care of my leather boots. I've been wearing my new boots almost daily since January 15th, and I want to make sure they last long. Do you have any tips on how to condition them?\n- How does price elasticity work?\n- It's good to hear that the Maldives is taking action to address the issue. How effective do you think these initiatives will be in the long run?\n- How has technology and social media impacted the radio personality's work, and what changes have they had to adapt to in recent years?\n- I hope that these initiatives will continue to be successful in the long run and that other countries will follow the Maldives' lead in addressing the threat of climate change.\n- I'",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran"
+    },
+    {
+      "qid": "51a45a95",
+      "global_idx": 2,
+      "question_type": "single-session-user",
+      "subtask": "single_session",
+      "question": "Where did I redeem a $5 coupon on coffee creamer?",
+      "expected_answer": "Target",
+      "n_messages_ingested": 263,
+      "ingest_s": 3.85,
+      "retrieve_s": 0.25,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- I'm looking for some advice on cat behavior. My cat Luna loves to lounge on the topmost hammock of her new 5-tier cat tower, which I got from Petco for $120 on sale. Do you think that's normal behavior?\n- I want you to act as a debate coach. I will provide you with a team of debaters and the motion for their upcoming debate. Your goal is to prepare the team for success by organizing practice rounds that focus on persuasive speech, effective timing strategies, refuting opposing arguments, and drawing ...\n- That's really helpful to know. I've also been trying to manage her shedding by brushing her regularly with a Furminator brush I got a month ago. Do you have any tips on how to reduce shedding further?\n\n[Memory \u2014 Known facts]\n- (here's assistant's response, event, actually redeemed a) [valid 2026-08-23\u2192\u221e; learned 2026-08-29; conf 0.70; id 2130e27d; src #4519efc5; \"I actually redeemed a $5 coupon on coffee creamer last Sunday, which was a nice ",
+      "det_correct": false,
+      "verbatim_hits": 2,
+      "recall_step": "ran"
+    },
+    {
+      "qid": "58bf7951",
+      "global_idx": 3,
+      "question_type": "single-session-user",
+      "subtask": "single_session",
+      "question": "What play did I attend at the local community theater?",
+      "expected_answer": "The Glass Menagerie",
+      "n_messages_ingested": 305,
+      "ingest_s": 4.86,
+      "retrieve_s": 0.36,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- I'll definitely try those suggestions. By the way, I recently went to a play at the local community theater and was impressed by the lead actress's performance - she reminded me of my friend Emily, who's also an aspiring actress.\n- What role did the relationship between the author's personal beliefs and values play in shaping the messages conveyed in their respective works?\n- I just bought Sushi Go! and I'm excited to try it out with my family. Do you have any tips for how to play the game?\n- are those reasons above why the Empress relies on the democratic processes of the imperial senate and local and regional governments, and exercises absolute power only when it is deemed strictly necesary?\n- I'm looking for some recommendations for local Italian restaurants. I recently tried the new place downtown and it was pretty good, but I'd love to explore other options.\n- I've been thinking of taking some acting classes myself, do you know of any loc",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran"
+    },
+    {
+      "qid": "1e043500",
+      "global_idx": 4,
+      "question_type": "single-session-user",
+      "subtask": "single_session",
+      "question": "What is the name of the playlist I created on Spotify?",
+      "expected_answer": "Summer Vibes",
+      "n_messages_ingested": 253,
+      "ingest_s": 3.28,
+      "retrieve_s": 0.25,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- I forgot to update my alma mater with my new name. Can you remind me what documents I need to send them?\n- I'll go with the medium size (15\" x 12\") cutting board. The couple's last name is Smith.\n- I'm trying to organize my digital life, can you help me generate a checklist for updating my online presence after a name change?\n- Can you expand on the key components of the strategy, explaining what needs to be done to successfully accomplish this\n- I'm actually surprised I forgot to update my alma mater, considering I had to update my ID and all that. Thanks for the reminder! I'll get on that right away. By the way, do you think I should update my LinkedIn profile to reflect my new name and educational background?\n\n[Memory \u2014 Known facts]\n- (many portrayals media, event, got the new pair of Adidas running shoes) [valid 2026-02-12\u2192\u221e; learned 2026-08-29; conf 0.70; id bb297bfd; src #ed2da061; \"I got the new pair of Adidas running shoes on February ",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran"
+    }
+  ]
+}

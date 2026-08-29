@@ -1,0 +1,185 @@
+name: LongMemEval Canonical (Full 500)
+
+# Runs the canonical 500-question LongMemEval benchmark end-to-end
+# with the μ=0 pipeline (no LLM at ingest, retrieval, or judging).
+#
+# Strategy: 5 parallel slices of 100 questions each, then an aggregator
+# job that merges them into a single canonical full-500 score. This
+# bounds wall-clock per runner (each slice takes ~10-15 min on a
+# GitHub ubuntu-latest runner) and bounds RAM (per-question Memory
+# keeps heap flat — no OOM even on the 7GB-RAM standard runners).
+#
+# Trigger:
+#   - workflow_dispatch (manual, from Actions tab)
+#   - schedule (nightly at 03:00 UTC)
+#   - push to canonical-benchmarks/ paths (changing the runner/judge)
+# Disables on the main branch unless you explicitly trigger.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slice_size:
+        description: "Questions per slice (default 100 → 5 slices)"
+        default: "100"
+        type: string
+  schedule:
+    - cron: "0 3 * * *"   # nightly 03:00 UTC
+  push:
+    paths:
+      - "scripts/longmemeval_canonical_full.py"
+      - "scripts/longmemeval_canonical_aggregate.py"
+      - "scripts/longmemeval_judge.py"
+      - "scripts/longmemeval_canonical.py"
+      - "cortexm/plugins/verbatim.py"
+      - "cortexm/api/memory.py"
+      - "cortexm/bridge/reader.py"
+      - ".github/workflows/longmemeval_canonical_full.yml"
+    branches:
+      - main
+
+permissions:
+  contents: write   # allow the aggregate job to commit results to repo
+
+jobs:
+  # Generate the slice matrix dynamically based on input.
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      slices: ${{ steps.gen.outputs.slices }}
+      slice_size: ${{ steps.gen.outputs.slice_size }}
+      n_slices: ${{ steps.gen.outputs.n_slices }}
+    steps:
+      - id: gen
+        run: |
+          SLICE_SIZE="${{ inputs.slice_size || '100' }}"
+          N_SLICES=$(( (500 + SLICE_SIZE - 1) / SLICE_SIZE ))
+          # generate JSON array of {idx, start, end} for each slice
+          SLICES="["
+          for i in $(seq 0 $((N_SLICES - 1))); do
+            START=$((i * SLICE_SIZE))
+            END=$((START + SLICE_SIZE))
+            if [ $END -gt 500 ]; then END=500; fi
+            [ $i -gt 0 ] && SLICES+=","
+            SLICES+="{\"idx\":$i,\"start\":$START,\"end\":$END}"
+          done
+          SLICES+="]"
+          echo "slices=$SLICES" >> $GITHUB_OUTPUT
+          echo "slice_size=$SLICE_SIZE" >> $GITHUB_OUTPUT
+          echo "n_slices=$N_SLICES" >> $GITHUB_OUTPUT
+          echo "Generated $N_SLICES slices of $SLICE_SIZE questions each"
+          echo "$SLICES"
+
+  # Run each slice in parallel. Each job runs its own runner with the
+  # per-question Memory pattern, so RAM stays bounded.
+  slice:
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # don't cancel other slices if one fails
+      matrix:
+        slice: ${{ fromJson(needs.matrix.outputs.slices) }}
+    name: "slice ${{ matrix.slice.start }}-${{ matrix.slice.end }}"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+      - name: Cache LongMemEval dataset
+        uses: actions/cache@v4
+        with:
+          path: data/longmemeval/
+          key: longmemeval-s-cleaned-v1
+      - name: Download LongMemEval dataset (if cache miss)
+        run: |
+          if [ ! -f data/longmemeval/longmemeval_s_cleaned.json ]; then
+            mkdir -p data/longmemeval
+            python -c "
+            from huggingface_hub import hf_hub_download
+            p = hf_hub_download(
+                repo_id='xiaowu0162/longmemeval-cleaned',
+                repo_type='dataset',
+                filename='longmemeval_s_cleaned.json')
+            import shutil; shutil.copy(p, 'data/longmemeval/longmemeval_s_cleaned.json')"
+          fi
+      - name: Run slice
+        run: |
+          mkdir -p benchmarks/results
+          python scripts/longmemeval_canonical_full.py \
+            --start ${{ matrix.slice.start }} \
+            --end ${{ matrix.slice.end }} \
+            --out benchmarks/results/canonical_slice_${{ matrix.slice.start }}.json \
+            --checkpoint benchmarks/results/canonical_slice_${{ matrix.slice.start }}.ckpt.jsonl \
+            --max-messages-per-q 2000 \
+            --max-seconds-per-q 240 \
+            --db-dir /tmp/cortexm_canonical
+      - name: Upload slice results
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-slice-${{ matrix.slice.start }}
+          path: |
+            benchmarks/results/canonical_slice_${{ matrix.slice.start }}.json
+            benchmarks/results/canonical_slice_${{ matrix.slice.start }}.ckpt.jsonl
+          retention-days: 30
+
+  # Aggregate all slices into one canonical full-500 score and
+  # commit it back to the repo so the README can reference it.
+  aggregate:
+    needs: [matrix, slice]
+    runs-on: ubuntu-latest
+    name: "aggregate → canonical full-500"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (no test deps — just need the cortexm package)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Download all slice artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: canonical-slice-*
+          path: benchmarks/results
+          merge-multiple: true
+      - name: Aggregate slices
+        run: |
+          mkdir -p benchmarks/results
+          python scripts/longmemeval_canonical_aggregate.py \
+            --slices benchmarks/results/canonical_slice_*.json \
+            --out benchmarks/results/canonical_full.json
+      - name: Print summary
+        run: |
+          echo "## Canonical LongMemEval (μ=0, full 500)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          python -c "
+          import json
+          d = json.load(open('benchmarks/results/canonical_full.json'))
+          s = d['summary']
+          print(f\"Coverage: {s['coverage_pct']}% ({s['n_total_questions']}/{s['n_target']})\")
+          print(f\"Overall: {s['det_judge_accuracy']}\")
+          print()
+          print('| Subtask | n | accuracy | correct | wrong |')
+          print('|---|---|---|---|---|')
+          for k, v in s['by_subtask'].items():
+              print(f'| {k} | {v[\"n\"]} | {v[\"accuracy\"]} | {v[\"correct\"]} | {v[\"wrong\"]} |')
+          " | tee -a $GITHUB_STEP_SUMMARY
+      - name: Commit results back
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benchmarks/results/canonical_full.json \
+                  benchmarks/results/canonical_slice_*.json \
+                  benchmarks/results/canonical_slice_*.ckpt.jsonl
+          git commit -m "chore(bench): canonical LongMemEval full-500 (μ=0)
+
+          Aggregated from ${{ needs.matrix.outputs.n_slices }} parallel slices
+          of ${{ needs.matrix.outputs.slice_size }} questions each. μ=0
+          throughout — no LLM at ingest, retrieval, or judging.
+          Score is REAL for the canonical 500." || echo "nothing to commit"
+          git push

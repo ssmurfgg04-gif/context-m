@@ -1088,6 +1088,7 @@ class MemoryReader:
                                               agent_id=agent_id)
         if verbatim_hits:
             vblock_lines = ["", "## VERBATIM CHUNKS (BM25 + dense hybrid)"]
+            seen_chunk_ids: set[int] = set()
             for vh in verbatim_hits:
                 # vh.text is the raw user message — include up to 2000
                 # chars per chunk so the judge sees the full answer
@@ -1099,6 +1100,40 @@ class MemoryReader:
                 vblock_lines.append(
                     f"- [score={vh.score:.3f} bm25={vh.bm25_norm:.3f} "
                     f"cos={vh.cosine_sim:.3f}] {snippet}")
+                seen_chunk_ids.add(vh.chunk_id)
+                # v0.5.4: NEIGHBOR FETCH — for each BM25 hit, also surface
+                # the chunks immediately before and after it (by rowid,
+                # which equals ingest order). This catches the
+                # "Target" / "Veja" / "Hawaii" failure mode where the
+                # user message says "I redeemed a $5 coupon on coffee
+                # creamer" and the assistant reply that immediately
+                # follows says "Many retailers, like Target, send
+                # exclusive coupons..." Without the neighbor, the
+                # expected answer "Target" is unreachable from the user
+                # chunk alone.
+                # μ=0: pure SQL rowid lookup — no LLM, no embeddings.
+                # Only fires if include_assistant=True at ingest time
+                # (otherwise the neighbors are also user messages and
+                # don't carry the answer).
+                if getattr(self.cfg, "verbatim_neighbor_window", 1) > 0:
+                    try:
+                        neighbors = self._verbatim.fetch_neighbors(
+                            chunk_id=vh.chunk_id, user_id=user_id,
+                            before=int(getattr(
+                                self.cfg, "verbatim_neighbor_window", 1)),
+                            after=int(getattr(
+                                self.cfg, "verbatim_neighbor_window", 1)),
+                            agent_id=agent_id)
+                        for nb in neighbors:
+                            if nb["chunk_id"] in seen_chunk_ids:
+                                continue
+                            seen_chunk_ids.add(nb["chunk_id"])
+                            nb_snippet = (nb["text"] or "")[:1200]
+                            vblock_lines.append(
+                                f"- [neighbor {nb['position']} "
+                                f"offset={nb['offset']:+d}] {nb_snippet}")
+                    except Exception:
+                        pass  # neighbor fetch is best-effort
             vblock = "\n".join(vblock_lines)
             block = (block + "\n" + vblock) if block else vblock
             # Also extend the SLB record so the cache sees the verbatim

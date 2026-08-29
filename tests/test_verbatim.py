@@ -234,3 +234,83 @@ def test_dispose_drops_tables(ctx_with_verbatim):
     # The conn is closed at this point; we just verify dispose
     # didn't raise and the Context is clean.
     assert ctx_with_verbatim.services == []
+
+
+# ----------------------------- neighbor fetch -----------------------
+
+def test_fetch_neighbors_returns_adjacent_chunks(ctx_with_verbatim):
+    """fetch_neighbors returns the chunks immediately before/after a hit.
+
+    The LongMemEval "Target" coupon question is the canonical case:
+    user says "I redeemed a $5 coupon on coffee creamer" then the
+    assistant says "Many retailers, like Target, send exclusive
+    coupons..." — without fetching the neighbor chunk, "Target" is
+    unreachable.
+    """
+    v = ctx_with_verbatim.inject("verbatim")["verbatim"]
+    # Ingest a 4-message conversation (3 user, 1 assistant interleaved)
+    v.add(text="What's for dinner?", user_id="alice")
+    v.add(text="I redeemed a $5 coupon on coffee creamer",
+         user_id="alice")
+    v.add(text="That's awesome! Target has great coupons for creamer.",
+         user_id="alice")
+    v.add(text="Thanks!", user_id="alice")
+    # The 2nd chunk is the "hit"
+    hits = v.search(query="coupon coffee creamer", user_id="alice", k=1)
+    assert hits, "BM25 should find the coupon chunk"
+    hit = hits[0]
+    assert "coupon" in hit.text.lower()
+    # Fetch 1 before + 1 after
+    neighbors = v.fetch_neighbors(chunk_id=hit.chunk_id, user_id="alice",
+                                   before=1, after=1)
+    # Should return 2 chunks (before = "What's for dinner?", after = "Target")
+    assert len(neighbors) == 2
+    positions = sorted(n["position"] for n in neighbors)
+    assert positions == ["after", "before"], \
+        f"expected [after, before], got {positions}"
+    # The "after" neighbor should contain "Target"
+    after_nb = [n for n in neighbors if n["position"] == "after"][0]
+    assert "target" in after_nb["text"].lower(), \
+        f"after-neighbor should contain Target, got: {after_nb['text']}"
+
+
+def test_fetch_neighbors_respects_agent_scope(ctx_with_verbatim):
+    """fetch_neighbors MUST respect the InjecMEM agent_id sandbox.
+
+    If a user-scope search hits a user-scoped chunk, the neighbor fetch
+    must NOT pull in an agent-scoped chunk that happens to be at the
+    adjacent rowid. This is the v0.5.4 sandbox-fix: a user query
+    (agent_id=None) only sees user-scoped chunks as both hits AND
+    neighbors.
+    """
+    v = ctx_with_verbatim.inject("verbatim")["verbatim"]
+    # User-scoped chunks (agent_id=None)
+    v.add(text="My name is Alice.", user_id="alice")
+    v.add(text="I work at Google.", user_id="alice")
+    # Agent-scoped chunk (agent_id="agent-x") — added AT THE END so
+    # its rowid is +1 from the last user chunk
+    v.add(text="Alice lives in Toronto.", user_id="alice",
+         agent_id="agent-x")
+    # Find the last user-scoped chunk ("I work at Google")
+    hits = v.search(query="work", user_id="alice", k=5)
+    assert hits
+    # The hit with "Google" should be a user-scoped chunk
+    google_hit = [h for h in hits if "google" in h.text.lower()][0]
+    # Fetch neighbor — should NOT return the agent-scoped Toronto chunk
+    neighbors = v.fetch_neighbors(chunk_id=google_hit.chunk_id,
+                                   user_id="alice",
+                                   before=1, after=1,
+                                   agent_id=None)
+    # User-scope neighbor fetch: must not see Toronto
+    for nb in neighbors:
+        assert "toronto" not in nb["text"].lower(), \
+            f"agent-scoped chunk leaked into user-scope view: {nb['text']}"
+    # Agent-scope neighbor fetch: should see Toronto
+    neighbors_agent = v.fetch_neighbors(chunk_id=google_hit.chunk_id,
+                                        user_id="alice",
+                                        before=1, after=1,
+                                        agent_id="agent-x")
+    has_toronto = any("toronto" in n["text"].lower()
+                       for n in neighbors_agent)
+    assert has_toronto, \
+        "agent-scope view should see Toronto chunk"

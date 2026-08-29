@@ -445,6 +445,86 @@ class VerbatimPlugin:
         ranked = sorted(tf.items(), key=lambda kv: (-kv[1], kv[0]))
         return [w for w, _ in ranked[:max_terms]]
 
+    def fetch_neighbors(self, *, chunk_id: int, user_id: str,
+                         before: int = 1, after: int = 1,
+                         agent_id: str | None = None) -> list[dict]:
+        """Fetch the chunks adjacent to a hit chunk in ingest order.
+
+        The verbatim tier indexes ONLY user messages by default (per
+        the LongMemEval canonical runner's `_flatten_haystack`). The
+        user's message that matches the query often doesn't contain
+        the answer — the answer lives in the ASSISTANT's response that
+        immediately followed. E.g.:
+
+            User: "I actually redeemed a $5 coupon on coffee creamer
+                   last Sunday, which was a nice surprise..."
+            Assistant: "That's awesome! Redeeming a surprise coupon is
+                        always a great feeling... Many retailers, like
+                        Target, send exclusive coupons and promotions..."
+
+        The expected answer "Target" is in the assistant message. By
+        fetching the chunks adjacent to the BM25 hit (by rowid, which
+        equals ingest order), we surface the assistant response and
+        the deterministic judge can match "Target" against it.
+
+        v0.5.4 sandbox: respects the InjecMEM agent_id scope. A user
+        query (agent_id=None) only sees user-scoped chunks as hits,
+        AND only sees user-scoped chunks as neighbors. An agent query
+        (agent_id=X) sees user-scoped + agent-X-scoped chunks as both
+        hits and neighbors. Without this, an agent-scoped "Alice lives
+        in Toronto" chunk could leak into a user-scope view via the
+        neighbor fetch even though the search() method correctly
+        filtered it out as a primary hit.
+
+        μ=0: pure SQL — no LLM. Returns the previous `before` and next
+        `after` chunks (by rowid) belonging to the same user_id and
+        matching the agent_id scope, skipping the hit chunk itself.
+
+        Returns a list of {chunk_id, text, user_id, session_id,
+        source_tx_id, position} dicts. Position is "before" or "after".
+        """
+        assert self._db is not None
+        # InjecMEM sandbox filter — must match search()'s scope rule.
+        if agent_id is None:
+            scope_filter = "agent_id IS NULL"
+            scope_params: tuple = ()
+        else:
+            scope_filter = "(agent_id IS NULL OR agent_id = ?)"
+            scope_params = (agent_id,)
+        out: list[dict] = []
+        # In our canonical runner, chunks are ingested in conversation
+        # order, so rowid IS position-in-conversation. The previous
+        # chunk is rowid-1, the next is rowid+1, etc.
+        # Fetch before
+        for i in range(1, before + 1):
+            row = self._db.execute(
+                "SELECT rowid, text, user_id, session_id, source_tx_id "
+                f"FROM verbatim_chunks WHERE rowid = ? AND user_id = ? "
+                f"AND {scope_filter}",
+                (chunk_id - i, user_id, *scope_params)).fetchone()
+            if row:
+                out.append({
+                    "chunk_id": row[0], "text": row[1] or "",
+                    "user_id": row[2], "session_id": row[3],
+                    "source_tx_id": row[4], "position": "before",
+                    "offset": -i,
+                })
+        # Fetch after
+        for i in range(1, after + 1):
+            row = self._db.execute(
+                "SELECT rowid, text, user_id, session_id, source_tx_id "
+                f"FROM verbatim_chunks WHERE rowid = ? AND user_id = ? "
+                f"AND {scope_filter}",
+                (chunk_id + i, user_id, *scope_params)).fetchone()
+            if row:
+                out.append({
+                    "chunk_id": row[0], "text": row[1] or "",
+                    "user_id": row[2], "session_id": row[3],
+                    "source_tx_id": row[4], "position": "after",
+                    "offset": i,
+                })
+        return out
+
     def _dense_only_search(self, *, query: str, user_id: str,
                             session_id: str | None,
                             agent_id: str | None,

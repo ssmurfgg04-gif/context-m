@@ -146,6 +146,12 @@ class Config:
     verbatim_fusion_weight: float = 0.5     # weight in context_block fusion
     verbatim_min_score: float = 0.05        # below this → skip
     verbatim_boost_first_chunk_only: bool = False  # give first chunk a small boost
+    # v0.5.4: how many chunks before/after each BM25 hit to surface as
+    # "neighbor context". Catches the "Target" / "Veja" / "Hawaii"
+    # failure mode where the answer is in the assistant reply that
+    # immediately follows the user-message hit. 0 disables. Default 1
+    # (one before + one after per hit) — keeps context_block bounded.
+    verbatim_neighbor_window: int = 1
 
     # --- recall_step in production search path ---------------------------
     # When True, Memory.search() ALSO runs recall_step (asymmetric step-

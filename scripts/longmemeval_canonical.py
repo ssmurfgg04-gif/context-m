@@ -94,18 +94,26 @@ def sample_questions(data: list[dict], n_per_type: int,
 
 # ---------------------------- ingest helpers ----------------------------
 
-def _flatten_haystack(haystack_sessions: list) -> list[str]:
+def _flatten_haystack(haystack_sessions: list,
+                       include_assistant: bool = False,
+                       max_assistant_chars: int = 800) -> list[str]:
     """Flatten the haystack's role/content messages into a list of
     natural-language strings (one per message).
 
     Each entry in haystack_sessions is a list of {role, content} dicts.
     For ingest, we use:
       - role=user → ingest content as user statement
-      - role=assistant → v0.5.3: SKIP (was tried but ingest of long
-        assistant responses doubles wall-clock time per question
-        without proportional accuracy gain. The verbatim tier already
-        catches most answers via PRF. Keep this off until assistant
-        content is shorter or skipped selectively.)
+      - role=assistant → v0.5.3: SKIP by default (was tried but ingest
+        of long assistant responses doubles wall-clock time per
+        question without proportional accuracy gain). v0.5.4: opt-in
+        via ``include_assistant=True`` — needed for "Target" / "Veja" /
+        other short-brand-name answers where the user message says
+        "I redeemed a $5 coupon on coffee creamer" and the assistant
+        reply that follows says "Many retailers, like Target, send
+        exclusive coupons..." Without the assistant chunk, the verbatim
+        tier can't surface the answer. To bound ingest cost, we cap
+        each assistant message at ``max_assistant_chars`` (default 800
+        — keeps the answer-bearing opening sentences, drops the rest).
       - role=system → skip (system prompt, not user-stated fact)
 
     v0.5.3: bumped the per-message char cap from 500 to 5000. The
@@ -114,6 +122,13 @@ def _flatten_haystack(haystack_sessions: list) -> list[str]:
     a 1735-char chunk got cut off). 5000 covers LongMemEval's longest
     messages while keeping ingest bounded (the extractor's DisSim
     clause splitter handles long text via recursive splits).
+
+    v0.5.4: ``include_assistant=True`` ingests assistant responses too
+    (capped at ``max_assistant_chars``). The chunks land in conversation
+    order, so verbatim's ``fetch_neighbors()`` can pull the assistant
+    response that immediately follows a user-message BM25 hit. This
+    closes the "2-3 word brand-name answer in assistant reply" failure
+    mode without needing a real sentence-embedding model.
     """
     out: list[str] = []
     for session in haystack_sessions:
@@ -129,6 +144,13 @@ def _flatten_haystack(haystack_sessions: list) -> list[str]:
             if role == "user":
                 if len(content) > 5000:
                     content = content[:5000]
+                out.append(content)
+            elif role == "assistant" and include_assistant:
+                # Cap assistant length — the answer-bearing opening
+                # is usually in the first 1-2 sentences. Long recipes
+                # / lists / tutorials don't carry the answer.
+                if len(content) > max_assistant_chars:
+                    content = content[:max_assistant_chars]
                 out.append(content)
     return out
 
