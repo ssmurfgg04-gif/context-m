@@ -301,6 +301,47 @@ class MemoryReader:
                     prf_topn=getattr(config, "prf_topn", 3))
             except Exception:  # noqa: BLE001
                 self._reranker = None
+        # v0.5.3: verbatim tier plugin (FTS5 + dense over raw chunks).
+        # Attached by Memory.__init__ when verbatim_search_enabled=True.
+        # The reader calls self._verbatim_search() to surface answer-
+        # bearing raw chunks alongside the fact-triple VSA hits. This is
+        # the canonical-LongMemEval single_session fix: when the
+        # deterministic extractor misses a factoid ("My dog's name is
+        # Charlie" with the verb "called" instead of "name is"), the
+        # verbatim tier still has the raw text and BM25+cosine fusion
+        # retrieves it.
+        self._verbatim = None
+
+    def attach_verbatim(self, plugin) -> None:
+        """Inject the VerbatimPlugin instance for the reader to query."""
+        self._verbatim = plugin
+
+    def _verbatim_search(self, query: str, user_id: str,
+                         k: int | None = None,
+                         agent_id: str | None = None) -> list:
+        """Query the verbatim tier (FTS5 + dense hybrid) — μ=0.
+
+        Returns a list of VerbatimHit. Returns [] if the verbatim
+        plugin isn't mounted, isn't enabled in config, or finds no
+        hits. The caller (search()) uses these to enrich the context
+        block with raw-chunk text — the fact-triple VSA may have
+        missed the answer because the extractor's 61 patterns didn't
+        fire on natural-human-language phrasing.
+
+        v0.5.3: agent_id forwarded so the InjecMEM scope sandbox holds
+        on verbatim tier too (user query → only user-scoped chunks;
+        agent query → user + own agent).
+        """
+        if self._verbatim is None:
+            return []
+        if not getattr(self.cfg, "verbatim_search_enabled", True):
+            return []
+        kk = k or int(getattr(self.cfg, "verbatim_k_at_search", 8))
+        try:
+            return self._verbatim.search(query=query, user_id=user_id,
+                                         k=kk, agent_id=agent_id)
+        except Exception:
+            return []
 
     def with_decoder(self, name: str) -> "MemoryReader":
         """Swap the output decoder (NSR insight: same palace + Trace,
@@ -1035,6 +1076,38 @@ class MemoryReader:
 
         block = self._context_block(query, plan.intent, facts, candidates,
                                     notes)
+        # v0.5.3: verbatim tier enrichment — surface answer-bearing raw
+        # chunks. The fact-triple VSA may have missed the answer because
+        # the extractor's 61 patterns didn't fire on natural-language
+        # phrasing. The verbatim tier (FTS5 + dense over the RAW message
+        # text) catches it. Append a "VERBATIM CHUNKS" section to the
+        # context_block so the deterministic judge sees both the
+        # structured facts AND the raw chunks. The judge's NUGGET/
+        # LIST/BOOL strategies will then match against the verbatim text.
+        verbatim_hits = self._verbatim_search(query, user_id,
+                                              agent_id=agent_id)
+        if verbatim_hits:
+            vblock_lines = ["", "## VERBATIM CHUNKS (BM25 + dense hybrid)"]
+            for vh in verbatim_hits:
+                # vh.text is the raw user message — include up to 2000
+                # chars per chunk so the judge sees the full answer
+                # context. The 500-char cap was truncating answer-bearing
+                # chunks mid-sentence (e.g. "Andy wears an untidy, stained
+                # white shirt" at position 638 of a 1735-char chunk).
+                # v0.5.3: bumped to 2000.
+                snippet = (vh.text or "")[:2000]
+                vblock_lines.append(
+                    f"- [score={vh.score:.3f} bm25={vh.bm25_norm:.3f} "
+                    f"cos={vh.cosine_sim:.3f}] {snippet}")
+            vblock = "\n".join(vblock_lines)
+            block = (block + "\n" + vblock) if block else vblock
+            # Also extend the SLB record so the cache sees the verbatim
+            # section — without this, the next near-duplicate query
+            # would hit the SLB and miss the verbatim enrichment.
+            # μ=0 — pure string concatenation, no LLM.
+            result_timing_extra = {"verbatim_hits": len(verbatim_hits)}
+        else:
+            result_timing_extra = {"verbatim_hits": 0}
         result = RetrievalResult(
             query, plan.intent, facts, block,
             self._provenance(query, facts, vsa_scores),
@@ -1046,7 +1119,8 @@ class MemoryReader:
                  chunk_recall_stats.n_kept if chunk_recall_stats else 0),
              "chunk_recall_skipped": (
                  chunk_recall_stats.skipped if chunk_recall_stats else ""),
-             "rerank": rerank_used},
+             "rerank": rerank_used,
+             **result_timing_extra},
             False, {f.id: round(candidates.get(f.id, 0.0), 4) for f in facts})
         # --- MIND diversity check (InjecMEM defense) ----------------------
         # Stamp the result's provenance with the retrieval diversity score

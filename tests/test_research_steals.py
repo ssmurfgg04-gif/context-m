@@ -141,7 +141,14 @@ class TestDecoders:
         assert parsed[0]["score"] == 0.9
 
     def test_reader_with_decoder(self):
-        mem = Memory(Config())
+        # v0.5.3: disable verbatim tier for this test so the
+        # context_block ends exactly as the decoder rendered it
+        # (verbatim would append "## VERBATIM CHUNKS" section).
+        cfg = Config()
+        cfg.verbatim_search_enabled = False
+        cfg.verbatim_ingest_enabled = False
+        cfg.recall_step_in_search = False
+        mem = Memory(cfg)
         mem.add([{"role": "user", "content": "My name is Alice and I work at Google."}],
                 user_id="u1")
         # swap decoder

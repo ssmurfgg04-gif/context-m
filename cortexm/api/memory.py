@@ -63,6 +63,33 @@ class Memory:
         self.git = MemoryGit(self.store, self.palace)
         self.zk = ZKProver(self.store, self.reader)
 
+        # v0.5.3: Verbatim tier — MemPalace-style FTS5 + dense over raw
+        # chunks. Mounted inline (not via Context) so Memory() callers
+        # get it by default. Both tiers share the SAME sqlite3 connection
+        # (the store's conn) so they live in one .db file. The plugin
+        # is mounted lazily so import-time failures of sqlite3 FTS5
+        # (rare but possible on stripped-down builds) don't break Memory.
+        self._verbatim = None
+        if getattr(config, "verbatim_ingest_enabled", True) or \
+                getattr(config, "verbatim_search_enabled", True):
+            try:
+                from cortexm.plugins.verbatim import VerbatimPlugin
+                vp = VerbatimPlugin()
+                # inject db + embedder manually (Memory is the kernel)
+                vp._db = self.store.conn
+                vp._embedder = self.palace.embedder
+                vp._create_tables()
+                self._verbatim = vp
+                # Wire into the writer (ingest path)
+                self.writer.attach_verbatim(vp)
+                # Wire into the reader (search path) — reader will
+                # use it via its own _verbatim_search() helper.
+                self.reader.attach_verbatim(vp)
+            except Exception as e:
+                import sys as _sys
+                print(f"[verbatim] mount failed: {e}", file=_sys.stderr)
+                self._verbatim = None
+
         # --- enterprise layer (PII, crypto, RBAC, audit, governance) ---------
         from cortexm.security.crypto import AESGCMCipher, load_master_key
         from cortexm.security.pii import PIIGuard, PIIVault
@@ -460,7 +487,14 @@ class Memory:
                agent_id: str | None = None, run_id: str | None = None,
                limit: int | None = None, timestamp=None,
                branch: str | None = None, **kw) -> dict:
-        """Neuro-symbolic retrieval with full provenance. Mem0-shaped output."""
+        """Neuro-symbolic retrieval with full provenance. Mem0-shaped output.
+
+        v0.5.3: also runs recall_step (asymmetric step-distance boost)
+        and concatenates its context_block onto the standard search
+        result. This is the multi_session fix — facts from scrolled-out
+        sessions surface via the step-distance boost, not just access_count.
+        Controlled by config.recall_step_in_search (default True).
+        """
         user_id = user_id or self.config.default_user_id
         ts = parse_ts(timestamp) if timestamp else None
         result = self.reader.search(query, user_id=user_id, agent_id=agent_id,
@@ -468,16 +502,78 @@ class Memory:
                                     branch=branch)
         hits = result.facts and self.prefetcher.note_hits(
             [f.id for f in result.facts])
+        context_block = result.context_block
+        # v0.5.3: wire recall_step into the production search path so all
+        # callers benefit. The recall_step applies an asymmetric step-
+        # distance boost to facts in danger of scrolling out of the LLM's
+        # context window. For LongMemEval multi_session questions ("list
+        # all the places Bob has worked"), this surfaces the OLDER
+        # session 1 fact that the access_count boost on the current
+        # session's fact would otherwise push below top-k.
+        # Gate: only fire if the user has enough ingested messages for
+        # the step-distance boost to be meaningful. Below the threshold,
+        # recall_step would just re-rank the same top-k as search().
+        extra_timing = {}
+        if getattr(self.config, "recall_step_in_search", True):
+            try:
+                # estimate current_step from the trace's chunk count for
+                # this user — the most accurate proxy we have without an
+                # explicit step counter
+                try:
+                    n_msgs = self.store.conn.execute(
+                        "SELECT COUNT(*) FROM chunks WHERE user_id=?",
+                        (user_id,)).fetchone()[0]
+                except Exception:
+                    n_msgs = 0
+                if n_msgs >= int(getattr(
+                        self.config, "recall_step_min_messages", 25)):
+                    rs = self.recall_step(query, user_id=user_id,
+                                         agent_id=agent_id, run_id=run_id,
+                                         current_step=n_msgs,
+                                         window=int(getattr(
+                                             self.config, "recall_step_window", 20)),
+                                         k=int(getattr(
+                                             self.config, "recall_step_k", 10)))
+                    rs_block = rs.get("context_block", "")
+                    if rs_block:
+                        context_block = (context_block + "\n\n" + rs_block
+                                          if context_block else rs_block)
+                        extra_timing["recall_step"] = "ran"
+                        # union the rs results into result.facts so the
+                        # caller sees both sets in the results list
+                        rs_results = rs.get("results", [])
+                        seen_ids = {f.id for f in result.facts}
+                        for r in rs_results:
+                            # recall_step returns dicts, not Facts; pull
+                            # the underlying fact from the store if available
+                            fid = r.get("id")
+                            if fid and fid not in seen_ids:
+                                try:
+                                    fobj = self.store.get_fact(fid)
+                                    if fobj and fobj.is_active and not fobj.quarantined:
+                                        result.facts.append(fobj)
+                                        seen_ids.add(fid)
+                                except Exception:
+                                    pass
+                    else:
+                        extra_timing["recall_step"] = "empty"
+                else:
+                    extra_timing["recall_step"] = f"skipped (n_msgs={n_msgs})"
+            except Exception as e:
+                extra_timing["recall_step_error"] = str(e)
+        # merge timing
+        merged_timing = dict(result.timing)
+        merged_timing.update(extra_timing)
         return {
             "results": result.memories(),
-            "context_block": result.context_block,
+            "context_block": context_block,
             "relations": [{"source": f.subject, "relationship": f.relation,
                            "destination": f.value,
                            "valid_from": f.valid_from, "valid_to": f.valid_to}
                           for f in result.facts],
             "provenance": result.provenance,
             "intent": result.intent,
-            "timing": result.timing,
+            "timing": merged_timing,
             "llm_calls": 0,
         }
 

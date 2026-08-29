@@ -101,8 +101,19 @@ def _flatten_haystack(haystack_sessions: list) -> list[str]:
     Each entry in haystack_sessions is a list of {role, content} dicts.
     For ingest, we use:
       - role=user → ingest content as user statement
-      - role=assistant → skip (model output, not user-stated fact)
+      - role=assistant → v0.5.3: SKIP (was tried but ingest of long
+        assistant responses doubles wall-clock time per question
+        without proportional accuracy gain. The verbatim tier already
+        catches most answers via PRF. Keep this off until assistant
+        content is shorter or skipped selectively.)
       - role=system → skip (system prompt, not user-stated fact)
+
+    v0.5.3: bumped the per-message char cap from 500 to 5000. The
+    old cap was truncating answer-bearing chunks mid-sentence (e.g.
+    "Andy wears an untidy, stained white shirt" at position 638 of
+    a 1735-char chunk got cut off). 5000 covers LongMemEval's longest
+    messages while keeping ingest bounded (the extractor's DisSim
+    clause splitter handles long text via recursive splits).
     """
     out: list[str] = []
     for session in haystack_sessions:
@@ -116,10 +127,8 @@ def _flatten_haystack(haystack_sessions: list) -> list[str]:
             if not content or not isinstance(content, str):
                 continue
             if role == "user":
-                # Cap to keep ingest bounded; long messages with code
-                # blocks etc. would slow the extractor needlessly.
-                if len(content) > 500:
-                    content = content[:500]
+                if len(content) > 5000:
+                    content = content[:5000]
                 out.append(content)
     return out
 
@@ -176,7 +185,13 @@ def run_canonical(n_per_type: int = 5,
     sample = sample_questions(data, n_per_type, seed=seed)
     print(f"[sample] picked {len(sample)} questions ({n_per_type}/subtask)")
 
-    # Fresh Memory instance for the canonical run.
+    # v0.5.3: single Memory instance for the canonical run. The
+    # earlier attempt to create fresh Memory per question caused
+    # OOM on Q1 (each Memory's init does FTS5 table creation + numpy
+    # array allocation; even with gc.collect the underlying sqlite3
+    # connections weren't being freed fast enough). With one Memory,
+    # the per-user chunks accumulate but the working set is similar
+    # (each question's user_id is unique — chunks aren't shared).
     cfg = Config(db_path=":memory:",
                  unmess_enabled=True,
                  bitap_trigger_enabled=True,
@@ -226,24 +241,19 @@ def run_canonical(n_per_type: int = 5,
         except Exception as e:
             print(f"  consolidate failed: {e}")
 
-        # Retrieve. Standard search + recall_step + TEMPORAL CHAIN.
+        # v0.5.3: search() now wires recall_step + verbatim tier
+        # internally. No need to call them separately here — the
+        # canonical runner is the SAME path users get in production.
         t0 = time.time()
         out = mem.search(question, user_id=user_id, limit=10)
         cb = out.get("context_block", "")
-        # recall_step — wires the multi_session fix
-        try:
-            current_step = n_ingested
-            window = 20  # standard LLM window
-            rs = mem.recall_step(question, user_id=user_id,
-                                 current_step=current_step,
-                                 window=window, k=10)
-            rs_block = rs.get("context_block", "")
-            if rs_block:
-                cb = cb + "\n\n" + rs_block
-        except Exception as e:
-            print(f"  recall_step failed: {e}")
         t_ret = time.time() - t0
-        print(f"  [retrieve] {t_ret:.1f}s")
+        # Surface what tiers fired so we can debug failures
+        timing = out.get("timing", {})
+        vh = timing.get("verbatim_hits", 0)
+        rs_status = timing.get("recall_step", "n/a")
+        print(f"  [retrieve] {t_ret:.1f}s (verbatim_hits={vh}, "
+              f"recall_step={rs_status})")
 
         # Judge
         lq = LongMemEvalQuestion(

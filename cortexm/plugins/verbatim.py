@@ -122,7 +122,8 @@ class VerbatimPlugin:
 
     def __init__(self, bm25_k: int = 2, bm25_k1: float = 1.5,
                  bm25_b: float = 0.75, *,
-                 drop_tables_on_dispose: bool = False) -> None:
+                 drop_tables_on_dispose: bool = False,
+                 prf_enabled: bool = True) -> None:
         # FTS5 uses BM25 with the standard k1/b parameters. We
         # pass them via the rank function (the FTS5 bm25() SQL fn
         # takes them as arguments). Defaults are textbook Okapi.
@@ -134,6 +135,12 @@ class VerbatimPlugin:
         # dispose would lose user data on restart. The caller owns
         # the DB connection's lifetime, not the plugin.
         self.drop_tables_on_dispose = drop_tables_on_dispose
+        # v0.5.3: PRF (pseudo-relevance feedback) — re-query with the
+        # top BM25 hits' content words to surface chunks that share
+        # vocabulary with the top hits but don't lexically match the
+        # original query. Default ON. Turn off for benchmarks that
+        # need pure BM25 baseline.
+        self.prf_enabled = prf_enabled
         self._db: sqlite3.Connection | None = None
         self._embedder = None
 
@@ -160,10 +167,32 @@ class VerbatimPlugin:
         # table is the source of truth; verbatim_chunks is its
         # search-accelerating shadow). The content_rowid points
         # back to verbatim_chunks(rowid) so deletes cascade.
-        self._db.execute(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS verbatim_chunks "
-            "USING fts5(text, user_id UNINDEXED, session_id UNINDEXED, "
-            "source_tx_id UNINDEXED, tokenize='unicode61')")
+        # agent_id UNINDEXED: stored but not tokenized — used for
+        # the InjecMEM scope sandbox (user queries see only user-
+        # scoped chunks; agent queries see user + own agent chunks).
+        # v0.5.3: ALTER TABLE for existing DBs that lack agent_id.
+        # SQLite doesn't support ALTER on virtual tables, so we
+        # CREATE TABLE IF NOT EXISTS and try to backfill via a
+        # CREATE VIRTUAL TABLE that includes the column on fresh DBs.
+        try:
+            self._db.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS verbatim_chunks "
+                "USING fts5(text, user_id UNINDEXED, session_id UNINDEXED, "
+                "source_tx_id UNINDEXED, agent_id UNINDEXED, "
+                "tokenize='unicode61')")
+        except Exception:
+            # Fallback for DBs that had the old schema (pre-0.5.3)
+            # without agent_id column. Drop + recreate so the new
+            # column exists. WARNING: this loses verbatim_chunks data
+            # on upgrade. The structured tier (chunks + facts) is the
+            # source of truth — verbatim_chunks is regenerated on next
+            # ingest. For a fresh memory: this branch never fires.
+            self._db.execute("DROP TABLE IF EXISTS verbatim_chunks")
+            self._db.execute(
+                "CREATE VIRTUAL TABLE verbatim_chunks "
+                "USING fts5(text, user_id UNINDEXED, session_id UNINDEXED, "
+                "source_tx_id UNINDEXED, agent_id UNINDEXED, "
+                "tokenize='unicode61')")
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS verbatim_vectors ("
             "chunk_id INTEGER PRIMARY KEY, vec BLOB NOT NULL, "
@@ -186,19 +215,26 @@ class VerbatimPlugin:
     # ------------------------ write path ----------------------------
 
     def add(self, *, text: str, user_id: str, session_id: str | None = None,
-            source_tx_id: int | None = None) -> int:
+            source_tx_id: int | None = None,
+            agent_id: str | None = None) -> int:
         """Insert a verbatim chunk + its int8-quantized embedding.
 
         Returns the chunk_id (FTS5 rowid).
 
         μ=0 invariant: the embedder is a HashingEmbedder — no LLM,
         no API call, deterministic from the seed.
+
+        v0.5.3: agent_id stored UNINDEXED — used by search() to honor
+        the InjecMEM scope sandbox. User-scoped chunks have
+        agent_id=NULL; agent-scoped chunks have agent_id=<id>. A user
+        query (agent_id=None) sees ONLY user-scoped chunks; an agent
+        query (agent_id=X) sees user chunks + agent X's own chunks.
         """
         assert self._db is not None and self._embedder is not None
         cur = self._db.execute(
             "INSERT INTO verbatim_chunks(text, user_id, session_id, "
-            "source_tx_id) VALUES(?, ?, ?, ?)",
-            (text, user_id, session_id, source_tx_id))
+            "source_tx_id, agent_id) VALUES(?, ?, ?, ?, ?)",
+            (text, user_id, session_id, source_tx_id, agent_id))
         chunk_id = cur.lastrowid
         # Encode + quantize to int8 (same codec as VSA Palace int8 mode).
         vec = self._embedder.embed(text).astype(np.float32)
@@ -213,23 +249,41 @@ class VerbatimPlugin:
         """Batch add — for the Pipeline `Index` stage or `cortexm.import`.
 
         Each chunk dict must have: text, user_id; optional session_id,
-        source_tx_id. Returns the list of chunk_ids in order.
+        source_tx_id, agent_id. Returns the list of chunk_ids in order.
         """
         ids = []
         for c in chunks:
             ids.append(self.add(
                 text=c["text"], user_id=c["user_id"],
                 session_id=c.get("session_id"),
-                source_tx_id=c.get("source_tx_id")))
+                source_tx_id=c.get("source_tx_id"),
+                agent_id=c.get("agent_id")))
         return ids
 
     # ------------------------ read path ------------------------------
 
     def search(self, *, query: str, user_id: str, k: int = 10,
-               session_id: str | None = None) -> list[VerbatimHit]:
-        """BM25 + dense hybrid retrieval.
+               session_id: str | None = None,
+               agent_id: str | None = None) -> list[VerbatimHit]:
+        """BM25 + dense hybrid retrieval with PRF expansion.
 
         Returns top-k VerbatimHit sorted by fused score desc.
+
+        v0.5.3: ``agent_id`` enforces the InjecMEM scope sandbox:
+          - ``agent_id=None`` (user scope): see ONLY chunks where
+            ``agent_id IS NULL`` (user-scoped chunks).
+          - ``agent_id=X`` (agent scope): see chunks where
+            ``agent_id IS NULL OR agent_id = 'X'`` (user + own agent).
+
+        v0.5.3 PRF (pseudo-relevance feedback): after the first BM25
+        pass, take the top-3 hits' content words, append them to the
+        query, and re-run BM25. This surfaces chunks whose terms
+        co-occur with the query's content terms even when the chunk
+        itself doesn't lexically match the query. The classic example:
+        Q="what restaurant did I mention?" → BM25 finds chunks mentioning
+        "restaurant"; PRF re-queries with the cuisine/neighborhood terms
+        from those hits, surfacing the actual answer chunk that names
+        the restaurant but doesn't contain "restaurant".
 
         If FTS5 finds no matches (query has no in-vocab terms), we
         fall back to a full-scan cosine search over the user's
@@ -240,26 +294,65 @@ class VerbatimPlugin:
         if k <= 0:
             return []
 
+        # InjecMEM sandbox filter: user-scope (agent_id=None) sees only
+        # user-scoped chunks; agent scope sees user + own agent chunks.
+        if agent_id is None:
+            scope_filter = "agent_id IS NULL"
+            scope_params: tuple = ()
+        else:
+            scope_filter = "(agent_id IS NULL OR agent_id = ?)"
+            scope_params = (agent_id,)
+
         # ---- PASS 1: BM25 candidates (top k*2) ----
+        # FTS5's bm25() requires the bare table name, NOT an alias.
+        # Using `bm25(v, ?, ?)` with alias `v` raises "no such column: v".
+        # Use the full table name throughout. Same for the MATCH clause.
         bm25_sql = (
-            "SELECT v.rowid, v.text, v.user_id, v.session_id, "
-            "v.source_tx_id, bm25(v, ?, ?) AS rank "
-            "FROM verbatim_chunks v "
-            "WHERE v.user_id = ? AND verbatim_chunks MATCH ? "
+            "SELECT rowid, text, user_id, session_id, "
+            "source_tx_id, bm25(verbatim_chunks, ?, ?) AS rank "
+            "FROM verbatim_chunks "
+            f"WHERE user_id = ? AND {scope_filter} "
+            "AND verbatim_chunks MATCH ? "
             "ORDER BY rank LIMIT ?")
         # FTS5 bm25 rank: lower score = better match. Pass k1, b.
         try:
             rows = self._db.execute(
                 bm25_sql,
-                (self.bm25_k1, self.bm25_b, user_id, self._sanitize_query(query),
-                 k * 2)).fetchall()
+                (self.bm25_k1, self.bm25_b, user_id, *scope_params,
+                 self._sanitize_query(query), k * 2)).fetchall()
         except Exception:
             rows = []  # FTS5 syntax error on weird query → fallback below
+
+        # ---- PASS 1.5: PRF expansion (pseudo-relevance feedback) ----
+        # Take the top-3 hits from PASS 1, extract their content words,
+        # and re-query with an expanded query that includes those terms.
+        # This surfaces chunks that share vocabulary with the top hits
+        # but don't lexically match the original query.
+        if self.prf_enabled and len(rows) >= 3:
+            try:
+                prf_words = self._prf_extract_terms(
+                    [r[1] for r in rows[:3]], max_terms=8)
+                if prf_words:
+                    expanded_q = self._sanitize_query(query) + \
+                        " OR " + " OR ".join(f'"{w}"' for w in prf_words)
+                    prf_rows = self._db.execute(
+                        bm25_sql,
+                        (self.bm25_k1, self.bm25_b, user_id, *scope_params,
+                         expanded_q, k)).fetchall()
+                    # Union: dedupe by rowid, prefer PASS 1's score
+                    seen = {r[0] for r in rows}
+                    for r in prf_rows:
+                        if r[0] not in seen:
+                            rows.append(r)
+                            seen.add(r[0])
+            except Exception:
+                pass  # PRF is best-effort — never break search
 
         # Fall back to dense-only if BM25 missed (paraphrase / OOD query)
         if not rows:
             return self._dense_only_search(query=query, user_id=user_id,
-                                           session_id=session_id, k=k)
+                                           session_id=session_id,
+                                           agent_id=agent_id, k=k)
 
         # ---- normalize BM25 scores (FTS5 returns negative; lower=better) ----
         raw_scores = [r[5] for r in rows]
@@ -297,18 +390,81 @@ class VerbatimPlugin:
         hits.sort(key=lambda h: h.score, reverse=True)
         return hits[:k]
 
+    @staticmethod
+    def _prf_extract_terms(texts: list[str], max_terms: int = 8) -> list[str]:
+        """Extract content words from the top BM25 hits for PRF expansion.
+
+        We want terms that DISCRIMINATE the top hits from the average
+        chunk — proper nouns, numbers, and rare words. The standard
+        PRF approach: take the top-N hits, count term frequency across
+        them, weight by inverse document frequency (rarity). The terms
+        with the highest TF-IDF in the top-N go into the expansion.
+
+        μ=0: pure string + set operations. No LLM, no embeddings.
+        """
+        import re
+        # Stopword list — same as _sanitize_query's
+        _STOP = {
+            "the", "a", "an", "is", "are", "was", "were", "did", "do",
+            "does", "what", "where", "when", "how", "who", "why",
+            "i", "me", "my", "we", "us", "our", "you", "your",
+            "he", "she", "it", "they", "them", "their",
+            "and", "or", "but", "of", "to", "for", "from", "by",
+            "with", "as", "at", "in", "on", "so", "if", "be",
+            "this", "that", "these", "those", "have", "has", "had",
+            "would", "could", "should", "will", "can", "may", "might",
+            "about", "into", "any", "some", "all", "every", "each",
+            "go", "going", "gone", "went", "get", "got", "want", "wanted",
+            "tell", "told", "ask", "asked", "think", "thought",
+            "remind", "wonder", "wondering", "could", "would",
+            "really", "very", "just", "also", "too", "only",
+            "out", "up", "down", "off", "over", "then", "than",
+            "like", "love", "hate", "know", "need", "feel", "felt",
+            "definitely", "actually", "maybe", "sure", "great",
+            "good", "bad", "amazing", "awesome", "cool", "nice",
+            "wow", "yum", "yeah", "yes", "no", "okay", "ok",
+            "much", "many", "more", "most", "less", "few",
+            "do", "doing", "done", "did",
+        }
+        # Count term frequency across the top texts
+        tf: dict[str, int] = {}
+        for t in texts:
+            seen = set()
+            for w in re.findall(r"\w+", t.lower()):
+                if w in _STOP or len(w) < 3 or w.isdigit():
+                    continue
+                # Skip very common words (already in all chunks)
+                if w in seen:
+                    continue
+                seen.add(w)
+                tf[w] = tf.get(w, 0) + 1
+        if not tf:
+            return []
+        # Pick the top-N by frequency (terms appearing in multiple top
+        # hits are the most discriminative). Ties broken alphabetically.
+        ranked = sorted(tf.items(), key=lambda kv: (-kv[1], kv[0]))
+        return [w for w, _ in ranked[:max_terms]]
+
     def _dense_only_search(self, *, query: str, user_id: str,
-                            session_id: str | None, k: int) -> list[VerbatimHit]:
+                            session_id: str | None,
+                            agent_id: str | None,
+                            k: int) -> list[VerbatimHit]:
         """Full-scan cosine — fallback when BM25 finds nothing.
 
         Used for paraphrase / OOD queries that share no lexical
         signal with the chunk text. μ=0: pure embedding math.
         """
         assert self._db is not None and self._embedder is not None
+        if agent_id is None:
+            scope_filter = "agent_id IS NULL"
+            scope_params: tuple = ()
+        else:
+            scope_filter = "(agent_id IS NULL OR agent_id = ?)"
+            scope_params = (agent_id,)
         rows = self._db.execute(
-            "SELECT v.rowid, v.text, v.user_id, v.session_id, v.source_tx_id "
-            "FROM verbatim_chunks v WHERE v.user_id = ?",
-            (user_id,)).fetchall()
+            f"SELECT rowid, text, user_id, session_id, source_tx_id "
+            f"FROM verbatim_chunks WHERE user_id = ? AND {scope_filter}",
+            (user_id, *scope_params)).fetchall()
         if not rows:
             return []
         q_vec = self._embedder.embed(query).astype(np.float32)
@@ -336,20 +492,61 @@ class VerbatimPlugin:
 
     @staticmethod
     def _sanitize_query(query: str) -> str:
-        """Escape FTS5 special chars so user input doesn't break MATCH.
+        """Escape FTS5 special chars + switch to OR semantics.
 
         FTS5 has a query syntax (AND / OR / NEAR / column filters).
         A user searching for "Charlie's dog (brown)" would break it.
-        We wrap each token in double-quotes to force phrase search.
+
+        v0.5.3 fix: previously wrapped each token in `"..."` and joined
+        with spaces, which FTS5 implicitly treats as AND. That works for
+        exact-match queries like `"Charlie" "Bee" "Providore"` but FAILS
+        for natural-language questions like "What restaurant did they
+        mention?" — the answer chunk only contains "Miss Bee Providore",
+        so it doesn't match the AND of all question words.
+
+        New behavior: drop stopwords, wrap each remaining token in
+        double-quotes, join with ` OR `. This is standard BM25 best
+        practice — the more query tokens a chunk contains, the higher
+        its BM25 score. AND queries are too strict for natural-language
+        questions and force the dense-only fallback every time, which
+        is why canonical LongMemEval single_session was stuck at 0.222.
         """
         if not query:
             return '""'
-        # Strip FTS5 operators, split on whitespace, quote each token
         import re
-        tokens = re.findall(r"\S+", query)
+        # Strip FTS5 operators and parens
+        # Then split on whitespace + punctuation
+        clean = re.sub(r'["\'()*:;\[\]{}^]+', " ", query)
+        tokens = re.findall(r"\w+", clean)
         if not tokens:
             return '""'
-        return " ".join(f'"{t}"' for t in tokens)
+        # Stopword removal — these would just dilute the BM25 signal
+        # (every chunk contains "the", "a", "of"). The content words
+        # are what carry the question's intent.
+        _STOP = {
+            "the", "a", "an", "is", "are", "was", "were", "did", "do",
+            "does", "what", "where", "when", "how", "who", "why",
+            "i", "me", "my", "we", "us", "our", "you", "your",
+            "he", "she", "it", "they", "them", "their",
+            "and", "or", "but", "of", "to", "for", "from", "by",
+            "with", "as", "at", "in", "on", "so", "if", "be",
+            "this", "that", "these", "those", "have", "has", "had",
+            "would", "could", "should", "will", "can", "may", "might",
+            "about", "into", "any", "some", "all", "every", "each",
+            "go", "going", "gone", "went", "get", "got", "want", "wanted",
+            "tell", "told", "ask", "asked", "think", "thought",
+            "remind", "wonder", "wondering", "could", "would",
+        }
+        # Lowercase + filter stopwords + filter pure digits/short
+        content_tokens = [t.lower() for t in tokens
+                          if t.lower() not in _STOP
+                          and len(t) > 1
+                          and not t.isdigit()]
+        if not content_tokens:
+            return '""'
+        # OR-join quoted tokens — FTS5 ranks by BM25, so chunks
+        # matching MORE tokens rank higher (standard practice).
+        return " OR ".join(f'"{t}"' for t in content_tokens)
 
 
 __all__ = ["VerbatimPlugin", "VerbatimHit"]

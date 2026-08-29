@@ -68,6 +68,47 @@ class MemoryWriter:
         # MINJA contagion guard: per-scope cache of quarantined source texts
         # (loaded lazily, one query per scope, updated on quarantine).
         self._taint_cache: dict[str, list[str]] = {}
+        # Verbatim tier handle (lazily attached). Set when Memory attaches
+        # it; if the config has verbatim_ingest_enabled=False, _verbatim
+        # stays None and add() skips the verbatim insert.
+        self._verbatim = None
+
+    def attach_verbatim(self, plugin) -> None:
+        """Inject the VerbatimPlugin instance so add() can store raw chunks.
+
+        Called by Memory.__init__ after the plugin is mounted. If the
+        verbatim plugin isn't mounted, _verbatim stays None — the writer
+        silently degrades to structured-only ingest (μ=0 still holds)."""
+        self._verbatim = plugin
+
+    def _verbatim_store_chunk(self, *, text: str, user_id: str,
+                              session_id: str | None,
+                              source_tx_id: int | None,
+                              agent_id: str | None = None) -> None:
+        """μ=0 verbatim tier insert. Best-effort: never blocks ingest.
+
+        The verbatim plugin's add() is FTS5 INSERT + numpy embed + int8
+        quantize + INSERT INTO verbatim_vectors. All deterministic. If
+        it throws (FTS5 missing, embedder not ready, db locked), we log
+        and move on — the structured tier has already absorbed the facts
+        and the EXTRACTED_FROM edge is wired.
+
+        v0.5.3: agent_id is stored on the chunk so search() can honor
+        the InjecMEM scope sandbox (user queries don't see agent-scoped
+        chunks, and vice versa)."""
+        if not getattr(self.cfg, "verbatim_ingest_enabled", True):
+            return
+        if self._verbatim is None:
+            return
+        try:
+            self._verbatim.add(text=text, user_id=user_id,
+                              session_id=session_id,
+                              source_tx_id=source_tx_id,
+                              agent_id=agent_id)
+        except Exception as e:
+            # best-effort — never block the write path on the verbatim tier
+            import sys as _sys
+            print(f"[verbatim] store_chunk failed: {e}", file=_sys.stderr)
 
     # ------------------------------------------------------------------
     def _name_of(self, user_id: str) -> str | None:
@@ -165,6 +206,25 @@ class MemoryWriter:
             chunk_id = self.store.add_chunk(
                 text, user_id=user_id, agent_id=agent_id, run_id=run_id,
                 ts=msg_time, source=source or role)
+            # v0.5.3: ALSO push the raw chunk into the verbatim tier
+            # (FTS5 + int8 vector). This is the MemPalace-style layer
+            # the canonical-LongMemEval diagnosis called for — single-
+            # session factoids ("What restaurant did they mention?")
+            # retrieve BM25 hits from these raw chunks, bypassing the
+            # 61-pattern extractor that misses natural speech.
+            # The verbatim plugin stores session_id (best-effort: the
+            # caller rarely passes one — we use run_id as a proxy)
+            # and source_tx_id (the chunk_id from the structured tier's
+            # chunks table, so the EXTRACTED_FROM edge cross-references).
+            try:
+                _src_tx_id = int(chunk_id) if str(chunk_id).isdigit() else None
+            except Exception:
+                _src_tx_id = None
+            self._verbatim_store_chunk(
+                text=text, user_id=user_id,
+                session_id=run_id or agent_id or user_id,
+                source_tx_id=_src_tx_id,
+                agent_id=agent_id)
             verdict = injection_scan(text, self.cfg.quarantine_injection)
             if not verdict.quarantined and self.cfg.quarantine_contagion:
                 cv = contagion_scan(text, self._tainted_corpus(user_id),

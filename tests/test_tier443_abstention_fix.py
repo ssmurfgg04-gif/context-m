@@ -108,6 +108,11 @@ def test_tier443_chunk_recall_off_baseline():
     rustc" lexically overlaps with the version-string question. The
     ati865 and jonas-schievink chunks' answers are completely
     invisible to the LLM judge.
+
+    v0.5.3: also disable verbatim_search + recall_step_in_search —
+    both would otherwise surface the answer chunks directly via
+    BM25/cosine, breaking the baseline assertion. This test isolates
+    the chunk-recall path's contribution.
     """
     fd, db = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -115,6 +120,9 @@ def test_tier443_chunk_recall_off_baseline():
     cfg.db_path = db
     cfg.apply_rules_each_add = False
     cfg.chunk_recall_enabled = False  # baseline
+    cfg.verbatim_ingest_enabled = False  # v0.5.3: isolate chunk-recall path
+    cfg.verbatim_search_enabled = False
+    cfg.recall_step_in_search = False
     m = Memory(cfg)
     _ingest(m, SYNTHETIC_THREAD)
     n = _n_gold_in_context_block(m, QUESTIONS)
@@ -137,6 +145,10 @@ def test_tier443_chunk_recall_on_fix():
       3. For chunks WITHOUT facts (the answer-bearing ones): emits
          a "RECALL from thread: ..." note carrying a query-relevant
          window of the chunk text into the context_block.
+
+    v0.5.3: also disable verbatim_search + recall_step_in_search so
+    the test isolates the chunk-recall path's contribution (otherwise
+    verbatim would surface the chunks directly via BM25/cosine).
     """
     fd, db = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -144,6 +156,9 @@ def test_tier443_chunk_recall_on_fix():
     cfg.db_path = db
     cfg.apply_rules_each_add = False
     cfg.chunk_recall_enabled = True  # fix
+    cfg.verbatim_ingest_enabled = False  # v0.5.3: isolate chunk-recall path
+    cfg.verbatim_search_enabled = False
+    cfg.recall_step_in_search = False
     m = Memory(cfg)
     _ingest(m, SYNTHETIC_THREAD)
     n = _n_gold_in_context_block(m, QUESTIONS)

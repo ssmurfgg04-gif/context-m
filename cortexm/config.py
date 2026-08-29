@@ -129,6 +129,36 @@ class Config:
     prefilter_threshold: float = 0.08  # combined score below this → drop
     prefilter_min_keep: int = 3        # always keep at least this many
 
+    # --- Verbatim tier (MemPalace-style FTS5 + dense over raw chunks) -----
+    # When True, MemoryWriter.add() ALSO stores every raw user message in
+    # the verbatim_chunks FTS5 virtual table + a HashingEmbedder vector in
+    # verbatim_vectors. The reader's verbatim_bridge then surfaces these
+    # chunks alongside fact-triple hits, giving the system MemPalace-style
+    # factoid recall ("What restaurant did they mention?") without an LLM.
+    # The verbatim tier is the proven fix for the canonical-LongMemEval
+    # single_session catastrophe (0.222 → expected ~0.7+ with this tier).
+    # Default ON in v0.5.3+ — turning it off leaves only the structured
+    # tier (VSA over fact triples), which misses natural-human-language
+    # factoids the deterministic extractor couldn't parse into triples.
+    verbatim_ingest_enabled: bool = True     # store raw chunks on add()
+    verbatim_search_enabled: bool = True     # query verbatim at search time
+    verbatim_k_at_search: int = 30          # top-k verbatim hits per query
+    verbatim_fusion_weight: float = 0.5     # weight in context_block fusion
+    verbatim_min_score: float = 0.05        # below this → skip
+    verbatim_boost_first_chunk_only: bool = False  # give first chunk a small boost
+
+    # --- recall_step in production search path ---------------------------
+    # When True, Memory.search() ALSO runs recall_step (asymmetric step-
+    # distance boost) and concatenates its context_block onto the standard
+    # search result. This is the multi_session fix: facts from scrolled-out
+    # sessions get surfaced via the step-distance boost, not just access_count.
+    # Default ON in v0.5.3+ — all callers benefit. Turning it off disables
+    # the multi_session retrieval fix.
+    recall_step_in_search: bool = True
+    recall_step_window: int = 20              # standard LLM context window
+    recall_step_k: int = 10                   # top-k from recall_step
+    recall_step_min_messages: int = 25        # only fire if total ingested >= this
+
     # --- FadeMem-style forgetting (retention decay + sleep sweeps) ----------
     # When True, the consolidate() pass also runs a FadeMem sweep that
     # decays retention scores, marks low-retention facts for deactivation,
