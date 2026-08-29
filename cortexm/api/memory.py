@@ -53,7 +53,12 @@ class Memory:
             config = dataclasses.replace(config, **changes)
         self.config = config
         self.store = TraceStore(config.db_path, HashProvider(config.hash_provider),
-                               wal_sync=getattr(config, "wal_sync", "normal"))
+                               wal_sync=getattr(config, "wal_sync", "normal"),
+                               pragma_cache_mb=getattr(config, "pragma_cache_mb", 64),
+                               pragma_mmap_mb=getattr(config, "pragma_mmap_mb", 256),
+                               pragma_threads=getattr(config, "pragma_threads", 4),
+                               pragma_temp_in_memory=getattr(config, "pragma_temp_in_memory", True),
+                               pragma_locking_exclusive=getattr(config, "pragma_locking_exclusive", False))
         self.palace = MemoryPalace(config, self.store)
         self.extractor = Extractor(config)
         self.prefetcher = Prefetcher()
@@ -1033,7 +1038,12 @@ class Memory:
         from cortexm.enterprise.governance import Governance
         self.store = TraceStore(self.config.db_path,
                                 HashProvider(self.config.hash_provider),
-                                wal_sync=getattr(self.config, "wal_sync", "normal"))
+                                wal_sync=getattr(self.config, "wal_sync", "normal"),
+                                pragma_cache_mb=getattr(self.config, "pragma_cache_mb", 64),
+                                pragma_mmap_mb=getattr(self.config, "pragma_mmap_mb", 256),
+                                pragma_threads=getattr(self.config, "pragma_threads", 4),
+                                pragma_temp_in_memory=getattr(self.config, "pragma_temp_in_memory", True),
+                                pragma_locking_exclusive=getattr(self.config, "pragma_locking_exclusive", False))
         self.palace = MemoryPalace(self.config, self.store)
         self.writer = MemoryWriter(self.config, self.store, self.palace,
                                    self.extractor)

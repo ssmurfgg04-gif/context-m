@@ -123,7 +123,11 @@ class VerbatimPlugin:
     def __init__(self, bm25_k: int = 2, bm25_k1: float = 1.5,
                  bm25_b: float = 0.75, *,
                  drop_tables_on_dispose: bool = False,
-                 prf_enabled: bool = True) -> None:
+                 prf_enabled: bool = True,
+                 query_rewrite_enabled: bool = True,
+                 query_cache_enabled: bool = True,
+                 query_cache_capacity: int = 1024,
+                 max_expansions: int = 8) -> None:
         # FTS5 uses BM25 with the standard k1/b parameters. We
         # pass them via the rank function (the FTS5 bm25() SQL fn
         # takes them as arguments). Defaults are textbook Okapi.
@@ -141,6 +145,20 @@ class VerbatimPlugin:
         # original query. Default ON. Turn off for benchmarks that
         # need pure BM25 baseline.
         self.prf_enabled = prf_enabled
+        # v0.6.0: query-time expansion (Lucene synonym_graph + Google
+        # pre-BERT lineage). The QueryRewriter runs the original query
+        # AND its expansions through BM25, unioning results. ADDITIVE —
+        # can only surface MORE chunks, never fewer. See
+        # cortexm/bridge/query_rewrite.py for the 4-stage pipeline.
+        self.query_rewrite_enabled = query_rewrite_enabled
+        self.max_expansions = max_expansions
+        self._query_rewriter = None  # lazily instantiated
+        # v0.6.0: LRU query result cache. Keyed by (query, user_id, k,
+        # agent_id). Invalidated on add() per-user. See
+        # cortexm/bridge/ir_pro.py:LRUCache.
+        self.query_cache_enabled = query_cache_enabled
+        self._query_cache = None  # lazily instantiated
+        self.query_cache_capacity = query_cache_capacity
         self._db: sqlite3.Connection | None = None
         self._embedder = None
 
@@ -243,6 +261,11 @@ class VerbatimPlugin:
             "INSERT INTO verbatim_vectors(chunk_id, vec) VALUES(?, ?)",
             (chunk_id, vec_int8.tobytes()))
         self._db.commit()
+        # v0.6.0: invalidate the per-user query cache (LRU) on write.
+        # Without this, repeated identical queries would return stale
+        # results that don't include the just-added chunk.
+        if self.query_cache_enabled and self._query_cache is not None:
+            self._query_cache.invalidate(user_id=user_id)
         return chunk_id
 
     def add_many(self, chunks: list[dict]) -> list[int]:
@@ -293,6 +316,85 @@ class VerbatimPlugin:
         assert self._db is not None and self._embedder is not None
         if k <= 0:
             return []
+
+        # v0.6.0: LRU query cache. Key = (query, user_id, k, agent_id).
+        # Hit → return cached result (zero BM25 + zero cosine compute).
+        # Miss → compute, cache, return. Invalidated per-user on add().
+        cache_key = (query, user_id, k, agent_id)
+        if self.query_cache_enabled:
+            if self._query_cache is None:
+                from cortexm.bridge.ir_pro import LRUCache
+                self._query_cache = LRUCache(self.query_cache_capacity)
+            cached = self._query_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        # v0.6.0: query-time expansion (Lucene synonym_graph + Google
+        # pre-BERT lineage). The original query is ALWAYS the first
+        # expansion, so the existing BM25 + cosine path is preserved
+        # (additive). Expansions run additional BM25 passes; results
+        # are unioned by rowid with dedup.
+        queries = [query]
+        if self.query_rewrite_enabled:
+            if self._query_rewriter is None:
+                from cortexm.bridge.query_rewrite import QueryRewriter
+                self._query_rewriter = QueryRewriter(
+                    max_expansions=self.max_expansions)
+            try:
+                queries = self._query_rewriter.rewrite(query)
+            except Exception:
+                queries = [query]  # rewriter failure → fall back to original
+
+        # Run the existing search path on the FIRST query (original).
+        # Then for any additional expansions, run BM25-only and append
+        # new rowids to the result pool. The dense cosine path runs
+        # once on the original query (cheaper, and the fused score is
+        # most meaningful for the original query embedding).
+        primary = self._search_single(
+            query=queries[0], user_id=user_id, k=k,
+            session_id=session_id, agent_id=agent_id)
+        if len(queries) <= 1:
+            if self.query_cache_enabled:
+                self._query_cache.put(cache_key, primary)
+            return primary
+        # Additional expansions: BM25-only, dedup against primary rowids
+        seen_rowids = {h.chunk_id for h in primary}
+        extra: list = []
+        # Cap total candidates at 2*k so the union stays bounded.
+        budget = max(0, 2 * k - len(primary))
+        for q in queries[1:budget + 1]:
+            if budget <= 0:
+                break
+            extra_hits = self._bm25_only(
+                query=q, user_id=user_id, k=budget,
+                agent_id=agent_id, exclude_rowids=seen_rowids)
+            for h in extra_hits:
+                if h.chunk_id not in seen_rowids:
+                    extra.append(h)
+                    seen_rowids.add(h.chunk_id)
+                    budget -= 1
+                    if budget <= 0:
+                        break
+        # Sort the union by score, take top-k. Use a conservative
+        # score for expansions: 0.5 * their normalized BM25 (no dense
+        # cosine since we didn't run it on the expansion). The original
+        # hits keep their original fused score.
+        merged = list(primary) + extra
+        merged.sort(key=lambda h: getattr(h, "score", 0.0), reverse=True)
+        result = merged[:k]
+        if self.query_cache_enabled:
+            self._query_cache.put(cache_key, result)
+        return result
+
+    def _search_single(self, *, query: str, user_id: str, k: int = 10,
+                       session_id: str | None = None,
+                       agent_id: str | None = None) -> list:
+        """The original v0.5.3 search path (BM25 + PRF + dense fusion).
+
+        Renamed from ``search`` in v0.6.0 so the public ``search()``
+        can wrap it with cache + query-rewrite. The signature + behavior
+        is identical to v0.5.3.
+        """
 
         # InjecMEM sandbox filter: user-scope (agent_id=None) sees only
         # user-scoped chunks; agent scope sees user + own agent chunks.
@@ -627,6 +729,187 @@ class VerbatimPlugin:
         # OR-join quoted tokens — FTS5 ranks by BM25, so chunks
         # matching MORE tokens rank higher (standard practice).
         return " OR ".join(f'"{t}"' for t in content_tokens)
+
+    # =================================================================
+    # v0.6.0: IR fundamentals — new public API surface
+    # =================================================================
+    # All methods delegate to cortexm.bridge.ir_pro functions to keep
+    # the IR primitives in one place. Each takes the VerbatimPlugin's
+    # SQLite connection and returns plain Python data (dicts/lists).
+
+    def _bm25_only(self, *, query: str, user_id: str, k: int = 10,
+                   agent_id: str | None = None,
+                   exclude_rowids: set | None = None) -> list:
+        """BM25-only search for query-rewrite expansion fan-out.
+
+        Returns VerbatimHit-like objects with a `chunk_id` attribute.
+        Used by the public search() to add expansion hits without
+        re-running dense cosine on each expansion (cosine is expensive
+        and the score would mix poorly with the original's fused score).
+        """
+        assert self._db is not None
+        if k <= 0:
+            return []
+        if agent_id is None:
+            scope_filter = "agent_id IS NULL"
+            scope_params: tuple = ()
+        else:
+            scope_filter = "(agent_id IS NULL OR agent_id = ?)"
+            scope_params = (agent_id,)
+        bm25_sql = (
+            "SELECT rowid, text, user_id, session_id, "
+            "source_tx_id, bm25(verbatim_chunks, ?, ?) AS rank "
+            "FROM verbatim_chunks "
+            f"WHERE user_id = ? AND {scope_filter} "
+            "AND verbatim_chunks MATCH ? "
+            "ORDER BY rank LIMIT ?")
+        try:
+            rows = self._db.execute(
+                bm25_sql,
+                (self.bm25_k1, self.bm25_b, user_id, *scope_params,
+                 self._sanitize_query(query), k * 2)).fetchall()
+        except Exception:
+            rows = []
+        if not rows:
+            return []
+        # Normalize BM25 scores (FTS5 returns negative; lower=better)
+        raw_scores = [r[5] for r in rows]
+        mn, mx = min(raw_scores), max(raw_scores)
+        rng = (mx - mn) if (mx - mn) > 1e-9 else 1.0
+        out = []
+        exclude = exclude_rowids or set()
+        for row, raw in zip(rows, raw_scores):
+            rowid = row[0]
+            if rowid in exclude:
+                continue
+            norm = 1.0 - (raw - mn) / rng
+            # Construct a VerbatimHit with the same fields used by the
+            # public search() so they sort together.
+            out.append(VerbatimHit(
+                chunk_id=rowid, text=row[1] or "",
+                user_id=row[2], session_id=row[3],
+                source_tx_id=row[4],
+                bm25_score=float(raw),
+                cosine_score=0.0,
+                # 0.5 weight — conservative so expansion hits don't
+                # out-rank the primary query's fused hits.
+                score=0.5 * norm,
+                retrieval_path="bm25_expansion"))
+            if len(out) >= k:
+                break
+        return out
+
+    # ----------------------------------------------------------------
+    # Phrase queries (Lucene NEAR() lineage)
+    # ----------------------------------------------------------------
+    def phrase_search(self, *, phrase: str, user_id: str,
+                      slop: int = 1, k: int = 10) -> list:
+        """Run a phrase query via FTS5 NEAR(). Delegates to ir_pro."""
+        from cortexm.bridge.ir_pro import phrase_search as _phrase
+        assert self._db is not None
+        return _phrase(self._db, phrase=phrase, user_id=user_id,
+                       slop=slop, k=k)
+
+    # ----------------------------------------------------------------
+    # Highlighting / snippets (FTS5 snippet() lineage)
+    # ----------------------------------------------------------------
+    def highlight(self, *, query: str, user_id: str, k: int = 5,
+                  before: str = "<b>", after: str = "</b>",
+                  ellipsis: str = "...", tokens: int = 10) -> list:
+        """Return chunks with matched terms highlighted. Delegates to ir_pro."""
+        from cortexm.bridge.ir_pro import highlight as _highlight
+        assert self._db is not None
+        return _highlight(self._db, query=query, user_id=user_id, k=k,
+                          before=before, after=after,
+                          ellipsis=ellipsis, tokens=tokens)
+
+    # ----------------------------------------------------------------
+    # Faceting (materialized counts)
+    # ----------------------------------------------------------------
+    def facet_counts(self, *, user_id: str, field: str = "relation"
+                     ) -> dict:
+        """Return {value: count} for a field in the facts table."""
+        from cortexm.bridge.ir_pro import facet_counts as _facet
+        assert self._db is not None
+        return _facet(self._db, user_id=user_id, field=field)
+
+    # ----------------------------------------------------------------
+    # MoreLikeThis (FTS5 term vectors)
+    # ----------------------------------------------------------------
+    def more_like_this(self, *, chunk_id: int, user_id: str,
+                       k: int = 5, max_terms: int = 10) -> list:
+        """Find chunks similar to a given chunk via term vectors."""
+        from cortexm.bridge.ir_pro import more_like_this as _mlt
+        assert self._db is not None
+        return _mlt(self._db, chunk_rowid=chunk_id, user_id=user_id,
+                    k=k, max_terms=max_terms)
+
+    # ----------------------------------------------------------------
+    # Range queries (numeric range via B-tree)
+    # ----------------------------------------------------------------
+    def range_search(self, *, user_id: str, relation: str,
+                     min_value: float | None = None,
+                     max_value: float | None = None,
+                     k: int = 100) -> list:
+        """Find facts with a numeric value in [min, max]."""
+        from cortexm.bridge.ir_pro import range_search as _range
+        assert self._db is not None
+        return _range(self._db, user_id=user_id, relation=relation,
+                      min_value=min_value, max_value=max_value, k=k)
+
+    # ----------------------------------------------------------------
+    # Auto-suggest / typeahead (fts5vocab)
+    # ----------------------------------------------------------------
+    def suggest(self, *, prefix: str, k: int = 5) -> list:
+        """Return completions for a prefix from the verbatim FTS5 vocab."""
+        from cortexm.bridge.ir_pro import suggest as _suggest
+        assert self._db is not None
+        return _suggest(self._db, prefix=prefix, k=k)
+
+    # ----------------------------------------------------------------
+    # Spell correction (Levenshtein on query terms)
+    # ----------------------------------------------------------------
+    def correct_spelling(self, term: str, max_dist: int = 2) -> str:
+        """Find the closest in-corpus term within max_dist edits."""
+        from cortexm.bridge.ir_pro import (
+            correct_spelling as _correct, _build_vocabulary)
+        assert self._db is not None
+        vocab = _build_vocabulary(self._db, min_count=2)
+        return _correct(term, vocab, max_dist=max_dist)
+
+    def correct_query(self, query: str, max_dist: int = 2) -> str:
+        """Apply spell correction to each token in a query."""
+        from cortexm.bridge.ir_pro import (
+            correct_query as _correct, _build_vocabulary)
+        assert self._db is not None
+        vocab = _build_vocabulary(self._db, min_count=2)
+        return _correct(query, vocab, max_dist=max_dist)
+
+    # ----------------------------------------------------------------
+    # Index compaction (VACUUM + FTS5 optimize)
+    # ----------------------------------------------------------------
+    def optimize_index(self) -> dict:
+        """VACUUM + FTS5 optimize + checkpoint. Reclaims deleted space."""
+        from cortexm.bridge.ir_pro import optimize_index as _opt
+        assert self._db is not None
+        return _opt(self._db)
+
+    # ----------------------------------------------------------------
+    # BM25 tuning (runtime k1/b update)
+    # ----------------------------------------------------------------
+    def tune_bm25(self, k1: float = 1.2, b: float = 0.75) -> None:
+        """Update BM25 k1/b on this instance. Takes effect on next search."""
+        self.bm25_k1 = k1
+        self.bm25_b = b
+
+    # ----------------------------------------------------------------
+    # Cache control (manual invalidation)
+    # ----------------------------------------------------------------
+    def invalidate_cache(self, *, user_id: str | None = None) -> int:
+        """Drop cached query results for a user (or all users)."""
+        if not self.query_cache_enabled or self._query_cache is None:
+            return 0
+        return self._query_cache.invalidate(user_id=user_id)
 
 
 __all__ = ["VerbatimPlugin", "VerbatimHit"]

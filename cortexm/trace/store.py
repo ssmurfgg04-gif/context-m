@@ -188,7 +188,13 @@ class SafeConnection:
 
 class TraceStore:
     def __init__(self, db_path: str = ":memory:", provider: HashProvider | None = None,
-                 wal_sync: str = "normal") -> None:
+                 wal_sync: str = "normal",
+                 *,
+                 pragma_cache_mb: int = 64,
+                 pragma_mmap_mb: int = 256,
+                 pragma_threads: int = 4,
+                 pragma_temp_in_memory: bool = True,
+                 pragma_locking_exclusive: bool = False) -> None:
         self.db_path = db_path
         self.hasher = provider or HashProvider()
         mem = db_path in (":memory:", None, "")
@@ -205,6 +211,37 @@ class TraceStore:
             self.conn.execute(
                 "PRAGMA synchronous="
                 + ("FULL" if str(wal_sync).lower() == "full" else "NORMAL"))
+            # v0.6.0: Google-style read-heavy PRAGMA tuning. See the
+            # user audit Aug 2026 + Config.pragma_* knobs. Defaults are
+            # conservative for 4GB-RAM laptops; bump for cloud deployments.
+            #   cache_size  — SQLite's page cache. Default 2MB → 64MB.
+            #                  Negative value = kibibytes (so -65536 = 64MB).
+            #   mmap_size   — memory-mapped I/O for read-only pages.
+            #                  0 = disabled (default SQLite behavior). We
+            #                  enable 256MB so reads bypass the page cache
+            #                  and go straight to mmap'd RAM.
+            #   temp_store  — 2 = MEMORY (no on-disk temp files for sorts
+            #                  and intermediates; matters for big GROUP BY).
+            #   threads     — parallel sort threads. SQLite ≥ 3.34 honors
+            #                  this for ORDER BY and CREATE INDEX.
+            #   locking_mode — EXCLUSIVE skips per-statement lock ops.
+            #                  DANGEROUS in multi-process deployments (other
+            #                  readers get SQLITE_BUSY). Default OFF; opt-in
+            #                  for single-process edge deployments.
+            try:
+                self.conn.execute(
+                    f"PRAGMA cache_size=-{pragma_cache_mb * 1024}")
+                if pragma_mmap_mb > 0:
+                    self.conn.execute(
+                        f"PRAGMA mmap_size={pragma_mmap_mb * 1024 * 1024}")
+                if pragma_temp_in_memory:
+                    self.conn.execute("PRAGMA temp_store=MEMORY")
+                if pragma_threads > 1:
+                    self.conn.execute(f"PRAGMA threads={pragma_threads}")
+                if pragma_locking_exclusive:
+                    self.conn.execute("PRAGMA locking_mode=EXCLUSIVE")
+            except sqlite3.OperationalError:
+                pass  # some PRAGMAs unavailable on older SQLite; ignore
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self._ancestry_cache: dict[str, frozenset[str]] = {}

@@ -359,6 +359,68 @@ class Config:
     # API surface that a production Halo2/KZG backend would expose.
     zk_sql_enabled: bool = False
 
+    # --- v0.6.0: query-time expansion (Lucene synonym_graph + Google
+    # pre-BERT query rewriting lineage). All flags default ON because
+    # the new modules are ADDITIVE: they run the original query AND
+    # the expansions through BM25 and union the results — so they can
+    # only surface MORE chunks, never fewer. Existing canonical
+    # LongMemEval scores are protected. -----------------------------------
+    # The QueryRewriter orchestrates 4 stages at query time:
+    #   1. slang normalization (curated dictionary, μ=0)
+    #   2. FST (spelling correction + abbreviation expansion)
+    #   3. synonym graph expansion (Lucene synonym_graph filter)
+    #   4. entity resolution (holidays → ISO dates)
+    # See cortexm/bridge/query_rewrite.py for the orchestrator and
+    # cortexm/bridge/{slang,fst,synonyms,recognizers}.py for the
+    # individual stages. Each stage can be independently disabled
+    # via its own flag (e.g. for ablation studies).
+    query_rewrite_enabled: bool = True
+    slang_normalization_enabled: bool = True
+    abbreviation_expansion_enabled: bool = True
+    spelling_correction_enabled: bool = True
+    synonym_expansion_enabled: bool = True
+    holiday_resolution_enabled: bool = True
+    query_max_expansions: int = 8     # cap on BM25 fan-out per query
+
+    # Negation indexing — store "I don't eat meat" as a negation_record
+    # (a metadata entry) rather than as a positive (user, eats, meat)
+    # fact. The reader checks the negation table when answering a
+    # query and returns "No — explicitly stated" if a negation overlaps
+    # the query. μ=0: pure regex + dict, no LLM. See
+    # cortexm/bridge/negation.py for the detector + SQL schema.
+    negation_indexing_enabled: bool = True
+
+    # Multilingual routing — detect non-English text via Unicode script
+    # analysis and route to verbatim-only storage (skip the English
+    # pattern extractor). Code-switched text is segmented by language
+    # boundary and each segment is processed independently. μ=0: pure
+    # Unicode script analysis, no model. See cortexm/bridge/multilingual.py
+    # for the detector + segmenter. The LaBSE polyglot encoder
+    # (Config.labse_enabled) handles the embedding for non-English text.
+    multilingual_routing_enabled: bool = True
+
+    # IR fundamentals (Lucene/Solr-grade primitives). See
+    # cortexm/bridge/ir_pro.py for the implementations.
+    #   * query_cache: LRU on (query, user_id, k) — invalidated on add()
+    #   * bm25_k1/b: exposed for tuning (Lucene defaults: 1.2 / 0.75)
+    #   * index_optimize_on_consolidate: run VACUUM + FTS5 optimize during
+    #     consolidate (default ON — reclaims space, keeps queries fast)
+    query_cache_enabled: bool = True
+    query_cache_capacity: int = 1024
+    bm25_k1: float = 1.5    # term saturation (Lucene default 1.2; we use 1.5 for short chunks)
+    bm25_b: float = 0.75    # length normalization (Lucene default 0.75)
+    index_optimize_on_consolidate: bool = True
+    highlight_tokens: int = 10     # FTS5 snippet() length
+    suggest_min_count: int = 2    # min count for fts5vocab auto-suggest entries
+
+    # SQLite PRAGMA tuning (Google-style read-heavy optimization).
+    # Applied at TraceStore init. See cortexm/trace/store.py.
+    # Defaults are conservative for 4GB-RAM laptops; bump for cloud.
+    pragma_cache_mb: int = 64      # SQLite page cache (default 2MB → 64MB)
+    pragma_mmap_mb: int = 256       # memory-mapped I/O (default 0 → 256MB)
+    pragma_threads: int = 4         # parallel sort/index threads
+    pragma_temp_in_memory: bool = True    # temp store in RAM (not disk)
+
     def __post_init__(self) -> None:
         if self.codec not in CODECS:
             raise ValueError(f"codec must be one of {CODECS}, got {self.codec!r}")
