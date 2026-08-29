@@ -58,3 +58,4 @@ benchmarks/results/codegraph_review.json
 
 # v0.5.2: canonical benchmark data (277MB, downloaded on demand)
 data/
+upload/
