@@ -1,0 +1,159 @@
+{
+  "summary": {
+    "version": "v0.6.1",
+    "n_total": 6,
+    "n_per_type": 1,
+    "workers": 1,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.5,
+    "data_source": "xiaowu0162/longmemeval-cleaned (longmemeval_s)",
+    "judged_by": "deterministic_rule",
+    "overall": 1.0,
+    "overall_vs_v055_baseline": 0.948,
+    "delta_vs_baseline": 0.052,
+    "by_subtask": {
+      "knowledge_update": 1.0,
+      "multi_session": 1.0,
+      "single_session": 1.0,
+      "temporal_reasoning": 1.0
+    },
+    "by_strategy": {
+      "nugget": 1.0,
+      "list": 1.0
+    },
+    "by_question_type": {
+      "knowledge-update": 1.0,
+      "multi-session": 1.0,
+      "single-session-assistant": 1.0,
+      "single-session-preference": 1.0,
+      "single-session-user": 1.0,
+      "temporal-reasoning": 1.0
+    },
+    "elapsed_seconds": 145.85,
+    "questions_per_second": 0.041,
+    "modules_enabled": {
+      "query_rewrite": true,
+      "slang_normalization": true,
+      "abbreviation_expansion": true,
+      "spelling_correction": true,
+      "synonym_expansion": true,
+      "holiday_resolution": true,
+      "negation_indexing": true,
+      "multilingual_routing": true
+    },
+    "honest_scope_note": "Sampled 1 questions per subtask from the canonical longmemeval_s_cleaned benchmark (500 questions total, ~48 sessions/question haystack). \u03bc=0 throughout \u2014 no LLM at ingest, retrieval, or judging. The score is REAL for the sampled subset but does NOT equal a full 500-question canonical LongMemEval score."
+  },
+  "module_attribution": {
+    "verbatim_hits_avg": 38.33,
+    "verbatim_hits_nonzero": 6,
+    "strategy_breakdown": {
+      "nugget": 5,
+      "list": 1
+    },
+    "negation_notes_in_context_block": 0
+  },
+  "results": [
+    {
+      "qid": "5831f84d",
+      "global_idx": 0,
+      "question_type": "knowledge-update",
+      "subtask": "knowledge_update",
+      "question": "How many Crash Course videos have I watched in the past few weeks?",
+      "expected_answer": "15",
+      "n_messages_ingested": 422,
+      "ingest_s": 20.6,
+      "retrieve_s": 0.7,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- I'm trying to learn more about natural language processing, can you recommend some online resources or courses that cover this topic? By the way, I've been on a learning streak lately, having watched 15 Crash Course videos in the past few weeks.\n- I've been following your recommendations and I'm making good progress on my AWS and machine learning journey. I've also been continuing to watch Crash Course videos - I just finished my 12th video on computer science!\n- ...g the initiative to learn and upskill yourself.\n\nAnd wow, 12 Crash Course videos on computer science? That's impressive! Crash Course videos are an excellent way to learn new concepts in an engaging and entertaining way. You must be building a strong foundation in computer science!\n\nRemember, learni...\n\n[Memory \u2014 Known facts]\n- (Crash Course, mentioned, Crash Course) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.35; id 81aaf27c; src #ff67a543; \"I'm trying to learn more about clou",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran",
+      "worker_idx": 0
+    },
+    {
+      "qid": "28dc39ac",
+      "global_idx": 1,
+      "question_type": "multi-session",
+      "subtask": "multi_session",
+      "question": "How many hours have I spent playing games in total?",
+      "expected_answer": "140 hours",
+      "n_messages_ingested": 431,
+      "ingest_s": 22.49,
+      "retrieve_s": 0.68,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- I spent around 70 hours playing Assassin's Creed Odyssey, and I found the combat to be engaging, but not overly complex. If The Witcher 3's combat is more challenging, I'm willing to give it a try. Can you recommend any tips or strategies for a smooth transition from Odyssey's combat to The Witcher ...\n- ...lately, and I realized that I spent around 30 hours playing The Last of Us Part II on hard difficulty, which was a really challenging but rewarding experience. Do you think Uncharted 4's difficulty level is comparable to The Last of Us Part II's hard mode?\n- I'm trying to find some new indie games to play on my Switch. Can you recommend any games similar to Celeste, which took me 10 hours to complete?\n- I'm looking for some recommendations on games similar to The Last of Us Part II. By the way, I just finished it on normal difficulty and it took me 25 hours to complete.\n- I don't have a specific budget in mind, but I was thinking something ",
+      "det_correct": true,
+      "verbatim_hits": 80,
+      "recall_step": "ran",
+      "worker_idx": 0
+    },
+    {
+      "qid": "fca762bc",
+      "global_idx": 2,
+      "question_type": "single-session-assistant",
+      "subtask": "single_session",
+      "question": "I wanted to follow up on our previous conversation about language learning apps. You mentioned a few options, and I was wondering if you could remind me of the one that uses mnemonics to help learners memorize words and phrases?",
+      "expected_answer": "Memrise",
+      "n_messages_ingested": 459,
+      "ingest_s": 22.94,
+      "retrieve_s": 0.7,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- Yeah, consistency is key. I've also found that using language learning apps and practicing with my Japanese co-workers has really helped my progress. Do you have any recommendations for language apps?\n- ...wish you all the best in your language learning journey!\n- ...te a packing list based on my previous trips?\n- What was the most challenging experience you had while learning a new language in a foreign country, and how did you overcome it?\n\n[Memory \u2014 Known facts]\n- (Memrise, uses, mnemonics to help learners memorize words) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.70; id 96fed021; src #a148cd67; \"...games, videos, and quizzes to help learners progress in their la\"]\n- (25 35 3, has_skill, about) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id b7900ed8; src #af5e4419; \"I'm still considering AncestryDNA, but I'm also curious about the other options. Can you tell me more about 23andMe? What kind of information does their ancestry se",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran",
+      "worker_idx": 0
+    },
+    {
+      "qid": "09d032c9",
+      "global_idx": 3,
+      "question_type": "single-session-preference",
+      "subtask": "single_session",
+      "question": "I've been having trouble with the battery life on my phone lately. Any tips?",
+      "expected_answer": "The user would prefer responses that build upon their previous mention of purchasing a portable power bank, such as suggestions on how to optimize its use, like ensuring it's fully charged before use. They might also appreciate tips on utilizing battery-saving features on their phone. The user may not prefer responses that suggest alternative solutions or unrelated advice.",
+      "n_messages_ingested": 481,
+      "ingest_s": 24.12,
+      "retrieve_s": 0.76,
+      "judge_strategy": "list",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- ...elps. Let me know if you have any other questions or if you'd like additional hints.\n- I've been experimenting with nutritional yeast a lot lately, and it's been a game-changer for me. I added it to my vegan lentil soup and it gave it a cheesy flavor without the dairy. Do you have any recommendations for other ingredients that can give a cheesy flavor to dishes?\n- I think I'll start with Vietnamese cuisine, I've been wanting to try making Pho at home for a while now. Do you have any good recipes or tips for making a delicious Pho broth?\n- I've been slacking off on my exercise routine during my week-long beach vacation, and I'm looking to get back on track. I've been doing a lot of jogging and cycling lately, and I'd love to explore yoga classes or studios in my area to mix things up. Can you help me with that?\n- Can you recommend some good documentaries about filmmaking or the film industry? I've been watching a lot of documentaries on Amaz",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran",
+      "worker_idx": 0
+    },
+    {
+      "qid": "8550ddae",
+      "global_idx": 4,
+      "question_type": "single-session-user",
+      "subtask": "single_session",
+      "question": "What type of cocktail recipe did I try last weekend?",
+      "expected_answer": "lavender gin fizz",
+      "n_messages_ingested": 453,
+      "ingest_s": 24.95,
+      "retrieve_s": 0.72,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- Thanks for the tips on making simple syrup! I think I'll try making my own this weekend. For the Lavender Dream, I actually didn't infuse my gin with lavender, I just found a recipe online that called for lavender syrup and gin. I didn't have lavender syrup, so I tried to make a lavender gin fizz in...\n- I'm looking for some new cocktail recipes to try out. Do you have any recommendations? By the way, speaking of hosting gatherings, I've been meal-prepping a big batch of quinoa salad with roasted vegetables and a citrus vinaigrette every Sunday, and it's been a lifesaver for quick lunches during the...\n- I'm looking for some fashion advice. I need a new outfit for a night out with friends this weekend. Can you suggest some trendy combos that would work well with my new ankle boots from H&M?\n\n[Memory \u2014 Known facts]\n- (each own unique challenges, event, got my sister for her birthday) [valid 2026-02-15\u2192\u221e; learned 2026-08-29; conf 0.70; id bf1f7b",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran",
+      "worker_idx": 0
+    },
+    {
+      "qid": "gpt4_4edbafa2",
+      "global_idx": 5,
+      "question_type": "temporal-reasoning",
+      "subtask": "temporal_reasoning",
+      "question": "What was the date on which I attended the first BBQ event in June?",
+      "expected_answer": "June 3rd",
+      "n_messages_ingested": 459,
+      "ingest_s": 25.07,
+      "retrieve_s": 1.54,
+      "judge_strategy": "nugget",
+      "context_block_preview": "[Retrieved evidence \u2014 chunk-recall path]\n- I've been meaning to try out some BBQ recipes with a Korean twist, like the one I made on the 10th of June. Do you have any recommendations for Korean-style BBQ sauces or marinades that I could use?\n- ...s on how to plan a successful BBQ party?\n- ...d pair well with Korean-style BBQ?\n\n[Memory \u2014 Known facts]\n- (established god himself, event, attended) [valid 2026-07-01\u2192\u221e; learned 2026-08-29; conf 0.70; id 58a5471f; src #1a59689a; \"...tize which segments to target first?\"]\n- (established god himself, event, recently used up my favorite Sweet Baby Ray's at my friend's) [valid 2026-08-22\u2192\u221e; learned 2026-08-29; conf 0.70; id 78573f9a; src #7bba5100; \"I'm looking for some recommendations on BBQ sauce brands. I recently used up my favorite Sweet Baby Ray's at my friend's place last Saturday, which was on the 17th of June, and I need to restock.\"]\n- (established god himself, event, participated in the charity) [valid 2025-10-10\u2192\u221e; learned 2026-08-29;",
+      "det_correct": true,
+      "verbatim_hits": 30,
+      "recall_step": "ran",
+      "worker_idx": 0
+    }
+  ]
+}

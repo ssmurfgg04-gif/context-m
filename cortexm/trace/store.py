@@ -73,6 +73,28 @@ CREATE TABLE IF NOT EXISTS branches (
   name TEXT PRIMARY KEY, head TEXT NOT NULL, created TEXT
 );
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
+
+-- v0.6.1: Negation records. Sentences like "I don't eat meat" are
+-- stored here as a SEPARATE signal rather than being mis-extracted
+-- into a positive ``(user, eats, meat)`` fact. The reader checks this
+-- table when answering a query and returns "No — explicitly stated"
+-- when an overlapping negation is found.
+CREATE TABLE IF NOT EXISTS negation_records (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  agent_id TEXT,
+  session_id TEXT,
+  sentence TEXT NOT NULL,
+  marker TEXT NOT NULL,
+  implied_subject TEXT,
+  source_tx_id TEXT,
+  source_hash TEXT,
+  created_at TEXT NOT NULL,
+  is_active INTEGER DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_neg_user ON negation_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_neg_subject ON negation_records(implied_subject);
+CREATE INDEX IF NOT EXISTS idx_neg_active ON negation_records(is_active);
 """
 
 FACT_COLUMNS = ("id, subject, relation, value, valid_from, valid_to, tx_from, tx_to, "
@@ -327,6 +349,82 @@ class TraceStore:
     def get_chunk(self, chunk_id: str) -> dict | None:
         row = self.conn.execute("SELECT * FROM chunks WHERE id=?", (chunk_id,)).fetchone()
         return dict(row) if row else None
+
+    # ----------------------------------------------------- negation_records
+    def insert_negation_record(self, *, user_id: str, sentence: str,
+                               marker: str, implied_subject: str = "",
+                               agent_id: str | None = None,
+                               session_id: str | None = None,
+                               source_tx_id: str | None = None,
+                               source_hash: str = "",
+                               created_at: str | None = None,
+                               neg_id: str | None = None) -> str:
+        """Append a negation record. μ=0 metadata row, not a fact.
+
+        The MemoryWriter calls this once per negated sentence it
+        encounters during ingest. Idempotent on (user_id, sentence,
+        marker, source_hash): re-ingesting the same source chunk is
+        a no-op (re-statement reinforces; the row is not duplicated).
+        """
+        # Idempotent on (user_id, sentence, marker, source_hash):
+        # re-ingest of the same chunk shouldn't pile up duplicate rows.
+        # Check BEFORE inserting so the random `id` doesn't mask the
+        # duplicate; on a hit we no-op (return the existing id).
+        if source_hash:
+            existing = self.conn.execute(
+                "SELECT id FROM negation_records "
+                "WHERE user_id=? AND sentence=? AND marker=? "
+                "AND source_hash=? LIMIT 1",
+                (user_id, sentence, marker, source_hash)).fetchone()
+            if existing:
+                self._maybe_commit()
+                return existing["id"]
+        nid = neg_id or new_id()
+        ts_s = created_at or iso(datetime.now(timezone.utc))
+        self.conn.execute(
+            "INSERT INTO negation_records"
+            "(id, user_id, agent_id, session_id, sentence, marker, "
+            " implied_subject, source_tx_id, source_hash, created_at, "
+            " is_active) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,1) "
+            "ON CONFLICT(id) DO NOTHING",
+            (nid, user_id, agent_id, session_id, sentence, marker,
+             implied_subject, source_tx_id, source_hash, ts_s))
+        self._maybe_commit()
+        return nid
+
+    def query_negation_records(self, *, user_id: str,
+                               marker: str | None = None,
+                               implied_subject: str | None = None,
+                               active: bool = True,
+                               limit: int | None = None) -> list[dict]:
+        """Look up negation records for a user.
+
+        The reader uses this when a query overlaps a known negation
+        cluster (e.g. ``"Do I eat meat?"`` after ingest of ``"I don't
+        eat meat"``). Returns rows in created_at order.
+        """
+        clauses = ["user_id=?"]
+        params: list = [user_id]
+        if marker is not None:
+            clauses.append("marker=?")
+            params.append(marker)
+        if implied_subject is not None:
+            clauses.append("implied_subject=?")
+            params.append(implied_subject)
+        if active:
+            clauses.append("is_active=1")
+        where = " WHERE " + " AND ".join(clauses)
+        q = (f"SELECT * FROM negation_records{where} "
+             f"ORDER BY created_at ASC")
+        if limit:
+            q += f" LIMIT {int(limit)}"
+        rows = self.conn.execute(q, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def all_negation_records(self, user_id: str) -> list[dict]:
+        """All active negation records for a user (reader-side lookup)."""
+        return self.query_negation_records(user_id=user_id, active=True)
 
     def all_chunks(self, user_id: str | None = None) -> list[dict]:
         if user_id:

@@ -841,6 +841,19 @@ class MemoryReader:
             if tc_notes:
                 notes = (notes or []) + tc_notes
 
+        # v0.6.1: Negation-aware retrieval. If the user ingested a
+        # negation like "I don't eat meat", the reader surfaces it
+        # here so the judge sees the explicit "No — they stated..."
+        # signal BEFORE any positive fact lookup. μ=0: pure content-
+        # word overlap (cortexm.bridge.negation.is_negation_overlap).
+        if getattr(self.cfg, "negation_indexing_enabled", True):
+            try:
+                neg_notes = self._negation_notes(query, user_id)
+                if neg_notes:
+                    notes = (neg_notes if not notes else notes + neg_notes)
+            except Exception:
+                pass
+
         # --- query-aware triple pre-filter (HippoRAG 2 lineage) ------------
         # Drop candidate facts that have low lexical+semantic+relation
         # overlap with the query BEFORE fusion. HippoRAG 2 credits this
@@ -1409,6 +1422,35 @@ class MemoryReader:
                 lines.append(verdict)
                 notes.append("\n".join(lines))
         return notes
+
+    # ------------------------------------------------------- negation lookup
+    def _negation_notes(self, query: str, user_id: str) -> list[str]:
+        """Surface ingested negations that overlap the query.
+
+        The writer wrote sentences like ``"I don't eat meat"`` into
+        ``negation_records`` (see writer._store_negations). When the
+        user later asks ``"Do I eat meat?"``, we want the judge to
+        see the explicit "No — they stated..." signal. μ=0: pure
+        content-word overlap (≥2 shared content words) so we never
+        spuriously suppress a real positive answer.
+        """
+        try:
+            from cortexm.bridge.negation import is_negation_overlap
+            records = self.store.query_negation_records(user_id=user_id)
+            if not records:
+                return []
+            notes: list[str] = []
+            for rec in records:
+                if not is_negation_overlap(query, rec):
+                    continue
+                marker = rec.get("marker", "")
+                sentence = rec.get("sentence", "")
+                notes.append(
+                    f"NEGATION: user stated — \"{sentence}\" "
+                    f"(marker={marker!r})")
+            return notes
+        except Exception:
+            return []
 
     # ------------------------------------------------------------- symbolic
     def _symbolic_query(self, plan: QueryPlan, user_id, agent_id, run_id,

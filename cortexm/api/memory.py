@@ -1030,6 +1030,41 @@ class Memory:
         self.palace.close()
         self.store.close()
 
+    # ------------------------------------------------------------------
+    # v0.6.1: BM25 + index maintenance facade
+    # Exposed on Memory so users can call ``m.tune_bm25(k1=1.2, b=0.5)``
+    # and ``m.optimize_index()`` without reaching into the verbatim
+    # plugin. If the verbatim tier isn't mounted (e.g. disabled in
+    # Config), these are no-ops so callers don't need to defensively
+    # check.
+    def tune_bm25(self, k1: float = 1.2, b: float = 0.75) -> None:
+        """Tune BM25 k1 (term saturation) + b (length normalization).
+
+        Lucene defaults: k1=1.2, b=0.75. Our corpus (short chat chunks,
+        avg ~12 tokens) tends to prefer slightly higher saturation and
+        weaker length norm; the v0.6.0 defaults were k1=1.5, b=0.75.
+        Run ``scripts/tune_bm25_canonical.py`` to grid-search on the
+        canonical LongMemEval sample and pick the best for your data.
+
+        Takes effect on the next ``search()`` call.
+        """
+        if self._verbatim is not None:
+            self._verbatim.tune_bm25(k1=k1, b=b)
+        # Persist on the config too so reopens honor the tuning.
+        self.config.bm25_k1 = k1
+        self.config.bm25_b = b
+
+    def optimize_index(self) -> dict:
+        """VACUUM + FTS5 optimize + WAL checkpoint.
+
+        Run this after large bulk ingests to fold the WAL back into
+        the main .db file, reclaim deleted-page space, and merge the
+        FTS5 b-tree segments. Idempotent; safe to call any time.
+        """
+        if self._verbatim is not None:
+            return self._verbatim.optimize_index()
+        return {"optimized": False, "reason": "verbatim tier not mounted"}
+
     def _reopen(self) -> None:
         """Rebind every component to a freshly-opened store (post-restore)."""
         from cortexm.security.pii import PIIGuard, PIIVault

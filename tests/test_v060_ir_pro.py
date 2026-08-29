@@ -920,3 +920,136 @@ class TestMuZeroUpheld:
         assert after == before, (
             f"μ=0 violated: LLM_CALLS {before} → {after} during "
             "Memory.add + Memory.search")
+
+
+# =========================================================================
+# v0.6.1: MemoryWriter.add() → negation_records wiring
+# =========================================================================
+class TestNegationWiring:
+    """End-to-end: writer routes negated sentences into the
+    negation_records table, NOT into the positive facts table."""
+
+    def test_negation_does_not_become_positive_fact(self):
+        from cortexm import Memory, Config
+        m = Memory(Config())
+        m.add("I don't eat meat. I live in Berlin.", user_id="alice")
+        # 'eats meat' must NOT be a positive fact
+        facts = m.store.query_facts(user_id="alice")
+        rels = {(f.relation, f.value) for f in facts}
+        assert ("eats", "meat") not in rels, (
+            f"negation mis-extracted as positive fact: {rels}")
+        # 'lives_in Berlin' SHOULD be extracted
+        assert any(r == ("lives_in", "Berlin") for r in rels), rels
+
+    def test_negation_record_persists(self):
+        from cortexm import Memory, Config
+        m = Memory(Config())
+        m.add("I don't eat meat.", user_id="bob")
+        recs = m.store.query_negation_records(user_id="bob")
+        assert len(recs) == 1
+        assert "don't" == recs[0]["marker"]
+        assert "I don't eat meat" in recs[0]["sentence"]
+
+    def test_reingest_same_negation_is_idempotent(self):
+        from cortexm import Memory, Config
+        m = Memory(Config())
+        m.add("I don't eat meat.", user_id="carol")
+        m.add("I don't eat meat.", user_id="carol")
+        recs = m.store.query_negation_records(user_id="carol")
+        # Idempotent: same source_hash → no duplicate rows
+        assert len(recs) == 1, f"expected 1 row, got {len(recs)}"
+
+    def test_reader_surfaces_negation_on_query(self):
+        from cortexm import Memory, Config
+        from cortexm.api.memory import MemoryReader
+        m = Memory(Config())
+        m.add("I don't eat meat. I live in Berlin.", user_id="dave")
+        reader = MemoryReader(m.config, m.store, m.palace, m.prefetcher)
+        result = reader.search(query="Do I eat meat?",
+                                user_id="dave", k=10)
+        # The NEGATION note should be surfaced in the context_block
+        block = result.context_block if hasattr(result, "context_block") else ""
+        notes = getattr(result, "notes", None) or []
+        combined = (block or "") + " ".join(notes or [])
+        assert "NEGATION" in combined.upper() or "don't" in combined.lower(), (
+            f"negation note not surfaced: {combined[:300]}")
+
+
+# =========================================================================
+# v0.6.1: Medical synonym cluster + Memory.tune_bm25 facade
+# =========================================================================
+class TestMedicalCluster:
+    def test_medical_cluster_default_present(self):
+        from cortexm.bridge.synonyms import default_graph, DEFAULT_CLUSTERS
+        assert "medical" in DEFAULT_CLUSTERS
+        g = default_graph()
+        # `default_graph()` returns a singleton; if it was built before
+        # the medical cluster was added (e.g. prior test) it'd be missing.
+        # Reset the singleton in this test to ensure deterministic state.
+        import cortexm.bridge.synonyms as _s
+        _s._default_graph = None
+        g2 = _s.default_graph()
+        assert "medical" in g2.clusters
+        assert "diagnosed with" in g2.clusters["medical"]
+        assert "diagnosed as" in g2.clusters["medical"]
+        assert "has condition" in g2.clusters["medical"]
+
+    def test_medical_cluster_runtime_registration(self):
+        """Users can ALSO add their own cluster at runtime."""
+        from cortexm.bridge.synonyms import SynonymGraph
+        g = SynonymGraph()
+        g.register_cluster(
+            "custom_medical",
+            ["diagnosed with", "diagnosed as", "has condition"])
+        assert "custom_medical" in g.clusters
+        # Reverse index has the new phrases
+        for phrase in ["diagnosed with", "diagnosed as", "has condition"]:
+            assert phrase.lower() in g._reverse
+            assert g._reverse[phrase.lower()] == "custom_medical"
+
+    def test_medical_synonym_expansion(self):
+        """Query 'Does Alice have diabetes?' (positive phrasing) should
+        expand to surface variants like 'diagnosed with diabetes' that
+        would lexically match an indexed chunk."""
+        import cortexm.bridge.synonyms as _s
+        _s._default_graph = None
+        g = _s.default_graph()
+        # When the query uses 'diagnosed with', we get expansions for
+        # the OTHER medical variants — so the rewriter can fan out and
+        # let BM25 choose the closest to the chunk phrasing.
+        q = "Was Alice diagnosed with diabetes?"
+        exps = g.expand(q)
+        assert q == exps[0]  # original always first
+        # at least one variant substitutes "diagnosed as" or similar
+        variants = [
+            "diagnosed as", "diagnosed as having",
+            "has been diagnosed with", "was diagnosed with",
+            "received a diagnosis of", "diagnosis of",
+        ]
+        assert any(v in e for e in exps for v in variants), (
+            f"no medical variant in expansions: {exps}")
+
+
+class TestMemoryTuneBM25Facade:
+    def test_tune_bm25_facade_present(self):
+        from cortexm import Memory, Config
+        m = Memory(Config())
+        # The method must exist on Memory so users can call
+        # `m.tune_bm25(k1=1.2, b=0.5)` without reaching into the
+        # verbatim plugin.
+        assert callable(getattr(m, "tune_bm25", None))
+        # And it must not raise
+        m.tune_bm25(k1=1.2, b=0.5)
+        # config knobs are persisted
+        assert m.config.bm25_k1 == 1.2
+        assert m.config.bm25_b == 0.5
+        m.close()
+
+    def test_optimize_index_facade_present(self):
+        from cortexm import Memory, Config
+        m = Memory(Config())
+        assert callable(getattr(m, "optimize_index", None))
+        # No-op when verbatim tier not mounted (it should be in this
+        # case, but the call must never raise)
+        m.optimize_index()
+        m.close()

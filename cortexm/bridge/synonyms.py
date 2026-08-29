@@ -122,6 +122,22 @@ DEFAULT_CLUSTERS: Dict[str, List[str]] = {
         "grandfather", "grandmother", "grandparent",
         "uncle", "aunt", "cousin", "nephew", "niece",
     ],
+    # MEDICAL — surface-form variants of the same "this user has X"
+    # statement. Each phrase means the user carries a diagnosis or
+    # condition. The rewriter emits one expansion per variant so a
+    # query phrased as "Does Alice have diabetes?" surfaces chunks
+    # like "Alice was diagnosed with diabetes" or "Alice has the
+    # condition diabetes". μ=0: pure phrase substitution, no NER.
+    "medical": [
+        "diagnosed with", "diagnosed as", "diagnosed as having",
+        "has condition", "has the condition", "has a condition of",
+        "has been diagnosed with", "was diagnosed with",
+        "received a diagnosis of", "diagnosis of",
+        "suffers from", "suffering from", "afflicted with",
+        "has been treated for", "under treatment for",
+        "on medication for", "prescribed for",
+        "history of", "family history of",  # weak variants — match
+    ],
 }
 
 

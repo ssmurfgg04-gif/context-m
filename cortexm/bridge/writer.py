@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from cortexm import metrics
 from cortexm.bridge.extractor import Extractor
 from cortexm.bridge.patterns import ExtractionContext
+from cortexm.bridge.negation import extract_with_negation
 from cortexm.config import Config
 from cortexm.security.injection import scan as injection_scan
 from cortexm.security.injection import contagion_scan
@@ -148,6 +149,57 @@ class MemoryWriter:
             corpus.append(text)
 
     # ------------------------------------------------------------------
+    def _store_negations(self, *, text: str, user_id: str,
+                        session_id: str | None,
+                        source_tx_id: str | None,
+                        agent_id: str | None = None,
+                        created_at: datetime | None = None) -> int:
+        """μ=0 negation routing.
+
+        Splits the text into non-negated + negated sentences
+        (cortexm.bridge.negation.extract_with_negation) and writes
+        each negated sentence into the ``negation_records`` table
+        on the trace store. Returns the number of negation rows
+        written (best-effort: never blocks ingest).
+
+        v0.6.1 wiring: this is the follow-up the v0.6.0 detector
+        was waiting for. Before this, the extractor saw
+        ``"I don't eat meat"`` and, if a pattern fired before the
+        negation was checked, mis-extracted ``(+user, eats, meat)``
+        as a positive fact — the reader then hallucinated "Yes"
+        from the very text that denied it.
+        """
+        if not getattr(self.cfg, "negation_indexing_enabled", True):
+            return 0
+        try:
+            split = extract_with_negation(text)
+            negs = split["negations"]
+            if not negs:
+                return 0
+            ts_s = iso(created_at) if created_at else iso(_now())
+            src_hash = self.store.hasher.hash_text(text)
+            n = 0
+            for rec in negs:
+                self.store.insert_negation_record(
+                    user_id=user_id,
+                    sentence=rec.get("sentence", ""),
+                    marker=rec.get("marker", ""),
+                    implied_subject=rec.get("implied_subject", "") or "",
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    source_tx_id=str(source_tx_id) if source_tx_id is not None else None,
+                    source_hash=src_hash,
+                    created_at=ts_s,
+                )
+                n += 1
+            return n
+        except Exception as e:
+            # best-effort — never block the write path
+            import sys as _sys
+            print(f"[negation] store failed: {e}", file=_sys.stderr)
+            return 0
+
+    # ------------------------------------------------------------------
     def _unmess_cache(self) -> dict:
         """Lazy-init the unmess (idiolect + dissim) cache on this writer.
         Reuses the chaos-mode pattern so production and chaos paths share
@@ -225,6 +277,27 @@ class MemoryWriter:
                 session_id=run_id or agent_id or user_id,
                 source_tx_id=_src_tx_id,
                 agent_id=agent_id)
+            # v0.6.1: split negated sentences out BEFORE the extractor
+            # runs. The negated sentences go into a separate
+            # ``negation_records`` table (so the reader can return
+            # "No — explicitly stated" later); the extractor now sees
+            # only the non-negated portion, which kills the
+            # "I don't eat meat" → (+user, eats, meat) mis-extraction.
+            # Best-effort: on any failure we fall back to the raw text
+            # so the write path is never blocked.
+            try:
+                if getattr(self.cfg, "negation_indexing_enabled", True):
+                    neg_split = extract_with_negation(text)
+                    self._store_negations(
+                        text=text, user_id=user_id,
+                        session_id=run_id or agent_id or user_id,
+                        source_tx_id=str(_src_tx_id) if _src_tx_id is not None else None,
+                        agent_id=agent_id, created_at=msg_time)
+                    extraction_text = neg_split["positive_text"] or text
+                else:
+                    extraction_text = text
+            except Exception:
+                extraction_text = text
             verdict = injection_scan(text, self.cfg.quarantine_injection)
             if not verdict.quarantined and self.cfg.quarantine_contagion:
                 cv = contagion_scan(text, self._tainted_corpus(user_id),
@@ -249,8 +322,8 @@ class MemoryWriter:
             # The extractor's internal Bitap trigger widening handles
             # misspelled trigger words. When unmess is OFF (bench baseline
             # config), we run the raw text through the extractor unchanged.
-            clauses = self._unmess_text(text, user_id) \
-                if self.cfg.unmess_enabled else [text]
+            clauses = self._unmess_text(extraction_text, user_id) \
+                if self.cfg.unmess_enabled else [extraction_text]
 
             candidates = []
             for clause in clauses:
