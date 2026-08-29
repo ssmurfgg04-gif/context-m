@@ -50,9 +50,14 @@ def run_query(server_url: str, query: str) -> dict:
 
 
 def main():
+    # Ensure UTF-8 output on Windows cp1252 consoles
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
     print(f"\n[sparql-demo] === Context-M SPARQL Endpoint Demo ===")
-    print(f"[sparql-demo] Non-LLM retrieval path: palace + Trace → RDFDecoder")
-    print(f"[sparql-demo]                  → SPARQL parser → JSON Results\n")
+    print(f"[sparql-demo] Non-LLM retrieval path: palace + Trace -> RDFDecoder")
+    print(f"[sparql-demo]                  -> SPARQL parser -> JSON Results\n")
 
     # 1. Bootstrap a small corpus
     db = tempfile.mktemp(suffix=".db")

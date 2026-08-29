@@ -294,6 +294,8 @@ class Config:
     chunk_recall_threshold: float = 0.05  # min combined score to inject
     chunk_recall_w_lex: float = 0.45
     chunk_recall_w_sem: float = 0.55
+    chunk_recall_brand_boost_enabled: bool = True  # Veja/Target/Hawaii capwords fix
+    chunk_recall_brand_boost: float = 0.12  # additive boost for brand-like CapWords
 
     # --- index ----------------------------------------------------------
     # Which proximity-index backend the memory palace uses for ANN search

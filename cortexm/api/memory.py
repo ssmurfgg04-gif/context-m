@@ -1027,6 +1027,13 @@ class Memory:
         return {"loaded": False, "reason": "file_empty_or_corrupt"}
 
     def close(self) -> None:
+        # Close sidecar arena first on Windows (mmap holds file lock, prevents unlink)
+        try:
+            arena = getattr(self, "blob_arena", None)
+            if arena is not None:
+                arena.close()
+        except Exception:
+            pass
         self.palace.close()
         self.store.close()
 

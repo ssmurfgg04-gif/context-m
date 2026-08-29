@@ -147,9 +147,9 @@ def main():
                     help="number of long-form personas to ingest")
     ap.add_argument("--long-text-len", type=int, default=2000,
                     help="target length of each persona's source text (bytes)")
-    ap.add_argument("--db", default="/tmp/blob_arena_bench.db",
+    ap.add_argument("--db", default=os.path.join(tempfile.gettempdir(), "blob_arena_bench.db"),
                     help="path for the bench DB (will be overwritten)")
-    ap.add_argument("--arena", default="/tmp/blob_arena_bench.blb",
+    ap.add_argument("--arena", default=os.path.join(tempfile.gettempdir(), "blob_arena_bench.blb"),
                     help="path for the sidecar arena file")
     args = ap.parse_args()
 
@@ -236,9 +236,9 @@ def main():
     total_reduction = 1.0 - (after["total_bytes_on_disk"] / max(before["bytes_on_disk"], 1))
     print(f"\n[migrate-blob-arena] === Graph-size reduction ===")
     print(f"  chunks text bytes reduction: {text_reduction*100:.1f}%  "
-          f"({before['chunks_text_bytes']:,} → {after['chunks_text_bytes']:,})")
+          f"({before['chunks_text_bytes']:,} -> {after['chunks_text_bytes']:,})")
     print(f"  SQLite DB file reduction:    {db_reduction*100:.1f}%  "
-          f"({before['bytes_on_disk']:,} → {after['bytes_on_disk']:,})")
+          f"({before['bytes_on_disk']:,} -> {after['bytes_on_disk']:,})")
     print(f"  total on-disk (db+arena):    {after['total_bytes_on_disk']:,} bytes  "
           f"({total_reduction*100:+.1f}% vs before)")
     print(f"  arena file size:             {arena_bytes:,} bytes "
@@ -290,7 +290,7 @@ def main():
           f"{text_reduction*100:.1f}% (previews replace full text).")
     print(f"  The SQLite DB file itself shrinks by "
           f"{db_reduction*100:.1f}% (chunks-specific pages "
-          f"{before['chunks_pages']} → {after['chunks_pages']}).")
+          f"{before['chunks_pages']} -> {after['chunks_pages']}).")
     print(f"  The arena file adds {arena_bytes:,} bytes (compresses the")
     print(f"  long text via zlib + dedups page cache misses). Total disk")
     print(f"  usage goes {total_reduction*100:+.1f}% — but the WORKING")

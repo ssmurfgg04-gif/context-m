@@ -57,6 +57,8 @@ WORKER = textwrap.dedent("""
 
 
 def test_wal_survives_sigkill(tmp_path):
+    if not hasattr(signal, "SIGKILL"):
+        pytest.skip("SIGKILL not available on this platform (Windows)")
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     db = str(tmp_path / "crash.db")
     ack = str(tmp_path / "acked.txt")

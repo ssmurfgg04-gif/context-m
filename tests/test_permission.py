@@ -280,7 +280,7 @@ def test_grant_lists_sorted():
     g.grant_read("/tmp/a")
     g.grant_exec("ls")
     g.grant_exec("cat")
-    assert g.read_grants == ["/tmp/a", "/tmp/b"]
+    assert g.read_grants == sorted([_norm_path("/tmp/a"), _norm_path("/tmp/b")])
     assert g.exec_grants == ["cat", "ls"]
 
 
@@ -332,7 +332,7 @@ def test_norm_path_expands_user():
     """~ gets expanded to the user's home directory."""
     p = _norm_path("~/foo")
     assert "~" not in p
-    assert p.endswith("/foo")
+    assert p.endswith(os.path.join("", "foo")) or p.endswith("/foo") or p.endswith("\\foo")
 
 
 def test_is_sensitive_path_true_for_ssh():
@@ -472,7 +472,7 @@ class TestUserDirectiveNoMaliciousCodeReadsUserData:
         v = g.can_read("/tmp/ws/data.txt")
         assert v.allowed
         assert v.reason == "path grant match"
-        assert v.matched == "/tmp/ws"
+        assert v.matched == _norm_path("/tmp/ws")
 
     def test_default_deny_log_count(self):
         """The gate increments its denial counter on every denied

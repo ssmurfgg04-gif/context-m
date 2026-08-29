@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 
 import pytest
@@ -408,7 +409,7 @@ def test_cli_export_markdown_and_import_round_trip():
     out_dir = tempfile.mkdtemp()
     try:
         # populate via the Python API (CLI doesn't have an 'add' subcommand)
-        subprocess.run(["python3", "-c",
+        subprocess.run([sys.executable, "-c",
                         f"from cortexm import Memory, Config;"
                         f"m=Memory(Config(db_path={db!r}));"
                         f"m.add('Alice works at Google.', user_id='alice');"

@@ -105,7 +105,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--size", type=int, default=200)
     ap.add_argument("--epochs", type=int, default=200)
-    ap.add_argument("--save", default="/tmp/role_vectors.npz",
+    ap.add_argument("--save", default=os.path.join(tempfile.gettempdir(), "role_vectors.npz"),
                     help="path to save trained role vectors")
     args = ap.parse_args()
 

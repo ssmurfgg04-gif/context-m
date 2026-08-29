@@ -99,9 +99,17 @@ class TestBlobArena:
         full_text = mem.get_chunk_text(first_chunk_id)
         assert "Conversation transcript" in full_text
         assert len(full_text) > 100
-        # cleanup
+        # cleanup — close mmap on Windows before unlink
+        try:
+            if hasattr(mem, "blob_arena") and mem.blob_arena is not None:
+                mem.blob_arena.close()
+        except Exception:
+            pass
         if os.path.exists(arena_path):
-            os.unlink(arena_path)
+            try:
+                os.unlink(arena_path)
+            except PermissionError:
+                pass  # Windows mmap still held — best-effort
 
     def test_blob_arena_idempotent(self, mem):
         mem.add([{"role": "user", "content": "x" * 500}], user_id="u1")
@@ -112,8 +120,16 @@ class TestBlobArena:
         # second migration: nothing to migrate (already has blob_offset)
         r2 = mem.enable_blob_arena(arena_path)
         assert r2["migrated"] == 0
+        try:
+            if hasattr(mem, "blob_arena") and mem.blob_arena is not None:
+                mem.blob_arena.close()
+        except Exception:
+            pass
         if os.path.exists(arena_path):
-            os.unlink(arena_path)
+            try:
+                os.unlink(arena_path)
+            except PermissionError:
+                pass
 
 
 # ----------------------------------------------------------- (c) role vectors
