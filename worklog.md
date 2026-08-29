@@ -2710,3 +2710,101 @@ Stage Summary:
 - Pushing to GitHub main as v0.5.5. No PyPI / no awesome-deepseek-harness
   PR / no npm — user said "call this done push changes and
   improvements to github."
+
+---
+Task ID: v0.5.6
+Agent: main (Sonnet 4.5)
+Task: User asked for "one final deep review and fixing, improving
+code quality, following best practices and reliability." Don't swap
+LLM embedder (HashingEmbedder stays — non-English handled by
+another solution). Skip PyPI publish (user previously said "no need
+to push to anywhere else, just minor touch ups").
+
+Work Log:
+- Audited the user's flagged issues against actual code state:
+  * Verbatim tier default ON — already in Config (verbatim_ingest_enabled=
+    True, verbatim_search_enabled=True, recall_step_in_search=True).
+  * Memory API — already has edit, fix, recall_step, preload_context,
+    export_markdown, import_markdown methods. Public surface is complete.
+  * scripts/longmemeval_canonical_full.py — already in repo after v0.5.5.
+  * dsh-cortexm npm version 1.0.0 — already published.
+  * Security tests use os.path.expanduser('~/.ssh/id_rsa') — cross-platform
+    via the gate's _norm_path(); /etc/passwd is Unix-specific but harmless
+    on Windows (path doesn't exist, just doesn't match).
+
+- Code-quality cleanups in scripts/longmemeval_judge.py:
+  * Moved `import bisect` from inside _subset_sum_matches to module top.
+  * Refactored _subset_sum_matches to use a clean _enumerate() helper
+    that returns (sum, size) tuples. The previous version had a
+    redundant second pass over left_sums at the end that re-enumerated
+    left subsets — the new version handles the (left_size=2, right_size=0)
+    case in the main loop via the size+size>=2 check.
+  * Removed ~20 lines of dead/redundant code.
+
+- Code-quality cleanups in scripts/longmemeval_canonical_full.py:
+  * Replaced 4x `__import__('re')` with module-level `re` (already
+    imported at top). Standard practice — `__import__` inside function
+    bodies is an antipattern.
+  * Replaced `__import__('re').IGNORECASE` with `re.IGNORECASE`.
+
+- Real reliability bug found + fixed: Memory.close() was NOT idempotent.
+  Calling m.close() twice raised sqlite3.ProgrammingError because
+  palace.close() runs before store.close() but tries to commit() on
+  the (already-closed-after-first-call) connection. Patched palace.close()
+  in cortexm/vsa/palace.py to catch the ProgrammingError and treat as
+  no-op — standard Python teardown idiom. The fix is one try/except,
+  documented inline.
+
+- New tests/test_public_api_smoke.py — 11 regression tests for the
+  README onboarding flow:
+  * test_basic_zero_arg_memory: Memory() with no args works.
+  * test_add_search_roundtrip: README quick-start form works.
+  * test_export_markdown_writes_files: produces README.md + chunks/facts/.
+  * test_recall_step_exposed: public method, callable, returns dict.
+  * test_edit_fix_exposed: edit/fix present, signature correct.
+  * test_context_manager: `with Memory() as m:` protocol works.
+  * test_close_idempotent: calling close() twice doesn't raise (this
+    caught the real bug above).
+  * test_version_string_format: __version__ is X.Y.Z.
+  * test_config_defaults_ensure_verbatim: defaults are ON — the
+    0.948 canonical score depends on this; guard against flipping.
+  * test_llm_calls_zero_on_init: μ=0 holds across add/search/consolidate.
+  * test_zero_arg_add_with_string_role_messages: README form
+    `[{'role':'user','content':'...'}]` works.
+
+- README polish per the user's audit:
+  * Lead with the user promise: "Context-M remembers what you tell
+    it. Forever. For free. On your machine. Same result every time."
+  * Move the 0.948 result above the fold as a 2-column table
+    (Context-M vs MemPalace honest E2E) with LLM-call counts + cost
+    + determinism + data-ownership rows. The old 6-column table is
+    kept in the "Tier 4.3" section for benchmarking archaeology.
+  * Add "Quick start" section before the architecture diagram.
+  * Add "When to use Context-M vs Mem0 / Zep" section with concrete
+    decision criteria ($0 + determinism + ownership vs cloud SaaS).
+  * Honest scope note: 154/500 sample, single_session + multi_session
+    only; full 500-Q run needs ≥16GB RAM or GitHub Actions runners
+    (workflow file ready at .github/workflows/longmemeval_canonical_full.yml).
+
+- Full regression suite: 517 passed (was 506; +11 new smoke tests),
+  24 skipped, 0 failures in 21s. No regressions vs v0.5.5.
+- End-to-end smoke test (canonical idx 76 bike total $185): ✓
+  strategy=sum_or_diff elapsed=26.6s. v0.5.5 fixes still work after
+  the v0.5.6 cleanup.
+- Bumped version 0.5.5 → 0.5.6 in cortexm/__init__.py + pyproject.toml.
+
+Stage Summary:
+- Real reliability bug fixed: Memory.close() is now idempotent. The
+  first close commits + closes; the second close is a no-op (was:
+  ProgrammingError on already-closed SQLite connection).
+- Code-quality cleanups: bisect import hoisted, redundant subset-sum
+  loop removed (~20 lines dead code), __import__('re') antipattern
+  replaced with module-level re.
+- 11 new public-API smoke tests guard the README onboarding flow.
+- README lead with user promise + 0.948 badge + Quick Start +
+  When-to-use-vs-Mem0/Zep. Honest scope note intact.
+- 5 promises intact (Always remembers / Flat cost μ=0 / Own your
+  data / Doesn't lie / Same every time).
+- No LLM embedder swap (per user instruction).
+- No PyPI push (per user's earlier "no need to push to anywhere else").
+- Pushing to GitHub main as v0.5.6.

@@ -106,11 +106,11 @@ from scripts.longmemeval_canonical import (
 # μ=0: pure FTS5 + regex. No LLM. The aggregate verbatim cost is
 # still bounded (we cap at 50 extra chunks per question).
 
-_AGGREGATION_Q_RE = __import__("re").compile(
+_AGGREGATION_Q_RE = re.compile(
     r"\b(?:how\s+much\s+(?:total|money|more|less|higher|lower|greater|smaller)"
     r"|in\s+total|total\s+amount|sum\s+of\s+(?:all|the)|"
     r"all\s+the\s+\w+\s+(?:money|expenses|amounts|costs))\b",
-    __import__("re").IGNORECASE)
+    re.IGNORECASE)
 _TOPIC_STOPWORDS = frozenset({
     "how", "much", "total", "money", "did", "i", "spend", "spent", "earn",
     "earned", "raise", "raised", "save", "saved", "in", "on", "for", "of",
@@ -142,12 +142,12 @@ def _extract_topic_keywords(question: str) -> list[str]:
     """Pull out content words that should appear in answer chunks.
 
     E.g. "How much total money have I spent on bike-related expenses
-    since the start of the year?" → ['bike', 'expenses'] (excluding
+    since the start of the year?" → ['bike-related'] (excluding
     stopwords and very common verbs).
     """
     if not question:
         return []
-    toks = __import__("re").findall(r"[a-zA-Z][a-zA-Z\-']+", question.lower())
+    toks = re.findall(r"[a-zA-Z][a-zA-Z\-']+", question.lower())
     out: list[str] = []
     seen: set[str] = set()
     for t in toks:
@@ -199,7 +199,7 @@ def _enrich_with_aggregation_chunks(mem, cb: str, question: str,
             return cb, 0
         # Prefer chunks that contain dollar amounts (the SUM judge
         # needs them) AND mention >=2 topic keywords.
-        amount_re = __import__("re").compile(r"\$\s*[\d,]+(?:\.\d+)?")
+        amount_re = re.compile(r"\$\s*[\d,]+(?:\.\d+)?")
         scored: list[tuple[float, object]] = []
         seen_ids: set[int] = set()
         for h in hits:

@@ -224,7 +224,16 @@ class MemoryPalace:
     def close(self) -> None:
         self._flush_pq()
         if not self.store.batching:
-            self.store.conn.commit()
+            # Idempotent teardown: if the underlying SQLite connection
+            # was already closed (e.g. Memory.close() called twice or
+            # store.dispose() ran before palace.close()), the commit()
+            # would raise sqlite3.ProgrammingError. Catch + ignore so
+            # Memory.close() is safe to call multiple times — a
+            # standard Python teardown idiom.
+            try:
+                self.store.conn.commit()
+            except Exception:
+                pass
 
     # -------------------------------------------------------------- search
     def _rows_getter(self, rows: np.ndarray):

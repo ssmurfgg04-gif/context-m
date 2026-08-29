@@ -32,6 +32,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import os
 import re
@@ -448,23 +449,23 @@ def _subset_sum_matches(amounts: list[float], target: float,
     """Does any subset of >=2 amounts sum to target? Meet-in-the-middle.
 
     For <=10 amounts, brute-force all 2^N subsets (<= 1024 checks).
-    For >10, split into two halves, enumerate all subset sums of each,
-    sort one and binary-search for complement in the other. Bounded
-    to <2^12 work regardless of input size.
+    For 11..20, split into two halves, enumerate all subset sums of each
+    (with their sizes), sort one, and binary-search the other for a
+    matching complement. Bounded to <2^12 work regardless of input size.
     """
     amounts = [a for a in amounts if a > 0]
     n = len(amounts)
     if n < 2:
         return False
-    # Cap at first 20 amounts (sorted by their position in the context
-    # — caller should already have them in priority order).
+    # Cap at first 20 amounts (caller should already have them in
+    # priority order — by their position in the context_block).
     if n > 20:
         amounts = amounts[:20]
         n = 20
 
+    # Small case: brute-force over all 2^n non-empty subsets.
     if n <= 10:
-        # Brute force over all 2^n subsets, skip empty and singleton
-        for mask in range(3, (1 << n)):  # skip 0 (empty) and 1 (single)
+        for mask in range(3, (1 << n)):  # skip empty + singletons
             s = 0.0
             count = 0
             for i in range(n):
@@ -475,59 +476,40 @@ def _subset_sum_matches(amounts: list[float], target: float,
                 return True
         return False
 
-    # Meet-in-the-middle for 11..20 amounts
+    # Larger case: meet-in-the-middle. Enumerate all 2^half subsets of
+    # each half, then for each left (sum, size) look for a right
+    # (sum, size) such that left_sum + right_sum == target AND
+    # left_size + right_size >= 2.
     half = n // 2
     left = amounts[:half]
     right = amounts[half:]
-    left_sums: list[float] = []
-    for mask in range(1, 1 << len(left)):
-        s = 0.0
-        cnt = 0
-        for i in range(len(left)):
-            if mask & (1 << i):
-                s += left[i]
-                cnt += 1
-        left_sums.append(s)
-    right_sums: list[float] = []
-    right_sizes: list[int] = []
-    for mask in range(1, 1 << len(right)):
-        s = 0.0
-        cnt = 0
-        for i in range(len(right)):
-            if mask & (1 << i):
-                s += right[i]
-                cnt += 1
-        right_sums.append(s)
-        right_sizes.append(cnt)
-    right_arr = sorted(zip(right_sums, right_sizes))
+
+    def _enumerate(arr: list[float]) -> list[tuple[float, int]]:
+        out: list[tuple[float, int]] = []
+        for mask in range(0, 1 << len(arr)):
+            s = 0.0
+            cnt = 0
+            for i in range(len(arr)):
+                if mask & (1 << i):
+                    s += arr[i]
+                    cnt += 1
+            out.append((s, cnt))
+        return out
+
+    left_sums = _enumerate(left)
+    right_sums = _enumerate(right)
+    right_arr = sorted(right_sums)
     right_vals = [r[0] for r in right_arr]
-    import bisect
-    for ls in left_sums:
+
+    for ls, lsize in left_sums:
         need = target - ls
-        # binary search for any right_sum within tol of need
         i = bisect.bisect_left(right_vals, need - tol)
         while i < len(right_vals) and right_vals[i] <= need + tol:
-            # need at least 2 amounts total in this combination;
-            # left has >=1, so right can be >=1 — but we want overall >=2.
-            # left alone is 1 element; if right's subset has >=1 element
-            # we're guaranteed 2+. If left has 1 and right has 1, that's 2.
-            if right_arr[i][1] >= 1:
+            # The combination must have >=2 elements in total. The
+            # left half has lsize; the right has right_arr[i][1].
+            if lsize + right_arr[i][1] >= 2:
                 return True
             i += 1
-    # Also handle the "all of left" case if left has >=2 already
-    for ls in left_sums:
-        if abs(ls - target) <= tol and len(left) >= 2:
-            # but only if the ls corresponds to a >=2 subset
-            for mask in range(3, 1 << len(left)):
-                s = 0.0
-                cnt = 0
-                for i in range(len(left)):
-                    if mask & (1 << i):
-                        s += left[i]
-                        cnt += 1
-                if cnt >= 2 and abs(s - target) <= tol:
-                    return True
-            break
     return False
 
 
