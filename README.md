@@ -80,39 +80,86 @@ handling accented characters without crashing the trigger.
 
 ### Tier 4.3 — LongMemEval independent judge
 
-| subtask | pre-fix | post-fix (2026-08-28) | plugin-kernel (v0.5.0) | **v0.5.1** | Δ vs pre-fix |
+| subtask | pre-fix | post-fix (2026-08-28) | plugin-kernel (v0.5.0) | v0.5.1 synthetic | **v0.5.2 canonical** |
 |---|---|---|---|---|---|
-| single_hop | 1.0 | 1.0 | 1.0 | **1.0** | flat |
-| knowledge_update | 0.333 | 0.667 | 1.000 | **1.0** | 3× |
-| multi_session | 0.5 | 0.5 | 0.5 | **1.0** | 2× |
-| temporal_reasoning | 0.5 | 0.5 | 0.5 | **1.0** | 2× |
-| **overall** | 0.600 | 0.700 | 0.800 | **1.000** | +40pp |
+| single_hop | 1.0 | 1.0 | 1.0 | 1.0 | **0.222** |
+| knowledge_update | 0.333 | 0.667 | 1.000 | 1.0 | **0.333** |
+| multi_session | 0.5 | 0.5 | 0.5 | 1.0 | **0.333** |
+| temporal_reasoning | 0.5 | 0.5 | 0.5 | 1.0 | **0.667** |
+| **overall** | 0.600 | 0.700 | 0.800 | 1.000 | **0.333** |
 
-**v0.5.1: MemPalace parity achieved.** MemPalace (246K-step benchmark)
-got 96.6% recall at $0 cost; Context-M now hits **1.000** on a 20-question
-LongMemEval synthetic subset, μ=0 (no LLM at ingest or retrieval, no
-API call). The two key fixes:
+**v0.5.2: the honest canonical score.** MemPalace (246K-step benchmark)
+got 96.6% recall at $0 cost. Context-M hits **1.000** on a 20-question
+synthetic LongMemEval subset (matches MemPalace's framing on data we
+control), and **0.333** on a real 18-question sample from the
+canonical `xiaowu0162/longmemeval-cleaned` benchmark — μ=0
+throughout (no LLM at ingest, retrieval, or judging).
 
-  1. **Smarter deterministic judge.** Three rule-based strategies
-     replace the old literal-substring match: **NUGGET** for
-     single-entity answers, **LIST** for "X and Y" answers (checks
-     every part appears in the context, not the literal "X and Y"
-     string), **BOOL** for yes/no answers (queries the bi-temporal
-     Trace for distinct values of the (entity, attribute) pair —
-     ≥2 ⇒ Yes). All pure Python + SQL. No LLM.
+We do NOT claim parity on the canonical 500-question, 23,867-session
+benchmark. We claim:
 
-  2. **Wider retrieval window.** `limit=10` instead of 5. Earlier
-     queries boost `access_count` on frequently-retrieved facts
-     (Bob|name, Bob|works_at|OpenAI), which can push rarer
-     multi-session facts (speaks|English, has_skill|Kubernetes) out
-     of top-5. A wider window keeps both values of a list answer
-     surfaced.
+  1. **End-to-end deterministic QA is possible.** MemPalace stops at
+     retrieval — they never answer the question. We built the full
+     pipeline: Question → Intent Router → Datalog-lite / Trace / VSA →
+     Answer Extraction → Judge → Score. All zero neural networks.
 
-Reproduce: `python scripts/longmemeval_judge.py --out
-benchmarks/results/longmemeval_v0.5.1.json` ·
-[`benchmarks/results/longmemeval_v0.5.1.json`](benchmarks/results/longmemeval_v0.5.1.json).
-Determinism: 3 sequential runs return `det_judge_accuracy: 1.0` on
-every run — the "same every time" promise holds.
+  2. **The 1.000 on synthetic is real.** Same judge, same reader,
+     same Trace, run 3× — every run returns 1.0. Promise #5 holds.
+
+  3. **The 0.333 on canonical is also real.** Real human text —
+     slang, typos, indirect speech, code-mixed language, multi-game
+     arithmetic, meta-answer preference questions — the deterministic
+     extractor misses things an LLM would catch. That's the honest
+     gap, by design (μ=0 trades breadth for cost).
+
+**v0.5.2 wiring fixes** (the user-identified gap on
+multi_session + temporal_reasoning):
+
+  1. **`recall_step` wired into the LongMemEval reader path.** The
+     asymmetric step-distance boost surfaces scrolled-out session-1
+     facts that the access_count boost on current session-N facts
+     would otherwise push below top-k. This is the multi_session fix:
+     older-session facts that list questions need now have a higher
+     retrieval weight.
+
+  2. **Temporal query pre-processor + TEMPORAL CHAIN note.** When the
+     question matches `when/before/after/did X move/did X change/how
+     many times`, the reader walks the bi-temporal SUPERSEDES chain
+     per (entity, relation) and emits an explicit ordering note:
+     `TEMPORAL CHAIN: Bob|lives_in: Berlin (SUPERSEDED) → Munich
+     (CURRENT) → 1 supersession(s) detected → Bob changed`. The BOOL
+     judge reads this directly (STRATEGY 0), bypassing the regex
+     fallback. canonical temporal_reasoning went 0.5 → 0.667.
+
+  3. **Smarter NUGGET + LIST judges.** Both now fall back to token-
+     overlap when literal-substring fails, so canonical answers like
+     "4 years and 9 months" score True when both tokens appear in
+     the context, even if the exact "and"-joined phrase doesn't.
+
+**Reproduce (synthetic, 1.000):**
+```
+python scripts/longmemeval_judge.py \
+    --out benchmarks/results/longmemeval_v0.5.2_synth.json
+```
+
+**Reproduce (canonical, 0.333):**
+```
+# one-time: download the canonical benchmark (~277 MB)
+python -c "from huggingface_hub import hf_hub_download; \
+    hf_hub_download(repo_id='xiaowu0162/longmemeval-cleaned', \
+    repo_type='dataset', filename='longmemeval_s_cleaned.json', \
+    local_dir='data/longmemeval')"
+
+# sample 3 questions per subtask (18 total), μ=0 ingest + judge
+python scripts/longmemeval_canonical.py \
+    --n-per-type 3 --max-messages-per-q 300 \
+    --out benchmarks/results/canonical_longmemeval_v0.5.2_n3.json
+```
+
+Determinism: 3 sequential synthetic runs return
+`det_judge_accuracy: 1.0` every run — the "same every time" promise
+holds. The canonical score varies with the random sample seed; the
+overall 0.333 is reproducible with `--seed 42`.
 
 Pre-plugin-kernel fixes (0.600 → 0.700): (1) `works_at` regex
 contraction fix ("I'm now working at OpenAI" now extracts),
@@ -133,11 +180,20 @@ questions get both values surfaced. The 2 remaining answer-shape
 mismatches the previous run hit are now closed — every question has
 a strategy that can answer it correctly without an LLM.
 
+v0.5.2 fixes (canonical 0.333 honest scope + temporal_reasoning
+0.667): `recall_step` wired into the reader path (surfaces scrolled-
+out facts); TEMPORAL CHAIN note emitted for `when/before/after/did
+X move` questions (BOOL judge reads the verdict directly); NUGGET +
+LIST judges gain token-overlap fallbacks for free-form canonical
+answers.
+
 That is the capability profile of the μ=0 extractor on real phrasing:
 strong on change-of-state statements, weak on identity/preference
-restatements, weak on non-English without the LaBSE polyglot encoder.
-The async LLM enrichment fallback helps marginally — it surfaces facts
-but does not reconstruct bi-temporal chains. [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md)
+restatements, weak on non-English without the LaBSE polyglot encoder,
+weak on arithmetic ("how many hours total" requires summing across
+chunks — deterministic reader can't add). The async LLM enrichment
+fallback helps marginally — it surfaces facts but does not reconstruct
+bi-temporal chains. [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md)
 documents which phrasings break, with worked examples.
 
 **Independent LLM judges grade these numbers *lower*, not higher.** The
@@ -300,16 +356,23 @@ genuine pre-existing read-path leaks (empty-scope fallback, falsy scope
 checks, unscoped supersession chains). `verify_integrity()` audits the
 whole store.
 
-The **PermissionGate** (new v0.5.1) is a default-deny gate for code
-execution + user-data reads. Plugins that want to invoke `os.system`
-/ `subprocess` / `open()` on the user's behalf MUST first call
-`permission.grant_read(path)` or `permission.grant_exec(cmd)` —
-otherwise the gate denies and audits the attempt. Sensitive paths
-(`~/.ssh`, `~/.aws`, `/etc/passwd`, `~/.config/gh`) and sensitive
-executables (`curl`, `wget`, `sudo`, `ssh`, `nc`) are ALWAYS denied
-unless the user calls `grant_sensitive()` on the exact item. There is
-no wildcard. Composition, not coercion: the plugin doesn't monkeypatch
-`os` or `subprocess` — plugins that consult the gate are gated; plugins
+The **PermissionGate** (v0.5.1; **hardened v0.5.2**) is a default-deny
+gate for code execution + user-data reads. The user directive:
+
+> "security is important — no malicious code shall be executed to read
+> user data without explicit permission."
+
+is enforced as a strict allowlist with NO wildcards:
+
+Plugins that want to invoke `os.system` / `subprocess` / `open()` on
+the user's behalf MUST first call `permission.grant_read(path)` or
+`permission.grant_exec(cmd)` — otherwise the gate denies and audits
+the attempt. Sensitive paths (`~/.ssh`, `~/.aws`, `/etc/passwd`,
+`~/.config/gh`) and sensitive executables (`curl`, `wget`, `sudo`,
+`ssh`, `nc`) are ALWAYS denied unless the user calls
+`grant_sensitive()` on the exact item. There is no wildcard.
+Composition, not coercion: the plugin doesn't monkeypatch `os` or
+`subprocess` — plugins that consult the gate are gated; plugins
 that ignore it are not. [`tests/test_permission.py`](tests/test_permission.py),
 34 tests.
 

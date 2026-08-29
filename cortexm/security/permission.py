@@ -219,8 +219,23 @@ class PermissionGate:
 
         Required to read ``~/.ssh`` or to run ``curl``. The user must
         call this explicitly — there is no wildcard.
+
+        v0.5.2 fix: paths are NORMALIZED on store (the same
+        ``_norm_path`` expansion ``can_read`` uses), so ``~/.ssh``
+        and ``/home/alice/.ssh`` compare equal. Without this, a
+        user could grant_sensitive("~/.ssh/id_rsa") but can_read
+        would expand to "/home/alice/.ssh/id_rsa" and miss the
+        match — silently breaking the explicit-permission policy
+        the gate exists to enforce. Caught by
+        TestUserDirectiveNoMaliciousCodeReadsUserData.
         """
-        self._explicit_sensitive_allows.add(path_or_cmd.strip())
+        # Heuristic: if it looks like a path (contains / or ~), treat
+        # as a path and normalize. Otherwise treat as an exec (basename
+        # already normalized in can_exec).
+        s = path_or_cmd.strip()
+        if "/" in s or s.startswith("~"):
+            s = _norm_path(s)
+        self._explicit_sensitive_allows.add(s)
         if _audit_log := self.audit:
             _audit("permission.grant_sensitive", path_or_cmd, _audit_log)
 

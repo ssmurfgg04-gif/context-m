@@ -180,6 +180,29 @@ SINGLE_VALUED_QUERY = re.compile(
     r"company|boss|manager|location|address|city|home)\b"
     r"|\bwhat\s+does\s+\w+\s+do\b"
     r"|\bwho\s+is\s+\w+(?:'?s)?\s+(?:manager|boss|lead|supervisor)\b)", re.I)
+
+# Temporal chain triggers — questions whose answer requires walking the
+# bi-temporal SUPERSEDES chain rather than just looking up a single fact.
+# Routes "when/before/after/did X move/did X change/how many times" to
+# the temporal-chain note emitter (``_temporal_chain_notes`` below),
+# which surfaces an explicit "V1 → SUPERSEDED BY V2" trace per
+# (entity, relation). This is the LongMemEval temporal_reasoning
+# fix: the reader IS already pulling the supersession chain into the
+# candidate pool (line ~1230), but the candidate facts alone don't
+# tell the judge WHICH value came first / which replaced which. The
+# TEMPORAL CHAIN note makes the ordering visible.
+TEMPORAL_CHAIN_MARKERS = re.compile(
+    r"\b(when\s+(?:did|were|was|will)\b"
+    r"|\b(?:before|after|prior\s+to)\b"
+    r"|\b(?:during|while|since|until)\b"
+    r"|\bdid\s+\w+\s+(?:move|change|switch|leave|join|start|stop)\b"
+    r"|\bhas\s+\w+\s+(?:moved|changed|switched|been)\b"
+    r"|\bhow\s+many\s+times\b"
+    r"|\bprevious\w*\b|\bformer\w*\b"
+    r"|\bused\s+to\b|\bno\s+longer\b"
+    r"|\bfirst\s+(?:job|city|role|company)\b"
+    r"|\blast\s+(?:job|city|role|company)\b)", re.I)
+
 # Temporal + LIST fusion: "list all X from 2024" or "what did X do
 # between A and B" should be a temporal-list (return the full matching
 # set within the window, not just top-k). Detected downstream by the
@@ -198,6 +221,11 @@ class QueryPlan:
     # so the reader's filter knows to apply BOTH the temporal window
     # AND the exhaustive recall semantics (don't truncate to top-k).
     sub_intent: str | None = None
+    # v0.5.2: temporal chain flag — set when TEMPORAL_CHAIN_MARKERS
+    # matches. Reader emits explicit SUPERSEDES-chain notes so the
+    # judge can answer "did X move?" / "where before?" / "how many
+    # times" without guessing from candidate fact order.
+    wants_temporal_chain: bool = False
 
 
 @dataclass
@@ -655,6 +683,17 @@ class MemoryReader:
                 plan.intent = "temporal"
         if MULTIHOP_MARKERS.search(query) and len(plan.relations) >= 2:
             plan.intent = "multihop" if plan.intent == "recall" else plan.intent
+        # v0.5.2: temporal chain trigger — fire on "when/before/after/
+        # did X move/did X change" so the reader emits an explicit
+        # SUPERSEDES-chain note (``_temporal_chain_notes`` below).
+        # This is the LongMemEval temporal_reasoning fix: the reader
+        # already pulls the superseded chain into the candidate pool,
+        # but the judge needs an explicit ordering signal — the bare
+        # candidate facts don't say "V1 came before V2; V2 replaced V1".
+        if TEMPORAL_CHAIN_MARKERS.search(query):
+            plan.wants_temporal_chain = True
+            if plan.intent == "recall":
+                plan.intent = "temporal"
         return plan
 
     def _employment_window(self, query: str, user_id: str) -> tuple[str, str] | None:
@@ -749,6 +788,17 @@ class MemoryReader:
         # --- symbolic path -------------------------------------------------
         sym_facts, notes = self._symbolic_query(plan, user_id, agent_id, run_id,
                                                 scope, k, query)
+        # v0.5.2: temporal chain notes — for any query that triggered
+        # TEMPORAL_CHAIN_MARKERS, walk the bi-temporal SUPERSEDES chain
+        # per (entity, relation) and emit an explicit ordering note.
+        # The reader already pulled the supersession chain into the
+        # candidate pool above (in _symbolic_query); this just makes
+        # the *order* explicit so the LIST/BOOL judge can answer
+        # "did X move?" / "where before?" without guessing.
+        if plan.wants_temporal_chain:
+            tc_notes = self._temporal_chain_notes(plan, user_id)
+            if tc_notes:
+                notes = (notes or []) + tc_notes
 
         # --- query-aware triple pre-filter (HippoRAG 2 lineage) ------------
         # Drop candidate facts that have low lexical+semantic+relation
@@ -1182,6 +1232,74 @@ class MemoryReader:
             clauses.append(f"  {subj}: " + "; ".join(parts))
         return ("RECONSTRUCT narrative (μ=0, rule-based):\n"
                 + "\n".join(clauses))
+
+    # ----------------------------------------------------- temporal chain
+    def _temporal_chain_notes(self, plan: "QueryPlan", user_id: str) -> list[str]:
+        """Walk the bi-temporal SUPERSEDES chain for each (entity, relation)
+        in the plan and emit explicit ordering notes.
+
+        This is the LongMemEval temporal_reasoning fix. The reader
+        already pulls superseded facts into the candidate pool (line
+        ~1230 in ``_symbolic_query``), but candidate facts alone don't
+        tell the judge the *order* in which values were superseded.
+        For BOOL questions like "Did Bob move?" or "Did Alice change
+        jobs?", the LIST/BOOL judge needs to see ≥2 distinct values
+        AND know which came first. The TEMPORAL CHAIN note makes both
+        visible.
+
+        Output format (one note per (entity, relation) with ≥2 facts)::
+
+            TEMPORAL CHAIN: Bob|lives_in:
+              - Berlin [valid 2026-01-15 → 2026-06-12]  (SUPERSEDED)
+              - Munich [valid 2026-06-12 → ∞]  (CURRENT)
+            → 1 supersession(s) detected → Bob moved
+
+        μ=0: pure SQL via ``store.history_of`` (returns ordered list
+        with valid_from/valid_to). No LLM.
+        """
+        if not plan.wants_temporal_chain:
+            return []
+        if not plan.entities or not plan.relations:
+            # No entities / relations parsed from the query — we can't
+            # walk a chain we don't know the subject of. Fall back to
+            # history_of for the first user-scoped fact's subject, if any.
+            return []
+        notes: list[str] = []
+        for ent in plan.entities[:3]:
+            for rel in plan.relations[:4]:
+                hist = self.store.history_of(ent, rel, user_id=user_id)
+                if not hist:
+                    continue
+                # Sort by valid_from ascending — earliest first.
+                hist_sorted = sorted(
+                    hist, key=lambda f: (f.valid_from or "", f.id))
+                if len(hist_sorted) == 1:
+                    # Only one value — no chain. Skip.
+                    continue
+                lines = [f"TEMPORAL CHAIN: {ent}|{rel}:"]
+                supersessions = 0
+                current_value: str | None = None
+                for i, f in enumerate(hist_sorted):
+                    vf = f.valid_from or "?"
+                    vt = f.valid_to or "∞"
+                    status = ("CURRENT"
+                              if f.is_active else "SUPERSEDED")
+                    if not f.is_active:
+                        supersessions += 1
+                    else:
+                        current_value = f.value
+                    lines.append(f"  - {f.value} [valid {vf} → {vt}]"
+                                 f"  ({status})")
+                # Verdict line — gives the BOOL judge a one-shot signal.
+                verdict = (f"→ {supersessions} supersession(s) detected"
+                           f" → {ent} changed"
+                           if supersessions > 0
+                           else f"→ 0 supersessions → {ent} unchanged")
+                if current_value:
+                    verdict += f" (current: {current_value})"
+                lines.append(verdict)
+                notes.append("\n".join(lines))
+        return notes
 
     # ------------------------------------------------------------- symbolic
     def _symbolic_query(self, plan: QueryPlan, user_id, agent_id, run_id,

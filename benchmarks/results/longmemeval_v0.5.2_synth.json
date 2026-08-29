@@ -1,0 +1,363 @@
+{
+  "summary": {
+    "n_questions": 20,
+    "det_judge_accuracy": 1.0,
+    "gemini_judge_accuracy": 1.0,
+    "by_subtask": {
+      "single_hop": 1.0,
+      "knowledge_update": 1.0,
+      "multi_session": 1.0,
+      "temporal_reasoning": 1.0
+    },
+    "by_strategy": {
+      "nugget": 1.0,
+      "list": 1.0,
+      "bool": 1.0
+    },
+    "judged_by": "deterministic_rule",
+    "mempalace_parity": true,
+    "target_recall": 0.966
+  },
+  "results": [
+    {
+      "session_id": 1,
+      "question": "What is Bob's name?",
+      "expected_answer": "Bob",
+      "subtask": "single_hop",
+      "judge_strategy": "nugget",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 6a8872be; src #7b3bc7bc; \"My daughter's name is Emma.\"]\n- (Bob, spouse, Alice) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id a94fbefb; src #af9524fb; \"My wife is Alice.\"]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba;...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | child | Emma",
+        "Bob | spouse | Alice",
+        "Bob | speaks | German",
+        "Bob | speaks | English"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "Where does Bob work?",
+      "expected_answer": "Stripe",
+      "subtask": "single_hop",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I live in Berlin.\n\n[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, has_skill, Python) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id 06c010b8; src #0b1f72aa; \"I know Python.\"]\n- (Bob, has_skill, Kubernetes) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id e121b251; src #775b421e; \"I know Kubernetes.\"]\n- (Bob, works_at, O...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | has_skill | Python",
+        "Bob | has_skill | Kubernetes",
+        "Bob | works_at | OpenAI",
+        "Bob | role | ML engineer"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "Where does Bob live?",
+      "expected_answer": "Berlin",
+      "subtask": "single_hop",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I live in Berlin.\n- I was promoted to senior ML engineer.\n- I work at Stripe.\n\n[Memory \u2014 Known facts]\n- (Bob, lives_in, Munich) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id eb223429; src #ff7575a4; \"I live in Munich.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, lives_in, Berlin) [valid 2026-08-29\u21922026-08-29; learned 2026-08-29; conf 0.92; id 136eeef7; src #a192f...",
+      "top5": [
+        "Bob | lives_in | Munich",
+        "Bob | name | Bob",
+        "Bob | lives_in | Berlin",
+        "Bob | spouse | Alice",
+        "Bob | works_at | OpenAI"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 1,
+      "question": "What programming language does Bob prefer?",
+      "expected_answer": "Python",
+      "subtask": "single_hop",
+      "judge_strategy": "nugget",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, prefers, Python) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 72f6be69; src #1bdc85ed; \"I prefer Python.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, English) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id d1cac283; src #ae34f926; \"I speak English.\"]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba; \"I sp...",
+      "top5": [
+        "Bob | prefers | Python",
+        "Bob | name | Bob",
+        "Bob | speaks | English",
+        "Bob | speaks | German",
+        "Bob | has_skill | Python"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "Who is Bob's wife?",
+      "expected_answer": "Alice",
+      "subtask": "single_hop",
+      "judge_strategy": "nugget",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 6a8872be; src #7b3bc7bc; \"My daughter's name is Emma.\"]\n- (Bob, spouse, Alice) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id a94fbefb; src #af9524fb; \"My wife is Alice.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, left, Stripe) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id f44e9c6f; src #a2e3bdd2; \"...",
+      "top5": [
+        "Bob | child | Emma",
+        "Bob | spouse | Alice",
+        "Bob | name | Bob",
+        "Bob | left | Stripe",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "Where does Bob currently work?",
+      "expected_answer": "OpenAI",
+      "subtask": "knowledge_update",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n\n[Memory \u2014 Known facts]\n- (Bob, has_skill, Kubernetes) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id e121b251; src #775b421e; \"I know Kubernetes.\"]\n- (Bob, has_skill, Python) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id 06c010b8; src #0b1f72aa; \"I know Python.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, works_at, OpenAI) [valid 2026-0...",
+      "top5": [
+        "Bob | has_skill | Kubernetes",
+        "Bob | has_skill | Python",
+        "Bob | name | Bob",
+        "Bob | works_at | OpenAI",
+        "Bob | role | ML engineer"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "Where did Bob work before OpenAI?",
+      "expected_answer": "Stripe",
+      "subtask": "knowledge_update",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n\n[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id c90c1da3; src #d9489359; \"I now work at OpenAI.\"]\n- (Bob, has_skill, Python) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id 06c010b8; src #0b1f72aa; \"I know Python.\"]\n- (Bob, has_skill, Kubernetes) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id e121b251; src #775b421e; \"I know Kubernetes.\"]\n- (Bob, name, Bob) [valid ...",
+      "top5": [
+        "Bob | works_at | OpenAI",
+        "Bob | has_skill | Python",
+        "Bob | has_skill | Kubernetes",
+        "Bob | name | Bob",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 2,
+      "question": "What is Bob's current role?",
+      "expected_answer": "ML engineer",
+      "subtask": "knowledge_update",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I was promoted to senior ML engineer.\n\n[Memory \u2014 Known facts]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba; \"I speak German.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 6a8872be; src #7b3bc7bc; \"My daughter's name is Emma.\"]\n- (Bob, spouse, Alice)...",
+      "top5": [
+        "Bob | speaks | German",
+        "Bob | name | Bob",
+        "Bob | child | Emma",
+        "Bob | spouse | Alice",
+        "Bob | speaks | English"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 4,
+      "question": "What is Bob's current title after promotion?",
+      "expected_answer": "senior ML engineer",
+      "subtask": "knowledge_update",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I was promoted to senior ML engineer.\n\n[Memory \u2014 Known facts]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba; \"I speak German.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 6a8872be; src #7b3bc7bc; \"My daughter's name is Emma.\"]\n- (Bob, spouse, Alice)...",
+      "top5": [
+        "Bob | speaks | German",
+        "Bob | name | Bob",
+        "Bob | child | Emma",
+        "Bob | spouse | Alice",
+        "Bob | speaks | English"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 4,
+      "question": "What is Bob's daughter's name?",
+      "expected_answer": "Emma",
+      "subtask": "knowledge_update",
+      "judge_strategy": "nugget",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 6a8872be; src #7b3bc7bc; \"My daughter's name is Emma.\"]\n- (Bob, spouse, Alice) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id a94fbefb; src #af9524fb; \"My wife is Alice.\"]\n- (Bob, left, Stripe) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id f44e9c6f; src #a2e3bdd2; \"...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | child | Emma",
+        "Bob | spouse | Alice",
+        "Bob | left | Stripe",
+        "Bob | has_skill | Kubernetes"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "List all the places Bob has worked.",
+      "expected_answer": "Stripe and OpenAI",
+      "subtask": "multi_session",
+      "judge_strategy": "list",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I live in Berlin.\n\n[Memory \u2014 Known facts]\n- (Bob, works_at, OpenAI) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id c90c1da3; src #d9489359; \"I now work at OpenAI.\"]\n- (Bob, role, ML engineer) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id 0d2d51d3; src #801fbd59; \"I am an ML engineer.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, lives_i...",
+      "top5": [
+        "Bob | works_at | OpenAI",
+        "Bob | role | ML engineer",
+        "Bob | name | Bob",
+        "Bob | lives_in | Munich",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "List all the cities Bob has lived in.",
+      "expected_answer": "Berlin and Munich",
+      "subtask": "multi_session",
+      "judge_strategy": "list",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I live in Berlin.\n- I work at Stripe.\n\n[Memory \u2014 Known facts]\n- (Bob, lives_in, Munich) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id eb223429; src #ff7575a4; \"I live in Munich.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba; \"I speak German.\"]\n- (Bob, spouse, Alice) [val...",
+      "top5": [
+        "Bob | lives_in | Munich",
+        "Bob | name | Bob",
+        "Bob | speaks | German",
+        "Bob | spouse | Alice",
+        "Bob | child | Emma"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "What programming languages or tools does Bob know?",
+      "expected_answer": "Python and Kubernetes",
+      "subtask": "multi_session",
+      "judge_strategy": "list",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, has_skill, Kubernetes) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id e121b251; src #775b421e; \"I know Kubernetes.\"]\n- (Bob, has_skill, Python) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id 06c010b8; src #0b1f72aa; \"I know Python.\"]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba; \"I speak German.\"]\n- (Bob, speaks, English) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id d1cac283; src #a...",
+      "top5": [
+        "Bob | has_skill | Kubernetes",
+        "Bob | has_skill | Python",
+        "Bob | speaks | German",
+        "Bob | speaks | English",
+        "Bob | name | Bob"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Who is in Bob's family?",
+      "expected_answer": "Alice and Emma",
+      "subtask": "multi_session",
+      "judge_strategy": "list",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I live in Berlin.\n\n[Memory \u2014 Known facts]\n- (Bob, spouse, Alice) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id a94fbefb; src #af9524fb; \"My wife is Alice.\"]\n- (Bob, lives_in, Munich) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id eb223429; src #ff7575a4; \"I live in Munich.\"]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba; \"I speak German.\"]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e;...",
+      "top5": [
+        "Bob | spouse | Alice",
+        "Bob | lives_in | Munich",
+        "Bob | speaks | German",
+        "Bob | child | Emma",
+        "Bob | speaks | English"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "What languages does Bob speak?",
+      "expected_answer": "English and German",
+      "subtask": "multi_session",
+      "judge_strategy": "list",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I live in Berlin.\n\n[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, lives_in, Munich) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id eb223429; src #ff7575a4; \"I live in Munich.\"]\n- (Bob, speaks, English) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id d1cac283; src #ae34f926; \"I speak English.\"]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; ...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | lives_in | Munich",
+        "Bob | speaks | English",
+        "Bob | speaks | German",
+        "Bob | prefers | Python"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Where did Bob live when he was at Stripe?",
+      "expected_answer": "Berlin",
+      "subtask": "temporal_reasoning",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I work at Stripe.\n- I live in Berlin.\n- I was promoted to senior ML engineer.\n\n[Memory \u2014 Known facts]\n- (Bob, left, Stripe) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id f44e9c6f; src #a2e3bdd2; \"I left Stripe.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, lives_in, Munich) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id eb223429; src #ff7575a4; \"I live in ...",
+      "top5": [
+        "Bob | left | Stripe",
+        "Bob | name | Bob",
+        "Bob | lives_in | Munich",
+        "Bob | works_at | OpenAI",
+        "Bob | spouse | Alice"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Did Bob move between sessions?",
+      "expected_answer": "Yes, Bob moved between sessions.",
+      "subtask": "temporal_reasoning",
+      "judge_strategy": "bool",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I was promoted to senior ML engineer.\n- I live in Berlin.\n\n[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, role, ML engineer) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id 0d2d51d3; src #801fbd59; \"I am an ML engineer.\"]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 6a8872be; src #7b3bc7bc; \"My daughter's name is Em...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | role | ML engineer",
+        "Bob | child | Emma",
+        "Bob | has_skill | Kubernetes",
+        "Bob | spouse | Alice"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 3,
+      "question": "Where did Bob live before Munich?",
+      "expected_answer": "Berlin",
+      "subtask": "temporal_reasoning",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I live in Berlin.\n- I was promoted to senior ML engineer.\n\n[Memory \u2014 Known facts]\n- (Bob, lives_in, Munich) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id eb223429; src #ff7575a4; \"I live in Munich.\"]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, has_skill, Python) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id 06c010b8; src #0b1f72aa; \"I know Python.\"]\n- (Bo...",
+      "top5": [
+        "Bob | lives_in | Munich",
+        "Bob | name | Bob",
+        "Bob | has_skill | Python",
+        "Bob | prefers | Python",
+        "Bob | has_skill | Kubernetes"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 4,
+      "question": "What was Bob's role before his promotion?",
+      "expected_answer": "ML engineer",
+      "subtask": "temporal_reasoning",
+      "judge_strategy": "nugget",
+      "context_block": "[Retrieved evidence \u2014 chunk-recall path]\n- I was promoted to senior ML engineer.\n- I live in Berlin.\n\n[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, spouse, Alice) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id a94fbefb; src #af9524fb; \"My wife is Alice.\"]\n- (Bob, speaks, German) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.85; id a4e2f604; src #410055ba; \"I speak German.\"]\n- (Bob, sp...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | spouse | Alice",
+        "Bob | speaks | German",
+        "Bob | speaks | English",
+        "Bob | lives_in | Munich"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    },
+    {
+      "session_id": 4,
+      "question": "Whose name did Bob give his daughter?",
+      "expected_answer": "Emma",
+      "subtask": "temporal_reasoning",
+      "judge_strategy": "nugget",
+      "context_block": "[Memory \u2014 Known facts]\n- (Bob, name, Bob) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.95; id 20c8f850; src #e79174d2; \"My name is Bob.\"]\n- (Bob, lives_in, Munich) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.92; id eb223429; src #ff7575a4; \"I live in Munich.\"]\n- (Bob, child, Emma) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id 6a8872be; src #7b3bc7bc; \"My daughter's name is Emma.\"]\n- (Bob, spouse, Alice) [valid 2026-08-29\u2192\u221e; learned 2026-08-29; conf 0.90; id a94fbefb; src #af9524f...",
+      "top5": [
+        "Bob | name | Bob",
+        "Bob | lives_in | Munich",
+        "Bob | child | Emma",
+        "Bob | spouse | Alice",
+        "Bob | speaks | English"
+      ],
+      "det_correct": true,
+      "gemini_correct": true
+    }
+  ]
+}
