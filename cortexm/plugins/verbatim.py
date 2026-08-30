@@ -67,7 +67,7 @@ class VerbatimHit:
     text: str
     user_id: str
     session_id: str | None
-    source_tx_id: int | None
+    source_tx_id: str | int | None
     bm25_score: float    # raw BM25 rank score (lower = better in FTS5)
     bm25_norm: float     # min-max normalized to [0,1] (higher = better)
     cosine_sim: float    # cosine(query_vec, chunk_vec) ∈ [-1,1]
@@ -233,8 +233,8 @@ class VerbatimPlugin:
     # ------------------------ write path ----------------------------
 
     def add(self, *, text: str, user_id: str, session_id: str | None = None,
-            source_tx_id: int | None = None,
-            agent_id: str | None = None) -> int:
+            source_tx_id: str | int | None = None,
+            agent_id: str | None = None, commit: bool = True) -> int:
         """Insert a verbatim chunk + its int8-quantized embedding.
 
         Returns the chunk_id (FTS5 rowid).
@@ -260,7 +260,8 @@ class VerbatimPlugin:
         self._db.execute(
             "INSERT INTO verbatim_vectors(chunk_id, vec) VALUES(?, ?)",
             (chunk_id, vec_int8.tobytes()))
-        self._db.commit()
+        if commit:
+            self._db.commit()
         # v0.6.0: invalidate the per-user query cache (LRU) on write.
         # Without this, repeated identical queries would return stale
         # results that don't include the just-added chunk.
@@ -274,14 +275,20 @@ class VerbatimPlugin:
         Each chunk dict must have: text, user_id; optional session_id,
         source_tx_id, agent_id. Returns the list of chunk_ids in order.
         """
+        assert self._db is not None
         ids = []
-        for c in chunks:
-            ids.append(self.add(
-                text=c["text"], user_id=c["user_id"],
-                session_id=c.get("session_id"),
-                source_tx_id=c.get("source_tx_id"),
-                agent_id=c.get("agent_id")))
-        return ids
+        try:
+            for c in chunks:
+                ids.append(self.add(
+                    text=c["text"], user_id=c["user_id"],
+                    session_id=c.get("session_id"),
+                    source_tx_id=c.get("source_tx_id"),
+                    agent_id=c.get("agent_id"), commit=False))
+            self._db.commit()
+            return ids
+        except Exception:
+            self._db.rollback()
+            raise
 
     # ------------------------ read path ------------------------------
 
@@ -799,11 +806,11 @@ class VerbatimPlugin:
                 user_id=row[2], session_id=row[3],
                 source_tx_id=row[4],
                 bm25_score=float(raw),
-                cosine_score=0.0,
+                bm25_norm=norm,
+                cosine_sim=0.0,
                 # 0.5 weight — conservative so expansion hits don't
                 # out-rank the primary query's fused hits.
-                score=0.5 * norm,
-                retrieval_path="bm25_expansion"))
+                score=0.5 * norm))
             if len(out) >= k:
                 break
         return out

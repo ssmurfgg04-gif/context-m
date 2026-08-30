@@ -270,8 +270,19 @@ class TraceStore:
         self.conn.executescript(SCHEMA)
         self._ancestry_cache: dict[str, frozenset[str]] = {}
         self._active_cache: dict[str, frozenset[str]] = {}
-        self._batching = False
+        self._batch_depth = 0
+        self._batch_lock = threading.RLock()
         self._ensure_genesis()
+        # Hash algorithms are part of the on-disk integrity format.  Persist
+        # the choice so installing blake3 later cannot make existing BLAKE2b
+        # source/commit hashes appear tampered with.
+        stored_provider = self.kv_get("HASH_PROVIDER")
+        if stored_provider is None:
+            self.kv_set("HASH_PROVIDER", self.hasher.name)
+        elif stored_provider != self.hasher.name:
+            raise StoreError(
+                f"database uses {stored_provider}, runtime configured for "
+                f"{self.hasher.name}; open with the original hash_provider")
 
     def checkpoint(self, mode: str = "TRUNCATE") -> None:
         """Fold the WAL back into the main db file (shrink + fast reopen)."""
@@ -283,19 +294,38 @@ class TraceStore:
             pass
 
     def begin_batch(self) -> None:
-        self._batching = True
+        self._batch_lock.acquire()
+        self._batch_depth += 1
 
     def end_batch(self) -> None:
-        self._batching = False
-        self.conn.commit()
+        if self._batch_depth <= 0:
+            raise StoreError("end_batch without begin_batch")
+        self._batch_depth -= 1
+        try:
+            if self._batch_depth == 0:
+                self.conn.commit()
+        finally:
+            self._batch_lock.release()
+
+    def rollback(self) -> None:
+        """Abort the outer transaction and release all nested batch scopes."""
+        depth = self._batch_depth
+        if depth <= 0:
+            return
+        try:
+            self.conn.rollback()
+        finally:
+            self._batch_depth = 0
+            for _ in range(depth):
+                self._batch_lock.release()
 
     def _maybe_commit(self) -> None:
-        if not self._batching:
+        if not self._batch_depth:
             self.conn.commit()
 
     @property
     def batching(self) -> bool:
-        return self._batching
+        return bool(self._batch_depth)
 
     # ------------------------------------------------------------------ kv
     def kv_get(self, key: str, default: str | None = None) -> str | None:
@@ -306,7 +336,7 @@ class TraceStore:
         self.conn.execute(
             "INSERT INTO kv(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
             (key, value))
-        self.conn.commit()
+        self._maybe_commit()
 
     def iter_kv(self, prefix: str = ""):
         """Yield (key, value) pairs whose key starts with ``prefix``."""
@@ -318,7 +348,7 @@ class TraceStore:
 
     def kv_delete(self, key: str) -> None:
         self.conn.execute("DELETE FROM kv WHERE k=?", (key,))
-        self.conn.commit()
+        self._maybe_commit()
 
     # -------------------------------------------------------------- genesis
     def _ensure_genesis(self) -> None:

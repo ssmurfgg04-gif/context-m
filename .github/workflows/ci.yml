@@ -45,3 +45,13 @@ jobs:
         env:
           CONTEXTM_RUST: "1"
         run: python -m pytest tests/ -q
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -f deploy/Dockerfile -t cortexm-smoke .
+      - run: docker run -d --rm --name cortexm-smoke -p 8900:8900 cortexm-smoke
+      - run: curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8900/healthz
+      - if: always()
+        run: docker logs cortexm-smoke || true

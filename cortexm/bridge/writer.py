@@ -84,7 +84,7 @@ class MemoryWriter:
 
     def _verbatim_store_chunk(self, *, text: str, user_id: str,
                               session_id: str | None,
-                              source_tx_id: int | None,
+                              source_tx_id: str | None,
                               agent_id: str | None = None) -> None:
         """μ=0 verbatim tier insert. Best-effort: never blocks ingest.
 
@@ -105,7 +105,7 @@ class MemoryWriter:
             self._verbatim.add(text=text, user_id=user_id,
                               session_id=session_id,
                               source_tx_id=source_tx_id,
-                              agent_id=agent_id)
+                              agent_id=agent_id, commit=False)
         except Exception as e:
             # best-effort — never block the write path on the verbatim tier
             import sys as _sys
@@ -268,14 +268,10 @@ class MemoryWriter:
             # caller rarely passes one — we use run_id as a proxy)
             # and source_tx_id (the chunk_id from the structured tier's
             # chunks table, so the EXTRACTED_FROM edge cross-references).
-            try:
-                _src_tx_id = int(chunk_id) if str(chunk_id).isdigit() else None
-            except Exception:
-                _src_tx_id = None
             self._verbatim_store_chunk(
                 text=text, user_id=user_id,
                 session_id=run_id or agent_id or user_id,
-                source_tx_id=_src_tx_id,
+                source_tx_id=chunk_id,
                 agent_id=agent_id)
             # v0.6.1: split negated sentences out BEFORE the extractor
             # runs. The negated sentences go into a separate
@@ -291,7 +287,7 @@ class MemoryWriter:
                     self._store_negations(
                         text=text, user_id=user_id,
                         session_id=run_id or agent_id or user_id,
-                        source_tx_id=str(_src_tx_id) if _src_tx_id is not None else None,
+                        source_tx_id=chunk_id,
                         agent_id=agent_id, created_at=msg_time)
                     extraction_text = neg_split["positive_text"] or text
                 else:
@@ -517,33 +513,16 @@ class MemoryWriter:
         if not getattr(self.cfg, "shannon_tiered_storage", True):
             return 0.0
         try:
-            existing = self.store.query_facts(
-                user_id=user_id, active=True, limit=500)
-            if len(existing) < int(getattr(
+            if getattr(self.palace, "_n", 0) < int(getattr(
                     self.cfg, "shannon_min_facts", 10)):
                 return 0.0  # cold-start: not enough signal yet
             new_vec = self.palace.encode_fact(fact)
-            best = 0.0
-            # Scan in chunks of 64 to bound memory on the 4GB box.
-            for f in existing:
-                # Skip self (in case fact is already partially committed)
-                if f.id == fact.id:
-                    continue
-                try:
-                    # encode each existing fact once and cosine-compare
-                    ev = self.palace.encode_fact(f)
-                    # cosine via dot product on normalized vectors
-                    a = new_vec.ravel()
-                    b = ev.ravel()
-                    na = float((a @ a) ** 0.5) or 1.0
-                    nb = float((b @ b) ** 0.5) or 1.0
-                    sim = float((a @ b) / (na * nb))
-                    if sim > best:
-                        best = sim
-                        if best >= 0.99:
-                            break  # near-identical — no need to scan more
-                except Exception:
-                    continue
+            hits = self.palace.search(new_vec, k=1)
+            if not hits:
+                return 0.0
+            best = float(hits[0][1])
+            if hits[0][0] == fact.id and len(hits) > 1:
+                best = float(hits[1][1])
             return best
         except Exception:
             return 0.0

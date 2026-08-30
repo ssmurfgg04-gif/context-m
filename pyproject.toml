@@ -31,7 +31,7 @@ classifiers = [
     "Topic :: Database",
     "Typing :: Typed",
 ]
-dependencies = ["numpy>=1.24"]
+dependencies = ["numpy>=1.24", "blake3>=1.0", "pyahocorasick>=2.1"]
 
 [project.optional-dependencies]
 blake3 = ["blake3>=1.0"]

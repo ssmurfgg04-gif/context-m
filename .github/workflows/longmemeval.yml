@@ -1,0 +1,175 @@
+name: LongMemEval Canonical
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      shard_count:
+        description: "Total shard count"
+        required: true
+        default: "20"
+      workers:
+        description: "Workers per shard"
+        required: true
+        default: "2"
+      dry_run:
+        description: "Set true for the 4-shard validation run"
+        required: true
+        default: "false"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      shard_count: ${{ steps.meta.outputs.shard_count }}
+      shard_list: ${{ steps.meta.outputs.shard_list }}
+      workers: ${{ steps.meta.outputs.workers }}
+    steps:
+      - id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            shard_count=4
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            shard_count=${{ inputs.shard_count }}
+          else
+            shard_count=4
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            workers=${{ inputs.workers }}
+          else
+            workers=2
+          fi
+          echo "shard_count=${shard_count}" >> "$GITHUB_OUTPUT"
+          echo "workers=${workers}" >> "$GITHUB_OUTPUT"
+          python - <<PY >> "$GITHUB_OUTPUT"
+          import json
+          shard_count = int("${shard_count}")
+          print(f"shard_list={json.dumps(list(range(shard_count)))}")
+          PY
+
+  shard:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: ${{ fromJSON(needs.prepare.outputs.shard_list) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,crypto,blake3]"
+          pip install huggingface_hub
+      - name: Restore LongMemEval data cache
+        id: longmemeval-cache
+        uses: actions/cache@v4
+        with:
+          path: benchmarks/data/longmemeval
+          key: longmemeval-${{ runner.os }}-${{ hashFiles('benchmarks/data/longmemeval/longmemeval_oracle.json', 'benchmarks/data/longmemeval/longmemeval_s_cleaned.json') }}
+      - name: Download LongMemEval data if cache missed
+        if: steps.longmemeval-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p benchmarks/data/longmemeval
+          python - <<'PY'
+          from huggingface_hub import hf_hub_download
+          for name in ("longmemeval_oracle.json", "longmemeval_s_cleaned.json"):
+              hf_hub_download(
+                  repo_id="xiaowu0162/longmemeval-cleaned",
+                  repo_type="dataset",
+                  filename=name,
+                  local_dir="benchmarks/data/longmemeval",
+                  local_dir_use_symlinks=False,
+              )
+          PY
+      - name: Validate LongMemEval data
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          for path in [
+              pathlib.Path("benchmarks/data/longmemeval/longmemeval_oracle.json"),
+              pathlib.Path("benchmarks/data/longmemeval/longmemeval_s_cleaned.json"),
+          ]:
+              if not path.exists():
+                  sys.exit(f"missing {path}")
+              data = json.loads(path.read_text(encoding="utf-8"))
+              assert isinstance(data, list) and data, path
+              print(path.name, len(data), path.stat().st_size)
+          PY
+      - name: Run shard
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          rm -f benchmarks/data/longmemeval/longmemeval_shard_${{ matrix.shard_index }}.db
+          python scripts/longmemeval_canonical_parallel.py \
+            --shard-index ${{ matrix.shard_index }} \
+            --shard-count ${{ needs.prepare.outputs.shard_count }} \
+            --workers ${{ needs.prepare.outputs.workers }} \
+            --db-path benchmarks/data/longmemeval/longmemeval_shard_${{ matrix.shard_index }}.db \
+            --out benchmarks/results/longmemeval_shard_${{ matrix.shard_index }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: longmemeval-shard-${{ matrix.shard_index }}
+          path: benchmarks/results/longmemeval_shard_${{ matrix.shard_index }}.json
+
+  aggregate:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: longmemeval-shard-*
+          merge-multiple: true
+          path: artifacts
+      - name: Merge shard outputs
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          root = pathlib.Path("artifacts")
+          results = []
+          for path in sorted(root.glob("*.json")):
+              data = json.loads(path.read_text(encoding="utf-8"))
+              results.extend(data.get("results", []))
+          results.sort(key=lambda r: r["global_idx"])
+          total = sum(1 for r in results if r.get("det_correct"))
+          by_subtask = {}
+          by_strategy = {}
+          for r in results:
+              by_subtask.setdefault(r["subtask"], []).append(1 if r.get("det_correct") else 0)
+              by_strategy.setdefault(r["judge_strategy"], []).append(1 if r.get("det_correct") else 0)
+          summary = {
+              "n_total": len(results),
+              "overall": round(total / max(len(results), 1), 4),
+              "result_fraction": f"{total}/{len(results)}",
+              "by_subtask": {k: round(sum(v) / len(v), 4) for k, v in by_subtask.items()},
+              "by_strategy": {k: round(sum(v) / len(v), 4) for k, v in by_strategy.items()},
+              "question_1de5cff2": next((r for r in results if r.get("qid") == "1de5cff2"), None),
+          }
+          out = {"summary": summary, "results": results}
+          pathlib.Path("benchmarks/results").mkdir(parents=True, exist_ok=True)
+          pathlib.Path("benchmarks/results/longmemeval_aggregate.json").write_text(
+              json.dumps(out, indent=2), encoding="utf-8"
+          )
+          print(json.dumps(summary, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: longmemeval-aggregate
+          path: benchmarks/results/longmemeval_aggregate.json
