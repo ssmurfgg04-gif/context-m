@@ -56,7 +56,8 @@ class QueryFST:
         out = []
         i = 0
         while i < len(tokens):
-            token = tokens[i].lower().strip(",.!?;:"'")
+            _punct = chr(34) + chr(39) + ',.!?;:'
+            token = tokens[i].lower().strip(_punct)
             # Try longest prefix match in trie
             # marisa_trie.prefixes() returns all prefixes
             prefixes = list(self._trie.prefixes(token))

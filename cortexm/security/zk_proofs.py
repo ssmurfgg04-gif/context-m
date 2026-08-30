@@ -51,12 +51,12 @@ def _random_scalar() -> int:
     return int.from_bytes(secrets.token_bytes(32), "big") % _q
 
 
-def _hash_challenge(*points: Point, *scalars: int) -> int:
+def _hash_challenge(points: list = None, scalars: list = None) -> int:
     """Fiat-Shamir challenge from points and scalars."""
     h = hashlib.sha256()
-    for p in points:
+    for p in (points or []):
         h.update(f"{p.x}:{p.y}".encode())
-    for s in scalars:
+    for s in (scalars or []):
         h.update(str(s).encode())
     return int.from_bytes(h.digest(), "big") % _q
 
@@ -102,14 +102,14 @@ class SchnorrProof:
         a = _random_scalar()  # random for value
         b = _random_scalar()  # random for blinding
         R = a * _G + b * _H   # announcement
-        e = _hash_challenge(R, C.point)
+        e = _hash_challenge([R, C.point])
         z_v = (a + e * value) % _q
         z_r = (b + e * blinding) % _q
         return cls(commitment=R, z_v=z_v, z_r=z_r)
 
     def verify(self, C: PedersenCommitment) -> bool:
         """Verify the proof against commitment C."""
-        e = _hash_challenge(self.commitment, C.point)
+        e = _hash_challenge([self.commitment, C.point])
         # Check: z_v*G + z_r*H == R + e*C
         lhs = self.z_v * _G + self.z_r * _H
         rhs = self.commitment + e * C.point
@@ -139,7 +139,7 @@ class EqualityProof:
 
     def verify(self, C1: PedersenCommitment, C2: PedersenCommitment) -> bool:
         """Verify equality proof."""
-        e = _hash_challenge(self.commitment, C1.point, C2.point)
+        e = _hash_challenge([self.commitment, C1.point, C2.point])
         # Check: z*H == R + e*(C1 - C2)
         lhs = self.z * _H
         rhs = self.commitment + e * (C1.point + (-1 * C2.point))
@@ -360,7 +360,7 @@ class RangeProof:
                 return False
         # Verify sum consistency
         C_bits_sum = sum((1 << i) * C.point for i, C in enumerate(self.bit_commitments))
-        e = _hash_challenge(self.sum_proof.commitment, C.point, C_bits_sum)
+        e = _hash_challenge([self.sum_proof.commitment, C.point, C_bits_sum])
         lhs = self.sum_proof.z_r * _H
         rhs = self.sum_proof.commitment + e * (C.point + (-1 * C_bits_sum))
         return lhs == rhs
