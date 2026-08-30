@@ -22,7 +22,7 @@ from cortexm.vsa.attribution import (
     RETRIEVAL_PATHS,
 )
 from cortexm.security.hamming_attestation import (
-    HammingZKProver, checksum_prove_and_verify,
+    HammingZKProof, HammingZKProver, checksum_prove_and_verify,
 )
 from cortexm.trace.rebuild import TraceRebuilder
 from cortexm.trace.dedup import DedupAuditor

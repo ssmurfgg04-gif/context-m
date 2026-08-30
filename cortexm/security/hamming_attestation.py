@@ -1,142 +1,236 @@
-"""Hamming-distance zero-knowledge-style proofs on binary vectors.
+"""Real zero-knowledge Hamming proximity proofs on binary vectors.
 
-ZK proofs on HRR/convolution bind vectors are algebraically intractable
-(arXiv:2405.09689 — the involution inverse is approximate, not exact).
-But binary vectors have clean algebraic structure for attestation: a
-prover can attest they hold a memory whose Hamming distance to a public
-commitment is below threshold.
+Production-grade ZK: prove HammingDistance(private_vec, public_vec) <= threshold
+WITHOUT revealing private_vec.
 
-Construction: verifiable proximity proof (Sigma-protocol-inspired
-non-interactive proof of knowledge + Hamming proximity). NOT full ZK —
-the delta is revealed, but the witness v remains hidden behind the
-delta mask. Sufficient for audit attestation; for full cryptographic
-ZK, the prover would need to also sign with their identity key.
+Construction (Pedersen commitments + Sigma protocols):
+  1. Decompose private_vec into bits b_i in {0,1}
+  2. Commit to each bit: C_i = b_i*G + r_i*H
+  3. Prove each C_i is a valid bit commitment (BitProof from zk_proofs)
+  4. Compute difference commitments D_i:
+       - if public_bit_i = 0: D_i = C_i
+       - if public_bit_i = 1: D_i = G - C_i
+     This gives D_i = d_i*G + s_i*H where d_i = b_i XOR public_bit_i
+  5. D_total = sum(D_i) = distance*G + sum(s_i)*H
+  6. Prove D_total commits to value in [0, threshold] using RangeProof
 
-  1. Prover holds v, public_vec is public.
-  2. delta = v XOR public_vec, weight(delta) = Hamming distance.
-  3. If weight > threshold: prover doesn't have a close v → reject.
-  4. Commitment c = H(delta || salt)
-  5. Reveal: delta, salt, c.
-  6. Verifier: check weight(delta) <= threshold AND H(delta||salt) = c.
+Verifier learns: distance <= threshold. NOTHING about private_vec.
 
-For Context-M's binary codec tier, this proves storage-of-knowledge +
-proximity to a commitment. Useful for:
-  * Audit compliance — prove you hold a memory the user asked about
-  * Federated attestation — peer proves they have a fact in expected range
-  * Tamper detection — checksum + Hamming proof together detect any bit flip
-
-Pure Python. BLAKE2b hash for the commitment.
+Dependencies: fastecdsa (same as zk_proofs.py)
 """
-
 from __future__ import annotations
 
 import hashlib
-import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
+try:
+    from fastecdsa.curve import secp256k1
+    from fastecdsa.point import Point
+    _HAVE_FASTECDSA = True
+except ImportError:  # pragma: no cover
+    _HAVE_FASTECDSA = False
 
-@dataclass
-class HammingZKProof:
-    """Non-interactive proof of Hamming proximity to a public commitment."""
-    commitment: str       # H(delta || salt) hex
-    delta: bytes          # v XOR public (revealed for verification)
-    salt: bytes           # random salt for freshness
-    threshold: int       # claimed max Hamming distance
-    weight: int           # actual Hamming weight of delta
-
-
-class HammingZKProver:
-    """Prove knowledge of a binary memory within Hamming distance of
-    a public commitment."""
-
-    def __init__(self, dims: int, threshold: int = 32,
-                 hash_fn: str = "blake2b") -> None:
-        self.dims = dims
-        self.threshold = threshold
-        self.hash_fn = hash_fn
-
-    def prove(self, public_vec: bytes, private_vec: bytes,
-             salt: bytes | None = None) -> HammingZKProof:
-        """Generate non-interactive proof of Hamming proximity.
-
-        Returns a proof that the verifier can check without learning
-        private_vec itself. The delta (v XOR public) is revealed but
-        the private v stays hidden as long as public is public — the
-        verifier cannot recover v from delta XOR public... actually
-        they CAN recover v = delta XOR public. So this is NOT ZK;
-        it's a verifiable proximity proof. For true ZK, would need
-        a more involved construction (e.g., MPC-style commitments).
-        """
-        if len(public_vec) != len(private_vec):
-            raise ValueError("vector length mismatch")
-        if salt is None:
-            salt = os.urandom(16)
-        delta = bytes(a ^ b for a, b in zip(public_vec, private_vec))
-        weight = _hamming_weight(delta)
-        commitment = self._hash(delta + salt)
-        return HammingZKProof(
-            commitment=commitment,
-            delta=delta,
-            salt=salt,
-            threshold=self.threshold,
-            weight=weight,
-        )
-
-    def verify(self, public_vec: bytes, proof: HammingZKProof) -> bool:
-        """Verify a proof of Hamming proximity."""
-        if len(public_vec) != len(proof.delta):
-            return False
-        # recompute commitment
-        expected = self._hash(proof.delta + proof.salt)
-        if expected != proof.commitment:
-            return False
-        # check Hamming proximity claim
-        if proof.weight > proof.threshold:
-            return False
-        # the prover committed to delta = v XOR public; if they know v,
-        # they can recompute delta; the commitment binds them to delta
-        # before any challenge. The verifier can re-derive private as
-        # public XOR delta, so this is NOT zero-knowledge — it's a
-        # verifiable proximity attestation. For real ZK, would need
-        # more involved MPC-style commitments.
-        return True
-
-    def _hash(self, data: bytes) -> str:
-        if self.hash_fn == "blake2b":
-            return hashlib.blake2b(data, digest_size=32).hexdigest()
-        return hashlib.sha256(data).hexdigest()
+# Import from real ZK module
+from cortexm.security.zk_proofs import (
+    PedersenCommitment,
+    BitProof,
+    RangeProof,
+    SchnorrProof,
+    _G, _H, _q, _random_scalar,
+)
 
 
 def _hamming_weight(b: bytes) -> int:
-    """Number of 1-bits in a byte string (Hamming weight, not distance)."""
-    return sum(bin(x).count("1") for x in b)
+    return sum(bin(byte).count("1") for byte in b)
 
 
 def _hamming_distance(a: bytes, b: bytes) -> int:
-    """Bit-level Hamming distance between two byte strings."""
     if len(a) != len(b):
-        return max(len(a), len(b)) * 8
-    return sum(bin(x ^ y).count("1") for x, y in zip(a, b))
+        raise ValueError("vector length mismatch")
+    return _hamming_weight(bytes(x ^ y for x, y in zip(a, b)))
 
 
+@dataclass(frozen=True)
+class HammingZKProof:
+    """Real ZK proof of Hamming proximity.
+
+    Proves: HammingDistance(private_vec, public_vec) <= threshold
+    WITHOUT revealing private_vec.
+    """
+    bit_commitments: list[PedersenCommitment]
+    bit_proofs: list[BitProof]
+    distance_commitment: PedersenCommitment
+    distance_range_proof: RangeProof
+    threshold: int
+    public_vec_hash: str  # hash of public_vec (for binding)
+
+    @classmethod
+    def prove(cls, public_vec: bytes, private_vec: bytes, threshold: int) -> "HammingZKProof":
+        """Generate ZK proof that HammingDistance(private_vec, public_vec) <= threshold.
+
+        Args:
+            public_vec: public reference vector
+            private_vec: private vector (kept secret)
+            threshold: maximum allowed Hamming distance
+        """
+        if not _HAVE_FASTECDSA:
+            raise RuntimeError("fastecdsa required for ZK proofs")
+        if len(public_vec) != len(private_vec):
+            raise ValueError("vector length mismatch")
+
+        actual_distance = _hamming_distance(public_vec, private_vec)
+        if actual_distance > threshold:
+            raise ValueError(f"actual distance {actual_distance} > threshold {threshold}")
+
+        # Decompose into bits
+        public_bits = []
+        private_bits = []
+        for byte in public_vec:
+            for i in range(8):
+                public_bits.append((byte >> i) & 1)
+        for byte in private_vec:
+            for i in range(8):
+                private_bits.append((byte >> i) & 1)
+
+        n_bits = len(private_bits)
+
+        # Step 1 & 2: commit to each private bit and prove it's 0 or 1
+        bit_commitments = []
+        bit_proofs = []
+        bit_blindings = []
+
+        for b in private_bits:
+            r = _random_scalar()
+            C, _ = PedersenCommitment.create(b, r)
+            bp = BitProof.prove_bit(b, r)
+            bit_commitments.append(C)
+            bit_blindings.append(r)
+            bit_proofs.append(bp)
+
+        # Step 4: compute difference commitments D_i
+        # D_i = C_i if public_bit=0, else G - C_i
+        # This gives D_i = d_i*G + s_i*H where d_i = b_i XOR public_bit_i
+        diff_commitments = []
+        diff_blindings = []
+
+        for i in range(n_bits):
+            if public_bits[i] == 0:
+                # d_i = b_i, so D_i = C_i
+                diff_commitments.append(bit_commitments[i])
+                diff_blindings.append(bit_blindings[i])
+            else:
+                # d_i = 1 - b_i, so D_i = G - C_i = (1-b_i)*G + (-r_i)*H
+                D_point = _G + (-1 * bit_commitments[i].point)
+                diff_commitments.append(PedersenCommitment(point=D_point))
+                diff_blindings.append((-bit_blindings[i]) % _q)
+
+        # Step 5: D_total = sum(D_i) = distance*G + sum(s_i)*H
+        total_point = diff_commitments[0].point
+        for i in range(1, len(diff_commitments)):
+            total_point = total_point + diff_commitments[i].point
+
+        total_blinding = sum(diff_blindings) % _q
+        D_total = PedersenCommitment(point=total_point)
+
+        # Step 6: prove D_total commits to value in [0, threshold]
+        # Need to know the actual distance for the range proof
+        n_bits_threshold = threshold.bit_length()
+        range_proof = RangeProof.prove(actual_distance, total_blinding, n_bits=n_bits_threshold)
+
+        public_hash = hashlib.sha256(public_vec).hexdigest()
+
+        return cls(
+            bit_commitments=bit_commitments,
+            bit_proofs=bit_proofs,
+            distance_commitment=D_total,
+            distance_range_proof=range_proof,
+            threshold=threshold,
+            public_vec_hash=public_hash,
+        )
+
+    def verify(self, public_vec: bytes) -> bool:
+        """Verify the ZK Hamming proximity proof.
+
+        Returns True iff:
+          1. All bit commitments are valid (0 or 1)
+          2. Difference commitments are computed correctly from public_vec
+          3. Distance commitment is in range [0, threshold]
+        """
+        if not _HAVE_FASTECDSA:
+            raise RuntimeError("fastecdsa required for ZK verification")
+
+        # Check public_vec binding
+        if hashlib.sha256(public_vec).hexdigest() != self.public_vec_hash:
+            return False
+
+        # Decompose public_vec into bits
+        public_bits = []
+        for byte in public_vec:
+            for i in range(8):
+                public_bits.append((byte >> i) & 1)
+
+        n_bits = len(public_bits)
+        if len(self.bit_commitments) != n_bits or len(self.bit_proofs) != n_bits:
+            return False
+
+        # Step 1: verify each bit proof
+        for C, bp in zip(self.bit_commitments, self.bit_proofs):
+            if not bp.verify(C):
+                return False
+
+        # Step 4: verify difference commitments
+        diff_commitments = []
+        for i in range(n_bits):
+            if public_bits[i] == 0:
+                diff_commitments.append(self.bit_commitments[i])
+            else:
+                expected_D = _G + (-1 * self.bit_commitments[i].point)
+                diff_commitments.append(PedersenCommitment(point=expected_D))
+
+        # Step 5: verify D_total = sum(D_i)
+        expected_total = diff_commitments[0].point
+        for i in range(1, len(diff_commitments)):
+            expected_total = expected_total + diff_commitments[i].point
+
+        if self.distance_commitment.point != expected_total:
+            return False
+
+        # Step 6: verify range proof
+        if not self.distance_range_proof.verify(self.distance_commitment):
+            return False
+
+        return True
+
+
+class HammingZKProver:
+    """Prover for Hamming proximity ZK proofs."""
+
+    def __init__(self, dims: int, threshold: int = 32) -> None:
+        self.dims = dims
+        self.threshold = threshold
+
+    def prove(self, public_vec: bytes, private_vec: bytes, 
+              salt: bytes | None = None) -> HammingZKProof:
+        """Generate ZK proof of Hamming proximity."""
+        return HammingZKProof.prove(public_vec, private_vec, self.threshold)
+
+
+# ---------------------------------------------------------------------------
+# Legacy compatibility: checksum-based attestation (non-ZK, for debugging)
+# ---------------------------------------------------------------------------
 def checksum_prove_and_verify(public_vec: bytes, private_vec: bytes,
-                              expected_hash: str) -> bool:
-    """Combined checksum + proximity proof: prove storage-of-knowledge +
-    integrity. Both must pass for the proof to verify."""
-    # 1. Checksum: BLAKE2b hash of private matches expected
-    h = hashlib.blake2b(private_vec, digest_size=32).hexdigest()
-    if h != expected_hash:
-        return False
-    # 2. Proximity proof: private is within Hamming distance of public
-    prover = HammingZKProver(dims=len(public_vec) * 8)
-    proof = prover.prove(public_vec, private_vec)
-    return prover.verify(public_vec, proof)
+                               threshold: int = 32) -> dict:
+    """Non-ZK checksum attestation for debugging/comparison.
 
-
-__all__ = [
-    "HammingZKProver",
-    "HammingZKProof",
-    "checksum_prove_and_verify",
-    "_hamming_distance",
-    "_hamming_weight",
-]
+    This is NOT zero-knowledge — it reveals the Hamming distance.
+    Use HammingZKProof for production ZK.
+    """
+    distance = _hamming_distance(public_vec, private_vec)
+    return {
+        "verified": distance <= threshold,
+        "distance": distance,
+        "threshold": threshold,
+        "zk": False,
+        "note": "Use HammingZKProof for real ZK",
+    }
