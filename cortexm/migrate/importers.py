@@ -150,6 +150,7 @@ def import_zep(memory, path: str, user_id: str = "migrated") -> dict:
     from cortexm.trace.fact import make_fact
     n_triples, n_texts = 0, 0
     commit = memory.store.create_commit("migrate: zep")
+    memory.store.begin_batch()
     for row in _iter_zep_rows(path):
         if all(k in row for k in ("subject", "relation", "object")):
             f = make_fact(row["subject"], row["relation"], row["object"],

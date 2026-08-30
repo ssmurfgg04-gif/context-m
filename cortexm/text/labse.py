@@ -379,15 +379,14 @@ class PolyglotEncoder:
                 # Char n-grams (weight 0.5 each)
                 for feat in self._char_features(tok):
                     idx, sign = self._hash(feat)
-                    vec[i][idx] += sign * 0.5
-                
+                    vecs[i][idx] += sign * 0.5
+
                 # Per-token structural features
-                tl = len(tok)
-                vec[i][self._tok_idx] += self._tok_sign * 0.3
+                vecs[i][self._tok_idx] += self._tok_sign * 0.3
                 if len(tok) <= 4:
-                    vec[i][self._tok_short_idx] += self._tok_short_sign * 0.2
+                    vecs[i][self._tok_short_idx] += self._tok_short_sign * 0.2
                 else:
-                    vec[i][self._tok_long_idx] += self._tok_long_sign * 0.2
+                    vecs[i][self._tok_long_idx] += self._tok_long_sign * 0.2
         
         # L2-normalize all vectors (batch)
         norms = np.sqrt(np.sum(vecs * vecs, axis=1))

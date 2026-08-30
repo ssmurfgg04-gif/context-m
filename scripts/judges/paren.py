@@ -1,19 +1,23 @@
-"""Parenthetical abbreviation judge."""
+"""Parenthetical abbreviation judge.
+
+Acceptance criteria (all must hold):
+  1. Answer contains a parenthetical: "X (ABBR)".
+  2. ABBR is a 2-8 char alphanumeric token (typical academic/org abbreviation).
+  3. ABBR appears in the context_block as a standalone word-boundary token
+     (case-insensitive). Word-boundary match prevents "MIT" matching "submit".
+"""
 from __future__ import annotations
 
 import re
 
 
 def _judge_paren_abbreviation(context_block: str, answer: str) -> bool:
-    """Paren-abbreviation: 'UCLA' in context matches 'University of California, Los Angeles (UCLA)'"""
-    cb = (context_block or "").lower()
-    a = (answer or "").strip().lower()
-    if not a:
+    if not answer:
         return False
-    m = re.search(r"\(([^)]+)\)", a)
+    m = re.search(r"\(([A-Za-z][A-Za-z0-9]{1,7})\)", answer)
     if not m:
         return False
-    abbrev = m.group(1).lower()
-    if len(abbrev) < 2:
-        return False
-    return abbrev in cb
+    abbr = m.group(1)
+    cb = context_block or ""
+    # Word-boundary match: "MIT" must not match inside "submit"
+    return bool(re.search(rf"\b{re.escape(abbr)}\b", cb, re.I))
