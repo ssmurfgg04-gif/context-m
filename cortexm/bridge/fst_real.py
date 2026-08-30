@@ -14,11 +14,15 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Tuple
 
-try:
-    import marisa_trie
-    _HAVE_MARISA = True
-except ImportError:  # pragma: no cover
-    _HAVE_MARISA = False
+def _ensure_marisa():
+    """Lazy import check — works even if marisa-trie was installed after first import."""
+    try:
+        import marisa_trie
+        return marisa_trie
+    except ImportError:
+        raise RuntimeError(
+            "marisa-trie required for FST. Install: pip install marisa-trie"
+        )
 
 
 class QueryFST:
@@ -31,16 +35,13 @@ class QueryFST:
 
     def __init__(self, abbreviations: Dict[str, str] | None = None,
                  spelling: Dict[str, str] | None = None) -> None:
-        if not _HAVE_MARISA:
-            raise RuntimeError(
-                "marisa-trie required for FST. Install: pip install marisa-trie"
-            )
+        self._marisa = _ensure_marisa()
         self._abbreviations = dict(abbreviations or {})
         self._spelling = dict(spelling or {})
         # Merge both dictionaries
         self._all = {**self._abbreviations, **self._spelling}
         # Build trie from lowercase keys
-        self._trie = marisa_trie.Trie(self._all.keys())
+        self._trie = self._marisa.Trie(self._all.keys())
         # Compile reverse index for fast lookup
         self._rev = {v.lower(): k for k, v in self._all.items()}
 

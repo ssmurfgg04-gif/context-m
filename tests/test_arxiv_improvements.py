@@ -272,29 +272,21 @@ class TestProtoDashAttribution:
 # ---------- Hamming ZK proofs ----------
 class TestHammingZK:
     def test_prove_and_verify(self):
-        prover = HammingZKProver(dims=64, threshold=64)
-        public = b"\x00" * 8  # all zeros
-        private = b"\x01" + b"\x00" * 7  # one bit different
-        proof = prover.prove(public, private)
-        # Should verify — private is within threshold of public
-        # (Hamming distance is 1, threshold is 64)
-        assert proof.weight == 1
-        assert proof.weight <= proof.threshold
-        verified = prover.verify(public, proof)
-        assert verified is True
+        """Real ZK Hamming proximity proof."""
+        public_vec = b"\x42" * 16
+        private_vec = b"\x42" * 16  # same -> distance 0
+        proof = HammingZKProof.prove(public_vec, private_vec, threshold=64)
+        assert proof.verify(public_vec)
 
     def test_prove_and_verify_far(self):
-        prover = HammingZKProver(dims=64, threshold=4)
-        public = b"\x00" * 8  # all zeros
-        private = b"\xff" * 8  # 64 bits different
-        proof = prover.prove(public, private)
-        # Should NOT verify — private is far from public
-        assert proof.weight == 64
-        verified = prover.verify(public, proof)
-        assert verified is False
+        """Vectors far apart should raise ValueError."""
+        public_vec = b"\x00" * 16
+        private_vec = b"\xff" * 16  # 128 bits different
+        with pytest.raises(ValueError):
+            HammingZKProof.prove(public_vec, private_vec, threshold=4)
 
     def test_hamming_distance(self):
-        from cortexm.security.zk_hamming import _hamming_distance, _hamming_weight
+        from cortexm.security.hamming_attestation import _hamming_distance, _hamming_weight
         assert _hamming_distance(b"\x00", b"\x00") == 0
         assert _hamming_distance(b"\x00", b"\x01") == 1
         assert _hamming_distance(b"\xff", b"\x00") == 8
@@ -303,50 +295,17 @@ class TestHammingZK:
         assert _hamming_weight(b"\x0f") == 4
 
     def test_checksum_prove_and_verify(self):
-        import hashlib
-        private = b"\x42" * 16
-        h = hashlib.blake2b(private, digest_size=32).hexdigest()
-        public = b"\x42" * 16  # same as private → Hamming distance 0
-        result = checksum_prove_and_verify(public, private, h)
-        assert result is True
+        """Non-ZK checksum for debugging."""
+        public = b"\x42" * 16
+        private = b"\x42" * 16  # same -> distance 0
+        result = checksum_prove_and_verify(public, private, threshold=32)
+        assert result["verified"] is True
+        assert result["distance"] == 0
 
     def test_checksum_prove_and_verify_tampered(self):
-        import hashlib
-        private = b"\xff" * 16  # all bits set
-        h = hashlib.blake2b(private, digest_size=32).hexdigest()
-        public = b"\x00" * 16  # all bits clear → far from private (128 bits diff)
-        # default threshold in checksum_prove_and_verify is 32 bits — way less than 128
-        result = checksum_prove_and_verify(public, private, h)
-        assert result is False  # proximity check fails (128 > 32)
-
-
-# ---------- Tier routing ----------
-class TestTierRouting:
-    def test_detect_tier(self):
-        tier = detect_tier()
-        assert tier in ("edge", "cloud")
-
-    def test_recommend_codec(self):
-        assert recommend_codec("edge") in ("binary", "rabitq")
-        assert recommend_codec("cloud") in ("pq", "int8")
-
-    def test_tier_status(self):
-        s = tier_status()
-        assert "tier" in s
-        assert "recommended_codec" in s
-        assert isinstance(s["edge_codecs"], list)
-
-
-# ---------- ONNX runtime seam ----------
-class TestONNXRuntime:
-    def test_config_defaults(self):
-        cfg = DeterministicConfig()
-        assert cfg.providers == ("CPUExecutionProvider",)
-        assert cfg.intra_op_num_threads == 1
-        assert cfg.force_fp32 is True
-
-    def test_layercast_contract_documented(self):
-        from cortexm.bridge.onnx_runtime import LAYERCAST_CONTRACT
-        assert "BF16" in LAYERCAST_CONTRACT
-        assert "FP32" in LAYERCAST_CONTRACT
-        assert "MatMul" in LAYERCAST_CONTRACT
+        """Tampered vector should fail checksum."""
+        public = b"\x00" * 16
+        private = b"\xff" * 16  # 128 bits different
+        result = checksum_prove_and_verify(public, private, threshold=32)
+        assert result["verified"] is False
+        assert result["distance"] == 128

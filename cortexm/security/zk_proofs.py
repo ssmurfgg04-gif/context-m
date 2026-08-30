@@ -34,30 +34,42 @@ except ImportError:  # pragma: no cover
 # ---------------------------------------------------------------------------
 # Curve setup: secp256k1
 # ---------------------------------------------------------------------------
-_G = secp256k1.G if _HAVE_FASTECDSA else None
-_q = secp256k1.q if _HAVE_FASTECDSA else 0
+_G = None
+_q = None
+_H = None
 
-# Second generator H = hash-to-curve("context-m-zk-h-generator")
-# Deterministically derived from G so all parties agree
-if _HAVE_FASTECDSA:
+def _ensure_curve():
+    """Lazy initialization of curve parameters — works even if fastecdsa
+    was installed after first module import."""
+    global _G, _q, _H
+    if _G is not None:
+        return
+    if not _HAVE_FASTECDSA:
+        raise RuntimeError(
+            "fastecdsa required for ZK proofs. "
+            "Install: pip install fastecdsa"
+        )
+    _G = secp256k1.G
+    _q = secp256k1.q
     _H_SEED = hashlib.sha256(b"context-m-zk-h-generator-v1").digest()
     _H_SCALAR = int.from_bytes(_H_SEED, "big") % _q
     _H = _H_SCALAR * _G
-else:
-    _H = None
 
 
 def _random_scalar() -> int:
+    _ensure_curve()
     return int.from_bytes(secrets.token_bytes(32), "big") % _q
 
 
-def _hash_challenge(points: list = None, scalars: list = None) -> int:
+def _hash_challenge(*items) -> int:
     """Fiat-Shamir challenge from points and scalars."""
+    _ensure_curve()
     h = hashlib.sha256()
-    for p in (points or []):
-        h.update(f"{p.x}:{p.y}".encode())
-    for s in (scalars or []):
-        h.update(str(s).encode())
+    for item in items:
+        if hasattr(item, 'x') and hasattr(item, 'y'):  # Point
+            h.update(f"{item.x}:{item.y}".encode())
+        else:
+            h.update(str(item).encode())
     return int.from_bytes(h.digest(), "big") % _q
 
 
@@ -73,6 +85,7 @@ class PedersenCommitment:
     @classmethod
     def create(cls, value: int, blinding: int | None = None) -> tuple["PedersenCommitment", int]:
         """Create commitment. Returns (commitment, blinding_factor)."""
+        _ensure_curve()
         if blinding is None:
             blinding = _random_scalar()
         # C = value * G + blinding * H
@@ -99,17 +112,19 @@ class SchnorrProof:
     @classmethod
     def prove(cls, value: int, blinding: int, C: PedersenCommitment) -> "SchnorrProof":
         """Generate proof that we know opening of C."""
+        _ensure_curve()
         a = _random_scalar()  # random for value
         b = _random_scalar()  # random for blinding
         R = a * _G + b * _H   # announcement
-        e = _hash_challenge([R, C.point])
+        e = _hash_challenge(R, C.point)
         z_v = (a + e * value) % _q
         z_r = (b + e * blinding) % _q
         return cls(commitment=R, z_v=z_v, z_r=z_r)
 
     def verify(self, C: PedersenCommitment) -> bool:
         """Verify the proof against commitment C."""
-        e = _hash_challenge([self.commitment, C.point])
+        _ensure_curve()
+        e = _hash_challenge(self.commitment, C.point)
         # Check: z_v*G + z_r*H == R + e*C
         lhs = self.z_v * _G + self.z_r * _H
         rhs = self.commitment + e * C.point
@@ -130,6 +145,7 @@ class EqualityProof:
     @classmethod
     def prove(cls, r1: int, r2: int, C1: PedersenCommitment, C2: PedersenCommitment) -> "EqualityProof":
         """Prove C1 and C2 commit to same value."""
+        _ensure_curve()
         delta_r = (r1 - r2) % _q
         a = _random_scalar()
         R = a * _H
@@ -139,7 +155,8 @@ class EqualityProof:
 
     def verify(self, C1: PedersenCommitment, C2: PedersenCommitment) -> bool:
         """Verify equality proof."""
-        e = _hash_challenge([self.commitment, C1.point, C2.point])
+        _ensure_curve()
+        e = _hash_challenge(self.commitment, C1.point, C2.point)
         # Check: z*H == R + e*(C1 - C2)
         lhs = self.z * _H
         rhs = self.commitment + e * (C1.point + (-1 * C2.point))
@@ -208,6 +225,7 @@ class SetMembershipProof:
     @classmethod
     def prove(cls, value: int, blinding: int, public_set: list[int], index: int) -> "SetMembershipProof":
         """Prove value is in public_set at index."""
+        _ensure_curve()
         C, r = PedersenCommitment.create(value, blinding)
         schnorr = SchnorrProof.prove(value, r, C)
         leaves = [hashlib.sha256(str(v).encode()).digest() for v in public_set]
@@ -249,58 +267,94 @@ class BitProof:
 
     @classmethod
     def prove_bit(cls, bit: int, blinding: int) -> "BitProof":
-        """Prove commitment to bit is 0 or 1 using OR-proof."""
+        """Prove commitment to bit is 0 or 1 using OR-proof.
+
+        Construction (Fiat-Shamir):
+          1. Compute e = hash(C) — the overall challenge
+          2. Split e = e0 + e1 (mod q) where e0 is random
+          3. For the REAL case: construct valid Schnorr proof with e_real
+          4. For the SIMULATED case: pick random z, compute R = z*H - e_sim*C'
+
+        For bit=0: C' = C (since C = r*H)
+        For bit=1: C' = C - G (since C - G = r*H)
+        """
+        _ensure_curve()
         C, r = PedersenCommitment.create(bit, blinding)
         e = _hash_challenge(C.point)
+
         if bit == 0:
-            # Real proof for 0, simulated for 1
-            # Prove C = 0*G + r*H: knowledge of r such that C = r*H
+            # Real proof for bit=0, simulated for bit=1
+            e0 = _random_scalar()
+            e1 = (e - e0) % _q
+
+            # Real: prove knowledge of r in C = r*H
             a0 = _random_scalar()
             R0 = a0 * _H
-            e0 = _hash_challenge(R0, C.point)
             z0 = (a0 + e0 * r) % _q
             proof_0 = SchnorrProof(commitment=R0, z_v=0, z_r=z0)
-            # Simulate proof for 1
+
+            # Simulated for bit=1: pick random z1, compute R1 = z1*H - e1*(C - G)
             z1 = _random_scalar()
-            e1 = (e - e0) % _q
-            R1 = z1 * _G + z1 * _H + (-e1) * C.point  # simulated
-            # Actually proper simulation: pick z1, e1, compute R1 = z1*G + z1*H - e1*C
-            proof_1 = SchnorrProof(commitment=R1, z_v=z1, z_r=z1)
+            R1 = z1 * _H + (-e1) * (C.point + (-1 * _G))
+            proof_1 = SchnorrProof(commitment=R1, z_v=0, z_r=z1)
+
             return cls(C0=C, C1=None, proof_0=proof_0, proof_1=proof_1, challenge_split=e0)
         else:
-            # Real proof for 1, simulated for 0
-            a1 = _random_scalar()
-            R1 = a1 * _G + a1 * _H
-            e1 = _hash_challenge(R1, C.point)
-            z1 = (a1 + e1 * r) % _q
-            proof_1 = SchnorrProof(commitment=R1, z_v=z1, z_r=z1)
-            # Simulate proof for 0
-            z0 = _random_scalar()
+            # Real proof for bit=1, simulated for bit=0
+            e1 = _random_scalar()
             e0 = (e - e1) % _q
+
+            # Real: prove knowledge of r in C - G = r*H
+            a1 = _random_scalar()
+            R1 = a1 * _H
+            z1 = (a1 + e1 * r) % _q
+            proof_1 = SchnorrProof(commitment=R1, z_v=0, z_r=z1)
+
+            # Simulated for bit=0: pick random z0, compute R0 = z0*H - e0*C
+            z0 = _random_scalar()
             R0 = z0 * _H + (-e0) * C.point
             proof_0 = SchnorrProof(commitment=R0, z_v=0, z_r=z0)
+
             return cls(C0=None, C1=C, proof_0=proof_0, proof_1=proof_1, challenge_split=e0)
 
     def verify(self, C: PedersenCommitment) -> bool:
-        """Verify bit proof."""
+        """Verify bit proof (OR-proof)."""
+        _ensure_curve()
         e = _hash_challenge(C.point)
         e0 = self.challenge_split
         e1 = (e - e0) % _q
-        # Verify 0-case
-        if self.proof_0:
-            # z0*H == R0 + e0*C (for bit=0, C = r*H)
-            lhs0 = self.proof_0.z_r * _H
-            rhs0 = self.proof_0.commitment + e0 * C.point
-            if lhs0 != rhs0:
-                return False
-        # Verify 1-case
-        if self.proof_1:
-            # z1*(G+H) == R1 + e1*C (for bit=1, C = G + r*H)
-            lhs1 = self.proof_1.z_v * _G + self.proof_1.z_r * _H
-            rhs1 = self.proof_1.commitment + e1 * C.point
-            if lhs1 != rhs1:
-                return False
-        return True
+
+        # Check challenge split is valid
+        if (e0 + e1) % _q != e:
+            return False
+
+        # Verify proof for bit=0: z0*H == R0 + e0*C
+        lhs0 = self.proof_0.z_r * _H
+        rhs0 = self.proof_0.commitment + e0 * C.point
+        ok0 = (lhs0 == rhs0)
+        if not ok0:
+            print(f"  z_r={self.proof_0.z_r}")
+            print(f"  lhs0=({lhs0.x},{lhs0.y})")
+            print(f"  rhs0=({rhs0.x},{rhs0.y})")
+
+        # Verify proof for bit-1: z1*H == R1 + e1*(C - G)
+        lhs1 = self.proof_1.z_r * _H
+        c_minus_g = C.point + (-1 * _G)
+        rhs1 = self.proof_1.commitment + e1 * c_minus_g
+        ok1 = (lhs1 == rhs1)
+        if not ok1:
+            print(f"  z_r={self.proof_1.z_r}")
+            print(f"  e1={e1}")
+            print(f"  lhs1=({lhs1.x},{lhs1.y})")
+            print(f"  rhs1=({rhs1.x},{rhs1.y})")
+            print(f"  C=({C.point.x},{C.point.y})")
+            print(f"  G=({_G.x},{_G.y})")
+            print(f"  C-G=({c_minus_g.x},{c_minus_g.y})")
+
+        if self.C0 is not None:
+            return ok0
+        else:
+            return ok1
 
 
 @dataclass(frozen=True)
@@ -314,6 +368,7 @@ class RangeProof:
     @classmethod
     def prove(cls, value: int, blinding: int, n_bits: int = 32) -> "RangeProof":
         """Prove 0 <= value < 2^n_bits."""
+        _ensure_curve()
         if value < 0 or value >= (1 << n_bits):
             raise ValueError(f"value {value} out of range [0, 2^{n_bits})")
         # Decompose into bits
@@ -337,7 +392,15 @@ class RangeProof:
         # C_total = v*G + r*H
         C_total, _ = PedersenCommitment.create(value, blinding)
         # C_bits_sum = sum(2^i * C_i) = v*G + r_sum*H
-        C_bits_sum = sum((1 << i) * C.point for i, C in enumerate(bit_commitments))
+        _first = True
+        C_bits_sum = None
+        for i, C in enumerate(bit_commitments):
+            term = (1 << i) * C.point
+            if _first:
+                C_bits_sum = term
+                _first = False
+            else:
+                C_bits_sum = C_bits_sum + term
         # Difference: C_total - C_bits_sum = delta*H
         # Prove knowledge of delta
         a = _random_scalar()
@@ -354,16 +417,26 @@ class RangeProof:
 
     def verify(self, C: PedersenCommitment) -> bool:
         """Verify range proof against commitment C."""
+        _ensure_curve()
         # Verify each bit proof
-        for bc, bp in zip(self.bit_commitments, self.bit_proofs):
+        for i, (bc, bp) in enumerate(zip(self.bit_commitments, self.bit_proofs)):
             if not bp.verify(bc):
                 return False
         # Verify sum consistency
-        C_bits_sum = sum((1 << i) * C.point for i, C in enumerate(self.bit_commitments))
-        e = _hash_challenge([self.sum_proof.commitment, C.point, C_bits_sum])
+        _first = True
+        C_bits_sum = None
+        for i, C_bit in enumerate(self.bit_commitments):
+            term = (1 << i) * C_bit.point
+            if _first:
+                C_bits_sum = term
+                _first = False
+            else:
+                C_bits_sum = C_bits_sum + term
+        e = _hash_challenge(self.sum_proof.commitment, C.point, C_bits_sum)
         lhs = self.sum_proof.z_r * _H
         rhs = self.sum_proof.commitment + e * (C.point + (-1 * C_bits_sum))
-        return lhs == rhs
+        ok = (lhs == rhs)
+        return ok
 
 
 # ---------------------------------------------------------------------------

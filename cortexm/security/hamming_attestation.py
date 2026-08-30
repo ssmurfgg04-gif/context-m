@@ -37,8 +37,25 @@ from cortexm.security.zk_proofs import (
     BitProof,
     RangeProof,
     SchnorrProof,
-    _G, _H, _q, _random_scalar,
+    _random_scalar,
+    _ensure_curve,
 )
+
+# Lazy getters for curve params (avoid stale None references)
+def _G():
+    _ensure_curve()
+    from cortexm.security.zk_proofs import _G as __G
+    return __G
+
+def _H():
+    _ensure_curve()
+    from cortexm.security.zk_proofs import _H as __H
+    return __H
+
+def _q():
+    _ensure_curve()
+    from cortexm.security.zk_proofs import _q as __q
+    return __q
 
 
 def _hamming_weight(b: bytes) -> int:
@@ -67,6 +84,7 @@ class HammingZKProof:
 
     @classmethod
     def prove(cls, public_vec: bytes, private_vec: bytes, threshold: int) -> "HammingZKProof":
+        _ensure_curve()
         """Generate ZK proof that HammingDistance(private_vec, public_vec) <= threshold.
 
         Args:
@@ -121,16 +139,16 @@ class HammingZKProof:
                 diff_blindings.append(bit_blindings[i])
             else:
                 # d_i = 1 - b_i, so D_i = G - C_i = (1-b_i)*G + (-r_i)*H
-                D_point = _G + (-1 * bit_commitments[i].point)
+                D_point = _G() + (-1 * bit_commitments[i].point)
                 diff_commitments.append(PedersenCommitment(point=D_point))
-                diff_blindings.append((-bit_blindings[i]) % _q)
+                diff_blindings.append((-bit_blindings[i]) % _q())
 
         # Step 5: D_total = sum(D_i) = distance*G + sum(s_i)*H
         total_point = diff_commitments[0].point
         for i in range(1, len(diff_commitments)):
             total_point = total_point + diff_commitments[i].point
 
-        total_blinding = sum(diff_blindings) % _q
+        total_blinding = sum(diff_blindings) % _q()
         D_total = PedersenCommitment(point=total_point)
 
         # Step 6: prove D_total commits to value in [0, threshold]
@@ -150,6 +168,7 @@ class HammingZKProof:
         )
 
     def verify(self, public_vec: bytes) -> bool:
+        _ensure_curve()
         """Verify the ZK Hamming proximity proof.
 
         Returns True iff:
@@ -185,7 +204,7 @@ class HammingZKProof:
             if public_bits[i] == 0:
                 diff_commitments.append(self.bit_commitments[i])
             else:
-                expected_D = _G + (-1 * self.bit_commitments[i].point)
+                expected_D = _G() + (-1 * self.bit_commitments[i].point)
                 diff_commitments.append(PedersenCommitment(point=expected_D))
 
         # Step 5: verify D_total = sum(D_i)
