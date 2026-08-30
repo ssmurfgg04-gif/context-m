@@ -9,8 +9,8 @@ ultra-edge, PQ cloud).
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, asdict
-from typing import Final
+from dataclasses import dataclass, field, asdict, fields
+from typing import Final, get_type_hints
 
 CODECS = ("int8", "binary", "rabitq", "pq")
 VSA_MODES = ("perm", "conv", "bag")
@@ -458,6 +458,28 @@ class Config:
     def from_env(cls, **overrides) -> "Config":
         cfg = cls(**overrides) if overrides else cls()
 
+        # Generic typed mapping keeps every scalar Config field available to
+        # deployments without maintaining a second, incomplete field list.
+        hints = get_type_hints(cls)
+        for f in fields(cfg):
+            if not f.init:
+                continue
+            raw = os.environ.get("CORTEXM_" + f.name.upper())
+            if raw is None:
+                raw = os.environ.get("CONTEXT_M_" + f.name.upper())
+            if raw is None:
+                continue
+            typ = hints.get(f.name)
+            if typ is bool:
+                value = raw.strip().lower() in ("1", "true", "yes", "on")
+            elif typ is int:
+                value = int(raw)
+            elif typ is float:
+                value = float(raw)
+            else:
+                value = raw
+            setattr(cfg, f.name, value)
+
         # Helper: env var lookup that prefers the post-rename CORTEXM_
         # prefix and falls back to the legacy CONTEXT_M_ prefix (so
         # existing deployments / helm charts / cronjobs don't break on
@@ -537,6 +559,9 @@ class Config:
         # [1,0,0,...] vector that breaks retrieval (Tier-1 bug).
         if _env("LABSE") is not None:
             cfg.labse_enabled = _env_bool_dual("LABSE", cfg.labse_enabled)
+        # Legacy aliases above mutate after construction; validate the final
+        # configuration, not merely the defaults used to create it.
+        cfg.__post_init__()
         return cfg
 
     # FIX 2: Shared embedder for persistent workers (set by benchmark script)

@@ -113,6 +113,29 @@ def _bitap_trigger_match(sent: str, max_edits: int = 2) -> bool:
 class Extractor:
     def __init__(self, config) -> None:
         self.cfg = config
+        self._trigger_automaton = None
+        try:
+            import ahocorasick
+            automaton = ahocorasick.Automaton()
+            for word in _BITAP_TRIGGERS:
+                automaton.add_word(word, word)
+            automaton.make_automaton()
+            self._trigger_automaton = automaton
+        except ImportError:
+            # Package is a runtime dependency; retain the regex fallback for
+            # constrained embedded deployments with a partial installation.
+            pass
+
+    def _strict_trigger_match(self, sent: str) -> bool:
+        if self._trigger_automaton is None:
+            return bool(_TRIGGER.search(sent))
+        lowered = sent.lower()
+        for end, word in self._trigger_automaton.iter(lowered):
+            start = end - len(word) + 1
+            if (start == 0 or not lowered[start - 1].isalnum()) and \
+                    (end + 1 == len(lowered) or not lowered[end + 1].isalnum()):
+                return True
+        return bool(_DATE_TRIGGER.search(sent)) or bool(_TRIGGER.search(sent))
 
     # ------------------------------------------------------------------
     def extract(self, text: str, ctx: ExtractionContext) -> list[Candidate]:
@@ -184,7 +207,7 @@ class Extractor:
         # against the sentence with up to N edits. This stays deterministic
         # (Wu-Manber is bitwise, no learned weights) and <50μs on a typical
         # sentence — same order as the regex itself.
-        trigger_fired = bool(_TRIGGER.search(sent))
+        trigger_fired = self._strict_trigger_match(sent)
         bitap_widened = False
         if not trigger_fired:
             if (not getattr(self.cfg, "bitap_trigger_enabled", True)

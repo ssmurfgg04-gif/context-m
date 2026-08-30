@@ -84,7 +84,7 @@ class MemoryWriter:
 
     def _verbatim_store_chunk(self, *, text: str, user_id: str,
                               session_id: str | None,
-                              source_tx_id: int | None,
+                              source_tx_id: str | None,
                               agent_id: str | None = None) -> None:
         """μ=0 verbatim tier insert. Best-effort: never blocks ingest.
 
@@ -105,7 +105,7 @@ class MemoryWriter:
             self._verbatim.add(text=text, user_id=user_id,
                               session_id=session_id,
                               source_tx_id=source_tx_id,
-                              agent_id=agent_id)
+                              agent_id=agent_id, commit=False)
         except Exception as e:
             # best-effort — never block the write path on the verbatim tier
             import sys as _sys
@@ -268,14 +268,10 @@ class MemoryWriter:
             # caller rarely passes one — we use run_id as a proxy)
             # and source_tx_id (the chunk_id from the structured tier's
             # chunks table, so the EXTRACTED_FROM edge cross-references).
-            try:
-                _src_tx_id = int(chunk_id) if str(chunk_id).isdigit() else None
-            except Exception:
-                _src_tx_id = None
             self._verbatim_store_chunk(
                 text=text, user_id=user_id,
                 session_id=run_id or agent_id or user_id,
-                source_tx_id=_src_tx_id,
+                source_tx_id=chunk_id,
                 agent_id=agent_id)
             # v0.6.1: split negated sentences out BEFORE the extractor
             # runs. The negated sentences go into a separate
@@ -291,7 +287,7 @@ class MemoryWriter:
                     self._store_negations(
                         text=text, user_id=user_id,
                         session_id=run_id or agent_id or user_id,
-                        source_tx_id=str(_src_tx_id) if _src_tx_id is not None else None,
+                        source_tx_id=chunk_id,
                         agent_id=agent_id, created_at=msg_time)
                     extraction_text = neg_split["positive_text"] or text
                 else:

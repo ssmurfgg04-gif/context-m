@@ -198,7 +198,7 @@ class Memory:
                 self.audit_log.log("memory.add_batch", resource=user_id,
                                meta={"facts": total_facts})
             return {"event": "ADD_BATCH", "results": all_results,
-                    "stats": {"messages": sum(len(m) for m in messages_list),
+                    "stats": {"messages": len(messages_list),
                               "facts_inserted": total_facts, "llm_calls": 0}}
         except Exception:
             self.store.rollback()

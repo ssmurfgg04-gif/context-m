@@ -192,6 +192,22 @@ def _flatten_haystack(haystack_sessions: list,
     return out
 
 
+def _chunk_messages(msgs: list[str], batch_size: int = 50) -> list[list[dict]]:
+    """Convert flat text messages into batched mem0-style message lists."""
+    return [
+        [{"role": "user", "content": m} for m in msgs[i:i + batch_size]]
+        for i in range(0, len(msgs), batch_size)
+    ]
+
+
+def _slice_shard(data: list[dict], shard_index: int, shard_count: int) -> tuple[list[dict], int, int]:
+    """Return the contiguous shard slice requested by the caller."""
+    shard_size = (len(data) + shard_count - 1) // shard_count
+    start = shard_index * shard_size
+    end = min(start + shard_size, len(data))
+    return data[start:end], start, end
+
+
 # ---------------------------------------------------------------------------
 # Per-question execution (runs in worker processes)
 # ---------------------------------------------------------------------------
@@ -360,8 +376,6 @@ def _eval_one_question(args) -> dict:
     try:
         conn = getattr(getattr(mem, "store", None), "conn", None)
         if conn is not None:
-            # These are safe to set per-connection; query_only is set per-query
-            # via PRAGMA query_only=1 before search (read-only optimization)
             conn.execute("PRAGMA mmap_size = 268435456")  # 256MB
             conn.execute("PRAGMA cache_size = -64000")  # 64MB page cache
             conn.execute("PRAGMA temp_store = MEMORY")
@@ -382,16 +396,37 @@ def _eval_one_question(args) -> dict:
         if _WORKER_MAX_MESSAGES and len(msgs) > _WORKER_MAX_MESSAGES:
             msgs = msgs[:_WORKER_MAX_MESSAGES]
 
-        # FIX 1: Transaction batching - ingest entire haystack in ONE transaction
-        # Instead of batch=50 loop with mem.add() per batch, use add_batch
+        # FIX 1: Transaction batching - keep the whole question atomic, but
+        # feed the writer smaller chunks so we don't create one giant payload.
         try:
-            mem.add_batch(
-                [[{"role": "user", "content": m} for m in msgs]],
-                user_id=q_user_id)
+            batched_msgs = _chunk_messages(msgs, batch_size=50)
+            mem.add_batch(batched_msgs, user_id=q_user_id)
             n_ingested = len(msgs)
         except Exception as e:
             print(f"  [w{worker_idx}] ingest err: {e}", flush=True)
             n_ingested = 0
+
+        if _WORKER_MAX_SECONDS and (time.time() - t_start) > _WORKER_MAX_SECONDS:
+            elapsed_s = round(time.time() - t_start, 2)
+            return {
+                "qid": qid,
+                "global_idx": qidx,
+                "question_type": qtype,
+                "subtask": subtask,
+                "question": question,
+                "expected_answer": answer,
+                "n_messages_ingested": n_ingested,
+                "ingest_s": elapsed_s,
+                "retrieve_s": 0.0,
+                "elapsed_s": elapsed_s,
+                "judge_strategy": "TIMEOUT",
+                "context_block_preview": f"[timeout: {qid} exceeded {int(_WORKER_MAX_SECONDS)}s during ingest]",
+                "det_correct": False,
+                "verbatim_hits": 0,
+                "recall_step": "timeout",
+                "worker_idx": worker_idx,
+                "timeout": True,
+            }
 
         if not _FAST_MODE:
             try:
@@ -401,6 +436,28 @@ def _eval_one_question(args) -> dict:
         else:
             # Fast: skip consolidate (saves ~5s per Q on i5-420M, loses ~1% temporal accuracy)
             pass
+
+        if _WORKER_MAX_SECONDS and (time.time() - t_start) > _WORKER_MAX_SECONDS:
+            elapsed_s = round(time.time() - t_start, 2)
+            return {
+                "qid": qid,
+                "global_idx": qidx,
+                "question_type": qtype,
+                "subtask": subtask,
+                "question": question,
+                "expected_answer": answer,
+                "n_messages_ingested": n_ingested,
+                "ingest_s": elapsed_s,
+                "retrieve_s": 0.0,
+                "elapsed_s": elapsed_s,
+                "judge_strategy": "TIMEOUT",
+                "context_block_preview": f"[timeout: {qid} exceeded {int(_WORKER_MAX_SECONDS)}s before search]",
+                "det_correct": False,
+                "verbatim_hits": 0,
+                "recall_step": "timeout",
+                "worker_idx": worker_idx,
+                "timeout": True,
+            }
 
         t0 = time.time()
         # --- Speed/accuracy tradeoff: for single_session with known session_id,
@@ -412,20 +469,7 @@ def _eval_one_question(args) -> dict:
         out = None
         for _attempt in range(3):
             try:
-                # Try to set query_only PRAGMA for read-only speed if exposed
-                try:
-                    conn = getattr(getattr(mem, "store", None), "conn", None)
-                    if conn is not None:
-                        conn.execute("PRAGMA query_only = 1")
-                except Exception:
-                    pass
                 out = mem.search(question, user_id=q_user_id, limit=10)
-                # Reset query_only
-                try:
-                    if conn is not None:
-                        conn.execute("PRAGMA query_only = 0")
-                except Exception:
-                    pass
                 break
             except Exception as e:
                 if "BUSY" in str(e) or "locked" in str(e).lower():
@@ -436,6 +480,27 @@ def _eval_one_question(args) -> dict:
             out = mem.search(question, user_id=q_user_id, limit=10)
         cb = out.get("context_block", "")
         t_ret = time.time() - t0
+        if _WORKER_MAX_SECONDS and (time.time() - t_start) > _WORKER_MAX_SECONDS:
+            elapsed_s = round(time.time() - t_start, 2)
+            return {
+                "qid": qid,
+                "global_idx": qidx,
+                "question_type": qtype,
+                "subtask": subtask,
+                "question": question,
+                "expected_answer": answer,
+                "n_messages_ingested": n_ingested,
+                "ingest_s": round(t0 - t_start, 2),
+                "retrieve_s": round(t_ret, 2),
+                "elapsed_s": elapsed_s,
+                "judge_strategy": "TIMEOUT",
+                "context_block_preview": cb[:1000],
+                "det_correct": False,
+                "verbatim_hits": 0,
+                "recall_step": "timeout",
+                "worker_idx": worker_idx,
+                "timeout": True,
+            }
         timing = out.get("timing", {})
         vh = timing.get("verbatim_hits", 0)
         rs_status = timing.get("recall_step", "n/a")
@@ -466,6 +531,7 @@ def _eval_one_question(args) -> dict:
             "n_messages_ingested": n_ingested,
             "ingest_s": round(time.time() - t_start - t_ret, 2),
             "retrieve_s": round(t_ret, 2),
+            "elapsed_s": round(time.time() - t_start, 2),
             "judge_strategy": strategy,
             "context_block_preview": cb[:1000],
             "det_correct": bool(det_correct),
@@ -485,6 +551,7 @@ def _eval_one_question(args) -> dict:
             "n_messages_ingested": 0,
             "ingest_s": round(time.time() - t_start, 2),
             "retrieve_s": 0.0,
+            "elapsed_s": round(time.time() - t_start, 2),
             "judge_strategy": "ERROR",
             "context_block_preview": f"[error: {e}]",
             "det_correct": False,
@@ -538,6 +605,10 @@ def main(argv: List[str] | None = None) -> int:
                    help="output JSON path")
     p.add_argument("--seed", type=int, default=42,
                    help="sampling seed")
+    p.add_argument("--shard-index", type=int, default=None,
+                   help="0-based shard index for full-dataset sharding")
+    p.add_argument("--shard-count", type=int, default=None,
+                   help="total number of shards for full-dataset sharding")
     p.add_argument("--max-messages-per-q", type=int, default=1500,
                    help="cap on haystack messages per question")
     p.add_argument("--max-seconds-per-q", type=float, default=240.0,
@@ -634,9 +705,25 @@ def main(argv: List[str] | None = None) -> int:
     print(f"[load] {len(data)} canonical questions available",
           file=sys.stderr)
 
-    sample = sample_questions(data, args.n_per_type, seed=args.seed)
-    print(f"[sample] {len(sample)} questions ({args.n_per_type}/subtask)",
-          file=sys.stderr)
+    if args.shard_count is not None or args.shard_index is not None:
+        if args.shard_count is None or args.shard_index is None:
+            print("[error] --shard-index and --shard-count must be used together", file=sys.stderr)
+            return 1
+        if args.shard_count <= 0:
+            print("[error] --shard-count must be > 0", file=sys.stderr)
+            return 1
+        if not (0 <= args.shard_index < args.shard_count):
+            print("[error] --shard-index must satisfy 0 <= index < shard-count", file=sys.stderr)
+            return 1
+        sample, sample_offset, shard_end = _slice_shard(data, args.shard_index, args.shard_count)
+        shard_start = sample_offset
+        print(f"[shard] {args.shard_index}/{args.shard_count} -> questions [{shard_start}:{shard_end}] ({len(sample)})",
+              file=sys.stderr)
+    else:
+        sample = sample_questions(data, args.n_per_type, seed=args.seed)
+        sample_offset = 0
+        print(f"[sample] {len(sample)} questions ({args.n_per_type}/subtask)",
+              file=sys.stderr)
 
     # --- Resume logic: skip already-scored qids from partial results file ---
     already_scored: set[str] = set()
@@ -647,13 +734,7 @@ def main(argv: List[str] | None = None) -> int:
             for _r in _existing.get("results", []):
                 already_scored.add(_r.get("qid") or _r.get("question_id") or str(_r.get("global_idx")))
             print(f"[resume] found {len(already_scored)} already-scored questions in {args.out}, will skip them", file=sys.stderr)
-            # Filter sample to only not-yet-scored
             orig_len = len(sample)
-            sample = [q for q in sample if (q.get("question_id") or str(sample.index(q))) not in already_scored]
-            # Use qid properly: need to check against sampled qids
-            # Re-filter by actual qid
-            sample = [q for q in data if q.get("question_id") in {s.get("question_id") for s in sample}]  # dummy to keep logic
-            # Simpler: filter by question_id set from already_scored
             sample = [q for q in sample if q.get("question_id") not in already_scored]
             print(f"[resume] {orig_len} -> {len(sample)} remaining after resume filter", file=sys.stderr)
         except Exception as e:
@@ -667,13 +748,9 @@ def main(argv: List[str] | None = None) -> int:
     # prefix + tuning knobs. Workers create + tear down their own DBs.
     # Also handle block-size checkpointing: run in blocks, checkpoint after each
     worker_args = [
-        {"question": q, "global_idx": i, "worker_idx": i % args.workers}
+        {"question": q, "global_idx": sample_offset + i, "worker_idx": i % args.workers}
         for i, q in enumerate(sample)
     ]
-    # If resume, also need to handle already_scored correctly — rebuild sample without scored
-    if args.resume and already_scored:
-        # Proper resume filter: skip any q whose qid already in file
-        worker_args = [a for a in worker_args if a["question"].get("question_id") not in already_scored]
 
     print(f"[run] {args.workers} workers, {len(worker_args)} questions, "
           f"BM25(k1={args.bm25_k1}, b={args.bm25_b}), block_size={args.block_size}", file=sys.stderr)
@@ -707,6 +784,7 @@ def main(argv: List[str] | None = None) -> int:
             results = []
     # Run in blocks
     block_size = args.block_size
+    completed = len(results)
     for block_start in range(0, len(worker_args), block_size):
         block = worker_args[block_start:block_start+block_size]
         if not block:
@@ -722,8 +800,10 @@ def main(argv: List[str] | None = None) -> int:
                 except Exception as e:
                     r = {"qid": a["question"].get("question_id", f"q{a['global_idx']}"), "global_idx": a["global_idx"], "question_type": a["question"].get("question_type","unknown"), "subtask": "error", "question": a["question"].get("question",""), "expected_answer": str(a["question"].get("answer","")), "det_correct": False, "error": str(e), "score": 0.0}
                 block_results.append(r)
-                # Per-question log for sanity-check of .search() extraction
-                if len(results) + len(block_results) <= 3:
+                completed += 1
+                elapsed_q = float(r.get("elapsed_s", r.get("ingest_s", 0.0) + r.get("retrieve_s", 0.0)))
+                print(f"[progress] {completed}/{len(worker_args)} qid={r.get('qid')} elapsed={elapsed_q:.2f}s det_correct={r.get('det_correct')}", file=sys.stderr)
+                if completed <= 3:
                     print(f"[sample] Q{len(results)+len(block_results)} raw search preview: {r.get('context_block_preview','')[:300]}", file=sys.stderr)
         else:
             ctx_name = "fork" if _use_fork else "spawn"
@@ -734,11 +814,13 @@ def main(argv: List[str] | None = None) -> int:
                     initargs=(args.db_path, args.bm25_k1, args.bm25_b,
                               args.max_messages_per_q, args.max_seconds_per_q)
             ) as pool:
-                # imap_unordered with chunksize=8 per spec (faster than 1)
+                # imap_unordered with chunksize=1 so we can emit a heartbeat on every completion.
                 try:
-                    for r in pool.imap_unordered(_eval_one_question, block, chunksize=8):
+                    for r in pool.imap_unordered(_eval_one_question, block, chunksize=1):
                         block_results.append(r)
-                        print(f"[progress] {len(results)+len(block_results)}/{len(worker_args)} det_correct={r.get('det_correct')}", file=sys.stderr)
+                        completed += 1
+                        elapsed_q = float(r.get("elapsed_s", r.get("ingest_s", 0.0) + r.get("retrieve_s", 0.0)))
+                        print(f"[progress] {completed}/{len(worker_args)} qid={r.get('qid')} elapsed={elapsed_q:.2f}s det_correct={r.get('det_correct')}", file=sys.stderr)
                 except Exception as e:
                     print(f"[error] worker pool died: {e}, retrying remaining with spawn fallback", file=sys.stderr)
                     # Fallback to spawn if fork failed
@@ -790,6 +872,7 @@ def main(argv: List[str] | None = None) -> int:
         "overall": round(overall, 4),
         "overall_vs_v055_baseline": 0.948,
         "delta_vs_baseline": round(overall - 0.948, 4),
+        "result_fraction": f"{sum(1 for r in results if r['det_correct'])}/{len(results)}",
         "by_subtask": {k: _avg(v) for k, v in by_subtask.items()},
         "by_strategy": {k: _avg(v) for k, v in by_strategy.items()},
         "by_question_type": {k: _avg(v) for k, v in by_qtype.items()},

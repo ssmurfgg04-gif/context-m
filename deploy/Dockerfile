@@ -5,8 +5,8 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 COPY pyproject.toml README.md LICENSE ./
-COPY context_m ./context_m
-COPY cortexm.py ./
+COPY cortexm ./cortexm
+COPY context_m.py ./
 RUN pip install --no-cache-dir --target=/deps . cryptography
 
 FROM python:3.12-slim
@@ -38,4 +38,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8900/healthz', timeout=2)" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["python", "-m", "context_m.server.rest", "--db", "/data/memory.db", "--port", "8900"]
+CMD ["python", "-m", "cortexm.server.rest", "--db", "/data/memory.db", "--port", "8900"]
