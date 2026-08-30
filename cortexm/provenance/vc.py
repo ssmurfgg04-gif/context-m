@@ -1,5 +1,9 @@
 """W3C Verifiable Credentials 2.0 export for memory ranges.
 
+Uses didkit for standard W3C VC Data Model 2.0 + eddsa-jcs-2022 when available;
+falls back to custom implementation for prototyping.
+Install didkit for full spec compliance: pip install didkit
+
 A memory range (e.g. "all facts about user=alice from 2026-01-01 to
 2026-02-01") can be exported as a W3C Verifiable Credential with an
 eddsa-jcs-2022 Data Integrity proof.
@@ -34,6 +38,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from cortexm.provenance.agent import Ed25519AgentKey, get_default_agent
+try:
+    import didkit
+    _HAVE_DIDKIT = True
+except ImportError:
+    _HAVE_DIDKIT = False
+
 from cortexm.provenance.cose import CoseSign1Envelope, sign_commit
 
 

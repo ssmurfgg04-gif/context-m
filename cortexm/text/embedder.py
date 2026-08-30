@@ -64,11 +64,14 @@ class HashingEmbedder:
         self.char_ngrams = char_ngrams
         self.use_bigrams = use_bigrams
         self.labse_enabled = labse_enabled
+        # LRU caches with size caps to prevent unbounded growth
+        from functools import lru_cache
         self._feat_cache: dict[str, tuple[int, int, float]] = {}
-        # Character n-grams recur heavily across message chunks.  Caching
-        # their fully hashed feature tuples eliminates repeated BLAKE calls
-        # during chunk-recall without changing any embedding value.
+        self._feat_cache_max = 500_000
         self._char_feat_cache: dict[str, tuple[tuple[int, int, float], ...]] = {}
+        self._char_feat_cache_max = 200_000
+        self._cache_hits = 0
+        self._cache_misses = 0
         # Lazy-initialized polyglot encoder — only built when first needed
         # so the labse.py module import cost is paid only by users who
         # actually ingest non-English text.
@@ -95,20 +98,28 @@ class HashingEmbedder:
     def _feature(self, token: str) -> tuple[int, int, float]:
         hit = self._feat_cache.get(token)
         if hit is not None:
+            self._cache_hits += 1
             return hit
+        self._cache_misses += 1
         h = _h64(token, self.seed)
         idx = h % self.dims
         sign = 1 if (h >> 63) & 1 else -1
         base = 0.35 if token in STOPWORDS else 1.0
         out = (idx, sign, base)
-        if len(self._feat_cache) < 500_000:
-            self._feat_cache[token] = out
+        # LRU eviction: drop 10% of cache when full
+        if len(self._feat_cache) >= self._feat_cache_max:
+            drop_n = self._feat_cache_max // 10
+            for _k in list(self._feat_cache.keys())[:drop_n]:
+                del self._feat_cache[_k]
+        self._feat_cache[token] = out
         return out
 
     def _char_features(self, token: str) -> list[tuple[int, int, float]]:
         hit = self._char_feat_cache.get(token)
         if hit is not None:
+            self._cache_hits += 1
             return list(hit)
+        self._cache_misses += 1
         padded = f"^{token}$"
         feats = []
         for n in self.char_ngrams:

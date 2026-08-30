@@ -61,6 +61,13 @@ STOPWORDS = {
     "about", "from", "by", "up", "out", "not", "no", "yes", "oh", "well",
 }
 
+# Fallback: merge with sklearn's stopwords if available (larger, domain-aware set)
+try:
+    from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+    STOPWORDS = STOPWORDS | set(ENGLISH_STOP_WORDS)
+except ImportError:
+    pass
+
 
 def content_words(text: str) -> list[str]:
     return [w for w in words(text) if w not in STOPWORDS and len(w) > 1]

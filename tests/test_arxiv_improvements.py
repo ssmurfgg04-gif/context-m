@@ -21,7 +21,7 @@ from cortexm.vsa.attribution import (
     ProtoDashAttributer, sentence_level_score, tag_retrieval_path,
     RETRIEVAL_PATHS,
 )
-from cortexm.security.zk_hamming import (
+from cortexm.security.hamming_attestation import (
     HammingZKProver, checksum_prove_and_verify,
 )
 from cortexm.trace.rebuild import TraceRebuilder

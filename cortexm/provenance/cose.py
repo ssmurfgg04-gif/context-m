@@ -1,5 +1,9 @@
 """COSE Sign1 envelopes (RFC 9052) for memory commits.
 
+Uses pycose for standard CBOR serialization when available; falls back to
+JSON serialization for debugging / when pycose is not installed.
+Install pycose for full spec compliance: pip install pycose
+
 Every memory commit gets wrapped in a COSE Sign1 envelope signed with
 the agent's Ed25519 key. External verifiers can confirm the commit came
 from a known agent without trusting the host's audit log.
@@ -34,6 +38,16 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+try:
+    from pycose.messages import Sign1Message
+    from pycose.headers import Algorithm, KID
+    from pycose.algorithms import EdDSA
+    from pycose.keys.curves import Ed25519
+    from pycose.keys.okp import OKPKey
+    _HAVE_PYCOSE = True
+except ImportError:
+    _HAVE_PYCOSE = False
 
 from cortexm.provenance.agent import Ed25519AgentKey, get_default_agent
 

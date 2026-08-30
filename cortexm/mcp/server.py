@@ -859,7 +859,7 @@ class MCPServer:
                   threshold: int = 32) -> dict:
         """Hamming ZK proof on binary codec vectors."""
         try:
-            from cortexm.security.zk_hamming import HammingZKProver
+            from cortexm.security.hamming_attestation import HammingZKProver
             palace = self.memory.palace
             # fetch the memory's packed vector
             row = palace._id2row.get(memory_id)
@@ -992,7 +992,7 @@ class MCPServer:
                     "reason": "Config.zk_sql_enabled is False — set it True "
                               "to opt into ZK-SQL proofs (O(N) in trace size).",
                 }
-            from cortexm.security.zk_sql import ZkSqlProver
+            from cortexm.security.zk_sql_prototype import ZkSqlProver
             prover = ZkSqlProver(self.memory.store,
                                   self.memory.store.hasher)
             q = (query or "").lower()

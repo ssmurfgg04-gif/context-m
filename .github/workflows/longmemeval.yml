@@ -124,7 +124,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: benchmarks/data/longmemeval/longmemeval_shard_${{ matrix.shard_index }}.db
-          key: lme-db-${{ matrix.shard_index }}-${{ hashFiles('benchmarks/data/longmemeval/*.json') }}
+          key: lme-db-${{ matrix.shard_index }}-${{ hashFiles('benchmarks/data/longmemeval/*.json', 'cortexm/**/*.py', 'scripts/**/*.py') }}
 
       - name: Run shard
         shell: bash

@@ -45,6 +45,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from cortexm.api.memory import Memory
 from cortexm.config import Config
 
+# v0.6.3: judge strategies split into judges/ package for maintainability
+from judges.amount import (
+    _AMOUNT_RE, _parse_amount, _subset_sum_matches, _pair_difference_matches
+)
+from judges.holiday import _resolve_holiday_dates, _HOLIDAY_DATES
+from judges.nugget import _judge_nugget
+from judges.list import _judge_list
+from judges.paren import _judge_paren_abbreviation
+
 
 @dataclass
 class LongMemEvalQuestion:

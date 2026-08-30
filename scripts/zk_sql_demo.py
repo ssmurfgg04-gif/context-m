@@ -15,7 +15,7 @@ from datetime import timezone
 
 from cortexm.config import Config
 from cortexm.api.memory import Memory
-from cortexm.security.zk_sql import ZkSqlProver
+from cortexm.security.zk_sql_prototype import ZkSqlProver
 from cortexm.trace.fact import make_fact
 from cortexm.trace.store import TraceStore
 from cortexm.security.hashes import HashProvider
@@ -105,7 +105,7 @@ def main():
 
     # ---------- tampering demo ----------
     print("\n[tamper]  Flip claimed_result 4 -> 99, re-verify …")
-    from cortexm.security.zk_sql import ZkSqlProof
+    from cortexm.security.zk_sql_prototype import ZkSqlProof
     tampered = ZkSqlProof(
         query=proof.query, claimed_result=99.0,
         merkle_root=proof.merkle_root,

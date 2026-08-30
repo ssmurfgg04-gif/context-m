@@ -32,8 +32,8 @@ class HLC:
     # -- local event ------------------------------------------------------
     def tick(self, now_ms: int | None = None) -> str:
         import time
-        now = int(time.time() * 1000) if now_ms is None else now_ms
         with self._lock:
+            now = int(time.time() * 1000) if now_ms is None else now_ms
             if now > self._wall:
                 self._wall, self._count = now, 0
             else:
@@ -44,8 +44,8 @@ class HLC:
     def receive(self, remote_stamp: str) -> str:
         wall, count, _node = parse_stamp(remote_stamp)
         import time
-        now = int(time.time() * 1000)
         with self._lock:
+            now = int(time.time() * 1000)
             if now > self._wall and now > wall:
                 self._wall, self._count = now, 0
             elif wall > self._wall:

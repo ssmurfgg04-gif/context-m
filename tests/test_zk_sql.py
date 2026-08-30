@@ -23,7 +23,7 @@ import pytest
 from cortexm.config import Config
 from cortexm.errors import VerificationError
 from cortexm.security.hashes import HashProvider
-from cortexm.security.zk_sql import (ZkSqlProver, ZkSqlProof, CircuitGate,
+from cortexm.security.zk_sql_prototype import (ZkSqlProver, ZkSqlProof, CircuitGate,
                                          GATE_TYPES)
 from cortexm.trace.fact import make_fact
 from cortexm.trace.store import TraceStore
