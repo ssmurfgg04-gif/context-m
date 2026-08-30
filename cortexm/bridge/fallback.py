@@ -163,6 +163,11 @@ class TinyTransformerFallback:
         self.seed = seed & 0xFFFFFFFFFFFFFFFF
         self.max_tokens = max_tokens
         self.tables = _HashedTables(self.seed)
+        # Relation labels are drawn from a small, stable vocabulary.  The
+        # fallback evaluates every label for every pattern miss, so caching
+        # their deterministic embeddings avoids repeating the same attention
+        # computation dozens of times per sentence.
+        self._relation_embeddings: dict[str, np.ndarray] = {}
 
     # ------------------------------------------------------------------
     def _tokenize(self, text: str) -> list[str]:
@@ -213,6 +218,19 @@ class TinyTransformerFallback:
         n = float(np.linalg.norm(pooled))
         return pooled / n if n > 0 else pooled
 
+    def _relation_embedding(self, relation: str) -> np.ndarray:
+        """Return the deterministic embedding for a relation label.
+
+        Relation labels are immutable strings and ``embed`` has no mutable
+        input-dependent state, so retaining this vector is semantically
+        equivalent to recomputing it on every fallback invocation.
+        """
+        hit = self._relation_embeddings.get(relation)
+        if hit is None:
+            hit = self.embed(relation.replace("_", " "))
+            self._relation_embeddings[relation] = hit
+        return hit
+
     # ------------------------------------------------------------------
     def extract_candidates(self, sent: str, *,
                            subject_hint: str | None = None,
@@ -251,7 +269,7 @@ class TinyTransformerFallback:
         rels = relations or _DEFAULT_RELATIONS
         rel_scores = []
         for r in rels:
-            r_emb = self.embed(r.replace("_", " "))
+            r_emb = self._relation_embedding(r)
             score = float(np.dot(sent_emb, r_emb))
             rel_scores.append((r, score, r_emb))
         rel_scores.sort(key=lambda x: -x[1])

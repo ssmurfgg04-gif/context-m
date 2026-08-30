@@ -224,14 +224,19 @@ def _make_config(db_path: str, *,
         recall is at parity with the small canonical runner.
         """
         from cortexm.config import Config
+        fast = os.environ.get("LONGMEMEVAL_FAST", "0") == "1"
         cfg = Config(
             db_path=db_path,
-            unmess_enabled=True,
+            # ``--fast`` is intentionally a benchmark-only trade-off.  It
+            # retains the raw/verbatim and chunk-recall paths that answer
+            # LongMemEval questions, but avoids optional OOD and graph layers
+            # whose per-fact work makes a small smoke test misleadingly slow.
+            unmess_enabled=not fast,
             bitap_trigger_enabled=True,
-            tiny_fallback_enabled=True,
+            tiny_fallback_enabled=not fast,
             prefilter_enabled=True,
-            ppr_enabled=True,
-            enable_rerank=True,
+            ppr_enabled=not fast,
+            enable_rerank=not fast,
             fade_enabled=False,
             tmt_enabled=False,
             cognition_enabled=True,
@@ -243,7 +248,7 @@ def _make_config(db_path: str, *,
             synonym_expansion_enabled=True,
             holiday_resolution_enabled=True,
             # v0.6.1 negation routing — wires into MemoryWriter.add()
-            negation_indexing_enabled=True,
+            negation_indexing_enabled=not fast,
             multilingual_routing_enabled=True,
             # v0.6.1 BM25 tuning — user-requested (1.2, 0.5)
             bm25_k1=bm25_k1,
@@ -251,6 +256,7 @@ def _make_config(db_path: str, *,
             # IR fundamentals
             query_cache_enabled=True,
             index_optimize_on_consolidate=True,
+            shannon_tiered_storage=not fast,
         )
         # FIX 2: Pass shared embedder for persistent workers
         if embedder is not None:
@@ -609,6 +615,9 @@ def main(argv: List[str] | None = None) -> int:
                    help="0-based shard index for full-dataset sharding")
     p.add_argument("--shard-count", type=int, default=None,
                    help="total number of shards for full-dataset sharding")
+    p.add_argument("--sample-before-shard", action="store_true",
+                   help="sample --n-per-type questions first, then shard that "
+                        "small deterministic sample (workflow smoke tests)")
     p.add_argument("--max-messages-per-q", type=int, default=1500,
                    help="cap on haystack messages per question")
     p.add_argument("--max-seconds-per-q", type=float, default=240.0,
@@ -715,9 +724,13 @@ def main(argv: List[str] | None = None) -> int:
         if not (0 <= args.shard_index < args.shard_count):
             print("[error] --shard-index must satisfy 0 <= index < shard-count", file=sys.stderr)
             return 1
-        sample, sample_offset, shard_end = _slice_shard(data, args.shard_index, args.shard_count)
+        shard_source = (sample_questions(data, args.n_per_type, seed=args.seed)
+                        if args.sample_before_shard else data)
+        sample, sample_offset, shard_end = _slice_shard(
+            shard_source, args.shard_index, args.shard_count)
         shard_start = sample_offset
-        print(f"[shard] {args.shard_index}/{args.shard_count} -> questions [{shard_start}:{shard_end}] ({len(sample)})",
+        source_label = "sample" if args.sample_before_shard else "full"
+        print(f"[shard] {args.shard_index}/{args.shard_count} ({source_label}) -> questions [{shard_start}:{shard_end}] ({len(sample)})",
               file=sys.stderr)
     else:
         sample = sample_questions(data, args.n_per_type, seed=args.seed)
@@ -879,13 +892,14 @@ def main(argv: List[str] | None = None) -> int:
         "elapsed_seconds": round(elapsed, 2),
         "questions_per_second": round(len(results) / max(elapsed, 1), 3),
         "modules_enabled": {
+            "benchmark_mode": "fast" if _FAST_MODE else "full",
             "query_rewrite": True,
             "slang_normalization": True,
             "abbreviation_expansion": True,
             "spelling_correction": True,
             "synonym_expansion": True,
             "holiday_resolution": True,
-            "negation_indexing": True,
+            "negation_indexing": not _FAST_MODE,
             "multilingual_routing": True,
         },
         "honest_scope_note": (

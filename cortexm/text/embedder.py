@@ -65,6 +65,10 @@ class HashingEmbedder:
         self.use_bigrams = use_bigrams
         self.labse_enabled = labse_enabled
         self._feat_cache: dict[str, tuple[int, int, float]] = {}
+        # Character n-grams recur heavily across message chunks.  Caching
+        # their fully hashed feature tuples eliminates repeated BLAKE calls
+        # during chunk-recall without changing any embedding value.
+        self._char_feat_cache: dict[str, tuple[tuple[int, int, float], ...]] = {}
         # Lazy-initialized polyglot encoder — only built when first needed
         # so the labse.py module import cost is paid only by users who
         # actually ingest non-English text.
@@ -102,6 +106,9 @@ class HashingEmbedder:
         return out
 
     def _char_features(self, token: str) -> list[tuple[int, int, float]]:
+        hit = self._char_feat_cache.get(token)
+        if hit is not None:
+            return list(hit)
         padded = f"^{token}$"
         feats = []
         for n in self.char_ngrams:
@@ -114,7 +121,10 @@ class HashingEmbedder:
         for gram, w in feats:
             h = _h64(gram, self.seed ^ 0xA5A5)
             out.append((h % self.dims, 1 if (h >> 63) & 1 else -1, w))
-        return out
+        frozen = tuple(out)
+        if len(self._char_feat_cache) < 500_000:
+            self._char_feat_cache[token] = frozen
+        return list(frozen)
 
     # -- API ------------------------------------------------------------------
 

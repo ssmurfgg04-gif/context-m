@@ -47,8 +47,12 @@ class PerUserIdiolectNormalizer:
         self.min_count = min_count  # min user co-occurrences before promotion
         self.threshold = threshold
         self.k = k
-        # canonical vocab: token → (embedding, count)
-        self._vocab: "OrderedDict[str, tuple[np.ndarray, int]]" = OrderedDict()
+        # canonical vocab: token → (embedding-or-None, count).  Most tokens
+        # are immediately recognized as in-vocabulary on ingest, so eagerly
+        # constructing a 768-dimensional embedding for each new token is
+        # pure cost.  Materialize those vectors only if a genuine OOV lookup
+        # needs the k-NN codebook.
+        self._vocab: "OrderedDict[str, tuple[np.ndarray | None, int]]" = OrderedDict()
         self._vocab_ids: list[str] = []
         self._vocab_matrix: np.ndarray | None = None
         self._vocab_dirty = True
@@ -108,7 +112,7 @@ class PerUserIdiolectNormalizer:
                 emb, cnt = self._vocab[tok]
                 self._vocab[tok] = (emb, cnt + 1)
             elif len(self._vocab) < self.vocab_cap:
-                self._vocab[tok] = (self.embedder.embed(tok), 1)
+                self._vocab[tok] = (None, 1)
                 self._vocab_dirty = True
         # LRU eviction
         if len(self._vocab) > self.vocab_cap:
@@ -156,7 +160,14 @@ class PerUserIdiolectNormalizer:
         q = self.embedder.embed(token)
         if self._vocab_dirty or self._vocab_matrix is None or len(self._vocab_ids) != len(self._vocab):
             self._vocab_ids = list(self._vocab.keys())
-            self._vocab_matrix = np.stack([self._vocab[i][0] for i in self._vocab_ids])
+            materialized: list[np.ndarray] = []
+            for vocab_token in self._vocab_ids:
+                emb, count = self._vocab[vocab_token]
+                if emb is None:
+                    emb = self.embedder.embed(vocab_token)
+                    self._vocab[vocab_token] = (emb, count)
+                materialized.append(emb)
+            self._vocab_matrix = np.stack(materialized)
             self._vocab_dirty = False
         ids = self._vocab_ids
         embs = self._vocab_matrix
@@ -243,8 +254,17 @@ class PerUserIdiolectNormalizer:
 
     def save_state(self) -> dict:
         """Serialize for federation (deterministic)."""
+        # State transfer needs concrete vectors.  This is deliberately the
+        # only bulk materialization path; normal ingestion only needs token
+        # membership until an OOV k-NN query occurs.
+        vocab = []
+        for token, (emb, count) in self._vocab.items():
+            if emb is None:
+                emb = self.embedder.embed(token)
+                self._vocab[token] = (emb, count)
+            vocab.append((token, emb.tolist(), count))
         return {
-            "vocab": [(k, v[0].tolist(), v[1]) for k, v in self._vocab.items()],
+            "vocab": vocab,
             "users": {k: [v[0].tolist(), v[1]] for k, v in self._users.items()},
             "co_counts": dict(self._co_counts),
         }

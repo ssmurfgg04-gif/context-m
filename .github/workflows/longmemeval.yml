@@ -16,7 +16,7 @@ on:
       dry_run:
         description: "Set true for the 4-shard validation run"
         required: true
-        default: "false"
+        default: "true"
 
 jobs:
   prepare:
@@ -25,16 +25,28 @@ jobs:
       shard_count: ${{ steps.meta.outputs.shard_count }}
       shard_list: ${{ steps.meta.outputs.shard_list }}
       workers: ${{ steps.meta.outputs.workers }}
+      sample_before_shard: ${{ steps.meta.outputs.sample_before_shard }}
+      n_per_type: ${{ steps.meta.outputs.n_per_type }}
+      fast_args: ${{ steps.meta.outputs.fast_args }}
     steps:
       - id: meta
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             shard_count=4
+            sample_before_shard=--sample-before-shard
+            n_per_type=1
+            fast_args=--fast
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             shard_count=${{ inputs.shard_count }}
+            sample_before_shard=
+            n_per_type=5
+            fast_args=
           else
             shard_count=4
+            sample_before_shard=--sample-before-shard
+            n_per_type=1
+            fast_args=--fast
           fi
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             workers=${{ inputs.workers }}
@@ -43,6 +55,9 @@ jobs:
           fi
           echo "shard_count=${shard_count}" >> "$GITHUB_OUTPUT"
           echo "workers=${workers}" >> "$GITHUB_OUTPUT"
+          echo "sample_before_shard=${sample_before_shard}" >> "$GITHUB_OUTPUT"
+          echo "n_per_type=${n_per_type}" >> "$GITHUB_OUTPUT"
+          echo "fast_args=${fast_args}" >> "$GITHUB_OUTPUT"
           python - <<PY >> "$GITHUB_OUTPUT"
           import json
           shard_count = int("${shard_count}")
@@ -115,6 +130,9 @@ jobs:
           python scripts/longmemeval_canonical_parallel.py \
             --shard-index ${{ matrix.shard_index }} \
             --shard-count ${{ needs.prepare.outputs.shard_count }} \
+            --n-per-type ${{ needs.prepare.outputs.n_per_type }} \
+            ${{ needs.prepare.outputs.sample_before_shard }} \
+            ${{ needs.prepare.outputs.fast_args }} \
             --workers ${{ needs.prepare.outputs.workers }} \
             --db-path benchmarks/data/longmemeval/longmemeval_shard_${{ matrix.shard_index }}.db \
             --out benchmarks/results/longmemeval_shard_${{ matrix.shard_index }}.json
