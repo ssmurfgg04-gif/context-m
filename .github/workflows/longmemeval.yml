@@ -48,7 +48,6 @@ jobs:
           shard_count = int("${shard_count}")
           print(f"shard_list={json.dumps(list(range(shard_count)))}")
           PY
-        shell: bash
 
   shard:
     needs: prepare
