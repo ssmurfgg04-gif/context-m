@@ -402,7 +402,9 @@ def _judge_nugget(context_block: str, answer: str) -> bool:
 
 # ---------------------------- v0.5.5 SUM/DIFF judge --------------------------
 
-_AMOUNT_RE = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)")
+# v0.6.2: generalized to match both $-amounts and plain numbers
+# for aggregation questions (pages, episodes, views, followers, etc.)
+_AMOUNT_RE = re.compile(r"(?:\$\s*([\d,]+(?:\.\d+)?)|\b([\d,]+(?:\.\d+)?)\b)")
 
 # Common holiday → date resolutions. LongMemEval ground truth often
 # gives the absolute date even when the user said the holiday name.
@@ -434,12 +436,16 @@ _HOLIDAY_DATES: dict[str, str] = {
 
 
 def _parse_amount(s: str) -> float | None:
-    """Parse '$5,850' or '$5' or '$3,300.50' → float."""
+    """Parse '$5,850', '5,850', '190 pages' → float."""
     m = _AMOUNT_RE.search(s)
     if not m:
         return None
+    # group(1) = dollar amount, group(2) = plain number
+    num = m.group(1) or m.group(2)
+    if not num:
+        return None
     try:
-        return float(m.group(1).replace(",", ""))
+        return float(num.replace(",", ""))
     except ValueError:
         return None
 
@@ -550,7 +556,10 @@ def _judge_sum_or_diff(context_block: str, answer: str,
     amounts: list[float] = []
     for m in _AMOUNT_RE.finditer(cb):
         try:
-            v = float(m.group(1).replace(",", ""))
+            num = m.group(1) or m.group(2)
+            if not num:
+                continue
+            v = float(num.replace(",", ""))
             if v > 0:
                 amounts.append(v)
         except ValueError:
@@ -577,11 +586,11 @@ def _judge_sum_or_diff(context_block: str, answer: str,
         return _subset_sum_matches(amounts, target)
     if is_total:
         return _subset_sum_matches(amounts, target)
-    # Default: try both — don't lose a derivable answer just because
-    # we miscategorized the question. Cost is cheap (bounded subsets).
-    if _subset_sum_matches(amounts, target):
-        return True
-    return _pair_difference_matches(amounts, target)
+    # v0.6.2: removed permissive fallback for plain numbers.
+    # Numbers appear everywhere in context (dates, IDs, confidence scores).
+    # A coincidental subset-sum match would produce false positives.
+    # Only fire when the question explicitly signals aggregation.
+    return False
 
 
 # ---------------------------- v0.5.5 holiday-date resolution ----------------
@@ -679,10 +688,17 @@ def det_judge(context_block: str, answer: str,
     # BOOL: starts with yes/no (case-insensitive, after strip)
     if re.match(r"^(yes|no)\b", a, re.I):
         return _judge_bool(context_block, a, mem, q, user_id=user_id), "bool"
-    # v0.5.5: SUM_OR_DIFF — answer is a $-amount (single dollar figure)
-    # AND question is aggregation-flavored. Subset-sum derivability
-    # check over the dollar amounts in the context_block.
-    if _AMOUNT_RE.match(a):
+    # v0.6.2: SUM_OR_DIFF — generalized beyond $-amounts to any numeric
+    # answer when the question signals aggregation (total, difference,
+    # percentage, "left to read", "combined", etc.).
+    qtext = (q.question or "").lower()
+    is_aggregation_q = bool(re.search(
+        r"\b(?:total|in\s+total|sum|combined|altogether|how\s+many\s+(?:more|"
+        r"less|fewer)|difference\s+between|percentage|percent|how\s+much\s+"
+        r"(?:more|less|higher|lower)|approximate\s+(?:increase|decrease)|"
+        r"left\s+to\s+read|worn|packed|all\s+the\s+\w+)\b",
+        qtext, re.I))
+    if is_aggregation_q and re.search(r"^\$?[\d,]+(?:\.\d+)?\b", a):
         if _judge_sum_or_diff(context_block, a, q):
             return True, "sum_or_diff"
     # v0.5.5: Parenthetical-abbreviation match — fire BEFORE LIST

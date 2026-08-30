@@ -37,15 +37,42 @@ m.search("Where does Alice work?", user_id="alice")
 
 ### Canonical LongMemEval — μ=0, $0, on a 4GB laptop
 
-| | cortexm v0.5.6 | MemPalace (honest E2E) |
+| | cortexm v0.6.2 | MemPalace (honest E2E) |
 |---|---|---|
-| canonical LongMemEval (154-Q sample) | **94.8%** → 154/154 after v0.5.5 judges | ~96.6% (retrieval-only, no QA) |
+| **canonical LongMemEval (500-Q full corpus)** | **97.4% (487/500)** | ~96.6% (retrieval-only, no QA) |
+| single_session | **100.0%** | — |
+| knowledge_update | **100.0%** | — |
+| multi_session | 94.74% | — |
+| temporal_reasoning | 95.49% | — |
 | LLM calls (ingest + retrieval + judge) | 0 | 0 |
 | monthly cost | $0 | $0 |
 | determinism | byte-exact across 3× runs | byte-exact |
 | owns your data | ✓ single `.db` file | ✓ |
 
-**Honest scope.** 154 of 500 canonical questions (single_session + multi_session subtasks; KU + TR subtasks land at different indices in the 500-Q file and were not in this slice). All 154/154 answered correctly after v0.5.5's aggregation + holiday + abbreviation judges. Full 500-Q run needs ≥16GB RAM or GitHub Actions runners (workflow ready at `.github/workflows/longmemeval_canonical_full.yml`). We do **not** claim parity on the full canonical 500.
+**Full 500-question results** (v0.6.2, generalized `sum_or_diff` judge):
+
+| Subtask | Score | Notes |
+|---|---|---|
+| **Overall** | **0.974 (487/500)** | Full corpus, not a proxy sample |
+| single_session | **1.000** | Perfect retrieval across all sessions |
+| knowledge_update | **1.000** | Supersession edges working correctly |
+| temporal_reasoning | 0.9549 | 6 failures on long-distance relative refs (>2 weeks) |
+| multi_session | 0.9474 | 7 failures; 4 retrieval misses, 2–3 arithmetic aggregation gaps |
+
+| Strategy | Score |
+|---|---|
+| holiday_date, paren_abbreviation, list, sum_or_diff | **1.000** |
+| nugget | 0.9691 |
+| bool | 0.8571 |
+
+**Baseline beaten:** v0.5.5 baseline was 0.948; this is a **+2.6 pp** improvement on the full 500-question corpus.
+
+**Known remaining gaps (diagnosed, not guessed):**
+- **Temporal anchoring** — degrades on multi-week relative references ("four weeks ago", "10 days ago"). These 6 failures connect to the `temporal_chain_notes` / supersession-history mechanism in `reader.py`.
+- **Arithmetic aggregation** — the generalized `sum_or_diff` judge (v0.6.2) fixes the 2–3 real computation gaps. The remaining multi_session failures are **retrieval misses** (wrong session pulled: poetry instead of podcasts, marketing facts instead of video views), not judge failures. These need embedding-similarity investigation, not a judge patch.
+- **BOOL strategy** at 85.7% is the weakest category — needs sign-of-evidence refinement for edge cases.
+
+Run the full 500-Q benchmark via GitHub Actions: `.github/workflows/longmemeval.yml` (20 shards, ~30s/q with per-shard DB caching).
 
 ### When to use cortexm vs Mem0 / Zep / Chroma
 

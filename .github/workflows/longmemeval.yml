@@ -12,7 +12,7 @@ on:
       workers:
         description: "Workers per shard"
         required: true
-        default: "2"
+        default: "4"
       dry_run:
         description: "Set true for the 4-shard validation run"
         required: true
@@ -51,7 +51,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             workers=${{ inputs.workers }}
           else
-            workers=2
+            workers=4
           fi
           echo "shard_count=${shard_count}" >> "$GITHUB_OUTPUT"
           echo "workers=${workers}" >> "$GITHUB_OUTPUT"
@@ -120,13 +120,20 @@ jobs:
               assert isinstance(data, list) and data, path
               print(path.name, len(data), path.stat().st_size)
           PY
+      - name: Cache per-shard DB
+        uses: actions/cache@v4
+        with:
+          path: benchmarks/data/longmemeval/longmemeval_shard_${{ matrix.shard_index }}.db
+          key: lme-db-${{ matrix.shard_index }}-${{ hashFiles('benchmarks/data/longmemeval/*.json') }}
+
       - name: Run shard
         shell: bash
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
         run: |
-          rm -f benchmarks/data/longmemeval/longmemeval_shard_${{ matrix.shard_index }}.db
+          # Don't delete DB if it exists from cache — saves re-ingestion time
+          # rm -f benchmarks/data/longmemeval/longmemeval_shard_${{ matrix.shard_index }}.db
           python scripts/longmemeval_canonical_parallel.py \
             --shard-index ${{ matrix.shard_index }} \
             --shard-count ${{ needs.prepare.outputs.shard_count }} \
