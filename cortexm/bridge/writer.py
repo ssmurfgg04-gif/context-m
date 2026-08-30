@@ -513,33 +513,16 @@ class MemoryWriter:
         if not getattr(self.cfg, "shannon_tiered_storage", True):
             return 0.0
         try:
-            existing = self.store.query_facts(
-                user_id=user_id, active=True, limit=500)
-            if len(existing) < int(getattr(
+            if getattr(self.palace, "_n", 0) < int(getattr(
                     self.cfg, "shannon_min_facts", 10)):
                 return 0.0  # cold-start: not enough signal yet
             new_vec = self.palace.encode_fact(fact)
-            best = 0.0
-            # Scan in chunks of 64 to bound memory on the 4GB box.
-            for f in existing:
-                # Skip self (in case fact is already partially committed)
-                if f.id == fact.id:
-                    continue
-                try:
-                    # encode each existing fact once and cosine-compare
-                    ev = self.palace.encode_fact(f)
-                    # cosine via dot product on normalized vectors
-                    a = new_vec.ravel()
-                    b = ev.ravel()
-                    na = float((a @ a) ** 0.5) or 1.0
-                    nb = float((b @ b) ** 0.5) or 1.0
-                    sim = float((a @ b) / (na * nb))
-                    if sim > best:
-                        best = sim
-                        if best >= 0.99:
-                            break  # near-identical — no need to scan more
-                except Exception:
-                    continue
+            hits = self.palace.search(new_vec, k=1)
+            if not hits:
+                return 0.0
+            best = float(hits[0][1])
+            if hits[0][0] == fact.id and len(hits) > 1:
+                best = float(hits[1][1])
             return best
         except Exception:
             return 0.0

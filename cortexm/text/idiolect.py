@@ -49,6 +49,9 @@ class PerUserIdiolectNormalizer:
         self.k = k
         # canonical vocab: token → (embedding, count)
         self._vocab: "OrderedDict[str, tuple[np.ndarray, int]]" = OrderedDict()
+        self._vocab_ids: list[str] = []
+        self._vocab_matrix: np.ndarray | None = None
+        self._vocab_dirty = True
         # user_id → (centroid_emb, raw_count)
         self._users: dict[str, tuple[np.ndarray, int]] = {}
         # (user_id, slang_token, canonical_token) → co-occurrence count
@@ -106,11 +109,13 @@ class PerUserIdiolectNormalizer:
                 self._vocab[tok] = (emb, cnt + 1)
             elif len(self._vocab) < self.vocab_cap:
                 self._vocab[tok] = (self.embedder.embed(tok), 1)
+                self._vocab_dirty = True
         # LRU eviction
         if len(self._vocab) > self.vocab_cap:
             # drop least-recently-promoted entries
             while len(self._vocab) > self.vocab_cap:
                 self._vocab.popitem(last=False)
+            self._vocab_dirty = True
 
     def observe_pair(self, user_id: str, slang: str, canonical: str) -> None:
         """Promote a slang→canonical mapping after multiple confirmations."""
@@ -149,8 +154,12 @@ class PerUserIdiolectNormalizer:
         if len(self._vocab) < 5:
             return token
         q = self.embedder.embed(token)
-        ids = list(self._vocab.keys())
-        embs = np.stack([self._vocab[i][0] for i in ids])
+        if self._vocab_dirty or self._vocab_matrix is None or len(self._vocab_ids) != len(self._vocab):
+            self._vocab_ids = list(self._vocab.keys())
+            self._vocab_matrix = np.stack([self._vocab[i][0] for i in self._vocab_ids])
+            self._vocab_dirty = False
+        ids = self._vocab_ids
+        embs = self._vocab_matrix
         sims = embs @ q  # (N,)
         # idiolect bias
         u = self._users.get(user_id)
@@ -244,6 +253,9 @@ class PerUserIdiolectNormalizer:
         self._vocab.clear()
         for k, emb, cnt in state.get("vocab", []):
             self._vocab[k] = (np.asarray(emb, dtype=np.float32), cnt)
+        self._vocab_ids = []
+        self._vocab_matrix = None
+        self._vocab_dirty = True
         self._users = {k: (np.asarray(v[0], dtype=np.float32), v[1])
                        for k, v in state.get("users", {}).items()}
         self._co_counts = {tuple(k) if isinstance(k, list) else k: v
