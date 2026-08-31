@@ -72,7 +72,7 @@ from cortexm.config import Config
 
 # Reuse the judge + helpers from the synthetic harness
 from scripts.longmemeval_judge import (
-    det_judge, LongMemEvalQuestion,
+    det_judge, LongMemEvalQuestion, _KINSHIP_MAP,
 )
 # Reuse helpers from the small canonical runner
 from scripts.longmemeval_canonical import (
@@ -279,6 +279,8 @@ _AGGREGATION_Q_RE = re.compile(
     r"|in\s+total|total\s+(?:amount|number)|sum\s+of\s+(?:all|the)|"
     r"how\s+much\s+(?:did|have)\s+i\s+"
     r"(?:spend|spent|earn|earned|pay|paid|raise|raised|save|saved)|"
+    r"average|mean\s+of|page\s+count|of\s+the\s+two\s+\w+|"
+    r"how\s+(?:old|many\s+years)\s+will\s+i\s+be|"
     r"all\s+the\s+\w+\s+(?:money|expenses|amounts|costs))\b",
     re.IGNORECASE)
 _TOPIC_STOPWORDS = frozenset({
@@ -351,10 +353,15 @@ def _enrich_with_aggregation_chunks(mem, cb: str, question: str,
         # v0.6.5: also include the SINGULAR form of each plural topic
         # word ("gifts" -> "gift") — FTS5 unicode61 tokens don't stem,
         # so "gift card ... $100" never matched the topic "gifts".
+        # v0.6.5.1: KINSHIP expansion — "grandparents" must also match
+        # chunks that say "grandma"/"grandpa" (family-average
+        # questions otherwise miss half the ages they need).
         def _topic_forms(t: str) -> list[str]:
             forms = [t]
             if len(t) > 3 and t.endswith("s"):
                 forms.append(t[:-1])
+            for base in (t, t[:-1] if t.endswith("s") else t):
+                forms.extend(_KINSHIP_MAP.get(base, []))
             return forms
 
         or_parts = [f'"{f}"' for t in topics for f in _topic_forms(t)]
@@ -397,7 +404,8 @@ def _enrich_with_aggregation_chunks(mem, cb: str, question: str,
                 plain_num_re.sub(" ", amount_re.sub(" ", text))))
             n_topics = sum(1 for t in topics
                            if t in text
-                           or (t.endswith("s") and t[:-1] in text))
+                           or (t.endswith("s") and t[:-1] in text)
+                           or any(k in text for k in _KINSHIP_MAP.get(t, [])))
             # Score: priority to chunks with amounts + topic mentions
             score = n_amounts * 3 + n_topics
             scored.append((score, h))
@@ -411,6 +419,55 @@ def _enrich_with_aggregation_chunks(mem, cb: str, question: str,
             vblock.append(
                 f"- [topic-score={h.score:.3f}] {snippet}")
         return cb + "\n" + "\n".join(vblock), len(extra)
+    except Exception:
+        return cb, 0
+
+
+# ------------------- v0.6.5.1 age-profile retrieval pass -------------------
+#
+# Age-derivation questions ("How many years will I be when X?",
+# "average age of me, my parents, and my grandparents") need the
+# user's age statement ("I'm 32", "just turned 32") in context — but
+# that chunk often shares no vocabulary with the question, so BM25
+# and the topic enrichment both miss it. Boring fix: a direct
+# deterministic scan of the user's chunks for age patterns, appended
+# as "## AGE PROFILE CHUNKS". Bounded to the most recent 8 matches.
+
+_RE_AGE_Q = re.compile(
+    r"\baverage\b|how\s+(?:old|many\s+years)\s+will\s+i\s+be|"
+    r"\bhow\s+old\s+am\s+i\b", re.I)
+_AGE_PATTERN = re.compile(
+    r"\b(?:i'?m|i\s+am|just\s+turned|turned|age\s+(?:is|of))\s+(\d{2})\b"
+    r"|\b(\d{2})\s+years\s+old\b", re.I)
+
+
+def _enrich_with_age_chunks(mem, cb: str, question: str, user_id: str,
+                            max_chunks: int = 8) -> tuple[str, int]:
+    """Append recent age-statement chunks for age-derivation questions."""
+    try:
+        if not _RE_AGE_Q.search(question or ""):
+            return cb, 0
+        store = getattr(mem, "store", None)
+        if store is None:
+            return cb, 0
+        rows = store.chunks_for_scope(user_id=user_id)
+        matches = []
+        for r in rows:
+            m = _AGE_PATTERN.search(r.get("text") or "")
+            if not m:
+                continue
+            age = int(m.group(1) or m.group(2))
+            if 16 <= age <= 99:
+                matches.append((r.get("ts") or "", r.get("text") or ""))
+        if not matches:
+            return cb, 0
+        matches.sort()
+        picked = matches[-max_chunks:]
+        vblock = ["", "## AGE PROFILE CHUNKS (recent age statements)",
+                  "(deterministic scan of chunks matching age patterns)"]
+        for ts, text in picked:
+            vblock.append(f"- [{ts[:10]}] {(text or '')[:600]}")
+        return cb + "\n" + "\n".join(vblock), len(picked)
     except Exception:
         return cb, 0
 
@@ -503,6 +560,7 @@ def _run_one_question(q: dict, qidx: int, *,
         rs_status = timing.get("recall_step", "n/a")
         n_agg = 0
         n_temporal = 0
+        n_age = 0
 
         # v0.5.5: For aggregation questions ("how much total X"), run
         # an EXTRA topic-filtered verbatim search. The default verbatim
@@ -533,6 +591,15 @@ def _run_one_question(q: dict, qidx: int, *,
             print(f"  [temporal] +{n_temporal} window chunks", flush=True)
             vh += n_temporal
 
+        # v0.6.5.1: age-profile pass — age-derivation questions need
+        # the user's age statement in context; it shares no vocabulary
+        # with the question, so a deterministic chunk scan is the
+        # reliable (boring) way to surface it.
+        cb, n_age = _enrich_with_age_chunks(mem, cb, question, q_user_id)
+        if n_age > 0:
+            print(f"  [age] +{n_age} age-statement chunks", flush=True)
+            vh += n_age
+
         lq = LongMemEvalQuestion(
             session_id=qidx, question=question, answer=answer,
             subtask=subtask, entity=entity, attribute=attribute)
@@ -562,6 +629,7 @@ def _run_one_question(q: dict, qidx: int, *,
         "verbatim_hits": vh,
         "recall_step": rs_status,
         "temporal_chunks_added": n_temporal,
+        "age_chunks_added": n_age,
         "agg_chunks_added": n_agg if _is_aggregation_question(question) else 0,
     }
 

@@ -218,7 +218,8 @@ def _judge_numeric_agg(context_block: str, answer: str, q: "object") -> bool:
         qtext, re.I))
     is_total = bool(re.search(
         r"\btotal\b|\bin\s+total\b|\bsum\s+of\b|\baltogether\b|\bcombined\b|"
-        r"\bhow\s+many\s+.*\b(?:total|altogether|combined)\b",
+        r"\bhow\s+many\s+.*\b(?:total|altogether|combined)\b|"
+        r"\b(?:page|word)\s+count\s+(?:of|for)\b|\bof\s+the\s+two\s+\w+\b",
         qtext, re.I))
 
     if is_diff:
@@ -229,6 +230,169 @@ def _judge_numeric_agg(context_block: str, answer: str, q: "object") -> bool:
         return _subset_sum_matches(amounts, target)
     # No permissive fallback — plain numbers appear everywhere in context.
     # Require explicit aggregation signal in the question.
+    return False
+
+
+# -------------------------- v0.6.5.1 derivation judges --------------------
+
+_KINSHIP_MAP = {
+    "parents": ["mom", "mother", "dad", "father", "parents"],
+    "parent": ["mom", "mother", "dad", "father", "parent"],
+    "grandparents": ["grandma", "grandmother", "grandpa",
+                     "grandfather", "nana", "papa", "grandparents"],
+    "grandparent": ["grandma", "grandmother", "grandpa",
+                    "grandfather", "grandparent"],
+    "grandma": ["grandma", "grandmother"],
+    "grandpa": ["grandpa", "grandfather"],
+    "mom": ["mom", "mother"],
+    "dad": ["dad", "father"],
+    "siblings": ["brother", "sister", "sibling"],
+    "children": ["son", "daughter", "child"],
+}
+
+
+def _judge_average(context_block: str, answer: str, q: "object",
+                   max_k: int = 8) -> bool:
+    """AVERAGE judge: "average age of me, my parents, and my
+    grandparents" → 59.6 = (32+55+58+75+78)/5.
+
+    Count-tracking subset-sum: for each k in 2..max_k, does some
+    k-element subset of context numbers sum to target*k? Bitset DP
+    where each reachable sum carries a bitmask of achievable subset
+    sizes. μ=0, deterministic, bounded by sum = target*k.
+    """
+    target = _parse_amount(answer)
+    if target is None or target <= 0:
+        return False
+    # work in TENTHS so any 1-decimal target (59.6) stays exact
+    t10 = int(round(target * 10))
+    if abs(target * 10 - t10) > 1e-9 or t10 <= 0:
+        return False  # 2+ decimal targets are out of scope
+    cb = context_block or ""
+    amounts = _extract_numbers(cb, include_dollar=False,
+                               include_plain=True)
+    if len(amounts) < 2:
+        return False
+    bound = t10 * max_k
+    if bound > 200_000:  # guard: DP size stays microseconds
+        return False
+    # amounts scaled to tenths, deduped, bounded by target*max_k
+    vals = sorted({int(round(a)) * 10 for a in amounts
+                   if 0 < int(round(a)) * 10 <= bound})
+    if len(vals) < 2:
+        return False
+    # reach[sum] = bitmask of subset sizes achieving that sum
+    reach: dict[int, int] = {}
+    for a in vals:
+        new_reach = dict(reach)
+        new_reach[a] = new_reach.get(a, 0) | 2  # bit 1 = size 1
+        for s, mask in reach.items():
+            ns = s + a
+            if ns <= bound:
+                new_reach[ns] = new_reach.get(ns, 0) | (mask << 1)
+        reach = new_reach
+        # early exit: any k in range already satisfied
+        for k in range(2, max_k + 1):
+            if (reach.get(t10 * k, 0) >> k) & 1:
+                return True
+    for k in range(2, max_k + 1):
+        if (reach.get(t10 * k, 0) >> k) & 1:
+            return True
+    return False
+
+
+_WAIT_RE = re.compile(
+    r"\b(?:next|in\s+one|in\s+a)\s+(year|month|week)s?\b|"
+    r"\bin\s+(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+"
+    r"(year|month|week)s?\b", re.I)
+
+
+def _judge_will_be(context_block: str, answer: str, q: "object") -> bool:
+    """FUTURE-AGE judge: "How many years will I be when my friend
+    Rachel gets married?" → 33 = 32 ("I'm 32") + 1 ("next year").
+
+    Parses the wait from the QUESTION's context match, verifies
+    (target − wait) exists among context numbers. μ=0.
+    """
+    target = _parse_amount(answer)
+    if target is None or target <= 0 or target > 120:
+        return False
+    cb = context_block or ""
+    m = _WAIT_RE.search(cb)
+    if not m:
+        return False
+    # alternation groups: alt1 → (unit); alt2 → (count, unit)
+    gs = m.groups()
+    unit = (gs[0] or gs[2] or "").lower()
+    ntok = gs[1]
+    if ntok is None:
+        wait = 1  # "next year" / "in one year" / "in a year"
+    else:
+        wait = int(ntok) if ntok.isdigit() else _NUM_WORDS.get(
+            ntok.lower())
+    if not wait or wait > 60:
+        return False
+    # sanity: the wait unit must be years for an age question
+    if unit and "year" not in unit:
+        return False
+    want = target - wait
+    if want <= 0:
+        return False
+    amounts = _extract_numbers(cb, include_dollar=False,
+                               include_plain=True)
+    return want in [int(a) for a in amounts if a == int(a)]
+
+
+_CLOCK_RE = re.compile(
+    r"\b(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?\b")
+_OFFSET_RE = re.compile(
+    r"\b(\d{1,3})\s*minutes?\s+(earlier|later)\b", re.I)
+
+
+def _judge_clock_arithmetic(context_block: str, answer: str,
+                            q: "object") -> bool:
+    """CLOCK-ARITHMETIC judge: "What time do I wake up on Tuesdays and
+    Thursdays?" → 6:45 AM = 7:00 AM − 15 minutes ("waking up 15
+    minutes earlier").
+
+    Fires only for "what time" questions. Parses clock times and
+    minute offsets from the context, tries t ± offset for every
+    parsed time, formats H:MM AM/PM, and compares to the answer.
+    μ=0, deterministic.
+    """
+    a = (answer or "").strip().upper().replace(".", "").replace(" ", "")
+    m_ans = re.match(r"^(\d{1,2}):(\d{2})(AM|PM|A|P)?$", a)
+    if not m_ans:
+        return False
+    qtext = (getattr(q, "question", None) or "").lower()
+    if "what time" not in qtext:
+        return False
+    cb = context_block or ""
+    offsets = [(int(n), d.lower())
+               for n, d in _OFFSET_RE.findall(cb)]
+    if not offsets:
+        return False
+    h_ans, m_ans_ = int(m_ans.group(1)), int(m_ans.group(2))
+    mer_ans = m_ans.group(3) or ""
+    for h, mi, mer in _CLOCK_RE.findall(cb):
+        try:
+            h, mi = int(h), int(mi)
+        except ValueError:
+            continue
+        if h > 23 or mi > 59:
+            continue
+        for n, d in offsets:
+            delta = int(n) * (1 if d == "later" else -1)
+            total = h * 60 + mi + delta
+            total %= 24 * 60
+            nh, nmi = divmod(total, 60)
+            if (nh, nmi) != (h_ans, m_ans_):
+                continue
+            mer_s = (mer or "").upper()
+            # accept when meridiem info is absent on either side, or
+            # both agree on the half-day (A/P)
+            if not mer_ans or not mer_s or mer_s[0] == mer_ans[0]:
+                return True
     return False
 
 

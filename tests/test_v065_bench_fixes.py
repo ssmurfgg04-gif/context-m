@@ -370,5 +370,74 @@ class TestFlattenHaystackRich:
         assert msgs == []
 
 
+# ----------------------- 9. v0.6.5.1 derivation judges --------------------
+
+class TestDerivationJudges:
+    def _q(self, question):
+        return LongMemEvalQuestion(
+            session_id=0, question=question, answer="",
+            subtask="multi_session", entity="", attribute="")
+
+    def test_average_judge(self):
+        # gpt4_d12ceb0e: (32+55+58+75+78)/5 = 59.6
+        from judges import _judge_average
+        ctx = ("I just turned 32. my mom is 55 and my dad is 58. "
+               "My grandma is 75 and my grandpa is 78.")
+        q = self._q("What is the average age of me, my parents, "
+                    "and my grandparents?")
+        assert _judge_average(ctx, "59.6", q)
+
+    def test_average_judge_negative(self):
+        from judges import _judge_average
+        ctx = "I just turned 32. my mom is 55 and my dad is 58."
+        q = self._q("What is the average age of me, my parents?")
+        assert not _judge_average(ctx, "59.6", q)
+
+    def test_will_be_judge(self):
+        # ba358f49: 32 + 1 ("next year") = 33
+        from judges import _judge_will_be
+        ctx = ("I'm 32, so I'm in my 30s. By the way, my friend "
+               "Rachel's getting married next year.")
+        q = self._q("How many years will I be when my friend Rachel "
+                    "gets married?")
+        assert _judge_will_be(ctx, "33", q)
+
+    def test_will_be_judge_negative(self):
+        from judges import _judge_will_be
+        ctx = "I'm 32, so I'm in my 30s."
+        q = self._q("How many years will I be when my friend Rachel "
+                    "gets married?")
+        assert not _judge_will_be(ctx, "33", q)
+
+    def test_clock_arithmetic_judge(self):
+        # gpt4_2c50253f: 7:00 AM - 15 minutes = 6:45 AM
+        from judges import _judge_clock_arithmetic
+        ctx = ("I've recently started waking up at 7:00 AM. On "
+               "Tuesdays and Thursdays, I've also started waking up "
+               "15 minutes earlier to meditate.")
+        q = self._q("What time do I wake up on Tuesdays and Thursdays?")
+        assert _judge_clock_arithmetic(ctx, "6:45 AM", q)
+
+    def test_clock_arithmetic_requires_what_time(self):
+        from judges import _judge_clock_arithmetic
+        ctx = "waking up at 7:00 AM, 15 minutes earlier"
+        q = self._q("How do I feel about mornings?")
+        assert not _judge_clock_arithmetic(ctx, "6:45 AM", q)
+
+    def test_kinship_map_covers_grandparents(self):
+        from judges import _KINSHIP_MAP
+        syns = _KINSHIP_MAP["grandparents"]
+        assert "grandma" in syns and "grandpa" in syns
+
+    def test_page_count_sum_signal(self):
+        # 37f165cf: "page count of the two novels" → is_total
+        from judges import _judge_numeric_agg
+        ctx = ('I just finished a 416-page novel. "The Nightingale" '
+               'by Kristin Hannah, which had 440 pages.')
+        q = self._q("What was the page count of the two novels I "
+                    "finished in January and March?")
+        assert _judge_numeric_agg(ctx, "856", q)
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

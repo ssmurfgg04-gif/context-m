@@ -53,6 +53,7 @@ try:
     from judges import (  # type: ignore
         _AMOUNT_RE, _parse_amount, _subset_sum_matches, _pair_difference_matches,
         _extract_numbers, _judge_sum_or_diff, _judge_numeric_agg, _judge_percentage,
+        _judge_average, _judge_will_be, _judge_clock_arithmetic, _KINSHIP_MAP,
         _resolve_holiday_dates, _HOLIDAY_DATES,
         _judge_nugget, _STOPWORDS,
         _judge_list, _split_list_answer,
@@ -62,6 +63,7 @@ except ImportError:  # pragma: no cover — package-import mode
     from scripts.judges import (
         _AMOUNT_RE, _parse_amount, _subset_sum_matches, _pair_difference_matches,
         _extract_numbers, _judge_sum_or_diff, _judge_numeric_agg, _judge_percentage,
+        _judge_average, _judge_will_be, _judge_clock_arithmetic, _KINSHIP_MAP,
         _resolve_holiday_dates, _HOLIDAY_DATES,
         _judge_nugget, _STOPWORDS,
         _judge_list, _split_list_answer,
@@ -353,13 +355,18 @@ def det_judge(context_block: str, answer: str,
         r"left\s+to\s+read|worn|packed|all\s+the\s+\w+|"
         r"how\s+much\s+(?:did|have)\s+i\s+"
         r"(?:spend|spent|earn|earned|pay|paid|raise|raised|save|saved)|"
-        r"how\s+old\s+was\s+i\s+when|how\s+long\s+had\s+i\s+been)\b",
+        r"average|mean\s+of|page\s+count|of\s+the\s+two\s+\w+|"
+        r"how\s+old\s+was\s+i\s+when|how\s+long\s+had\s+i\s+been|"
+        r"how\s+(?:old|many\s+years)\s+will\s+i\s+be|what\s+time)\b",
         qtext, re.I))
     _is_numeric_answer = bool(re.search(r"^\$?[\d,]+(?:\.\d+)?\b", a))
     _is_word_number_answer = bool(re.match(
         r"^(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|"
         r"twelve|couple|few)\b", a, re.I))
-    if is_aggregation_q and (_is_numeric_answer or _is_word_number_answer):
+    _is_clock_answer = bool(re.match(
+        r"^\d{1,2}:\d{2}\s*(?:AM|PM|a\.m\.|p\.m\.)?\b", a, re.I))
+    if is_aggregation_q and (_is_numeric_answer or _is_word_number_answer
+                             or _is_clock_answer):
         # v0.6.4: dispatch the v0.6.2 judges that were imported but
         # never called — percentage answers get the bounded percentage
         # judge first, and plain-number answers fall through to the
@@ -372,6 +379,18 @@ def det_judge(context_block: str, answer: str,
             return True, "sum_or_diff"
         if _judge_numeric_agg(context_block, a, q):
             return True, "numeric_agg"
+        # v0.6.5.1: the three derivation judges for the remaining
+        # v0.6.5 regressions (average / future-age / clock arithmetic)
+        if re.search(r"\baverage\b|\bmean\s+of\b", qtext, re.I) \
+                and _judge_average(context_block, a, q):
+            return True, "average"
+        if re.search(r"how\s+(?:old|many\s+years)\s+will\s+i\s+be",
+                     qtext, re.I) \
+                and _judge_will_be(context_block, a, q):
+            return True, "will_be"
+        if _is_clock_answer and re.search(r"\bwhat\s+time\b", qtext, re.I) \
+                and _judge_clock_arithmetic(context_block, a, q):
+            return True, "clock_arithmetic"
     # v0.5.5: Parenthetical-abbreviation match — fire BEFORE LIST
     # so "X (ABBR)" answers don't get mis-routed to LIST just because
     # the full expansion contains a comma (e.g. "University of

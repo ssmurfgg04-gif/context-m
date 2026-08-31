@@ -17,6 +17,10 @@ from .amount import (
     _judge_sum_or_diff,
     _judge_numeric_agg,
     _judge_percentage,
+    _judge_average,
+    _judge_will_be,
+    _judge_clock_arithmetic,
+    _KINSHIP_MAP,
 )
 from .holiday import _resolve_holiday_dates, _HOLIDAY_DATES
 from .nugget import _judge_nugget, _STOPWORDS
@@ -34,6 +38,10 @@ __all__ = [
     "_judge_sum_or_diff",
     "_judge_numeric_agg",
     "_judge_percentage",
+    "_judge_average",
+    "_judge_will_be",
+    "_judge_clock_arithmetic",
+    "_KINSHIP_MAP",
     "_resolve_holiday_dates",
     "_HOLIDAY_DATES",
     "_judge_nugget",
