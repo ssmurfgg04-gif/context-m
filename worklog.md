@@ -3279,3 +3279,26 @@ Stage Summary:
 - v0.6.4 code complete: all v0.6.3 critical bugs fixed, judges wired, RuVector borrows landed behind config flags
 - 698/698 tests green; ZK sanity 10/10 incl. forgery rejection
 - 500-Q full-corpus validation: GitHub Actions longmemeval.yml + local chunked run in progress
+
+---
+Task ID: 17
+Agent: main (Super Z)
+Task: v0.6.4 push + full-500 validation pipeline repair
+
+Work Log:
+- Pushed v0.6.4 (2382950) + tag v0.6.4 with the user-provided PAT
+- Push triggered longmemeval.yml smoke (success) but longmemeval_canonical_full.yml FAILED
+- Diagnosed slice-job logs: 'IndentationError: unexpected indent' — the v0.6.3 workflow's
+  multi-line 'python -c "..."' steps feed YAML-indented source to python; the full-500
+  workflow has NEVER produced a result since it shipped (58ed1b0 fix: one-liner + heredoc)
+- Second failure layer: huggingface_hub not in test extra → ModuleNotFoundError at the
+  dataset download (5fb6211 fix: explicit pip install in the slice job)
+- Verified all workflow run: blocks with yaml.safe_load + bash -n before pushing
+- Full-500 run 33380659334 in_progress (5 slices × 100 questions on GitHub infra);
+  aggregate job commits canonical_full.json back to main automatically
+- Note: background processes (nohup/setsid) do not survive tool-call boundaries in this
+  sandbox — local full-500 switched to GitHub Actions as the primary validation path
+
+Stage Summary:
+- v0.6.4 + 2 CI fixes pushed; full-500 workflow functional for the first time
+- Awaiting: full-500 aggregate results → README v0.6.4 number update
