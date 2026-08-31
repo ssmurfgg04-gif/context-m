@@ -1,5 +1,5 @@
 {
-  "note": "LoCoMo retrieval-depth curve, v0.6.6 code (all fixes), PYTHONHASHSEED=0, clock-pinned. Canonical = k=60. Full per-question evidence for k=60 lives in locomo_full.json; k=30/k=120 points regenerated with final code and summarized here to keep the repo lean.",
+  "note": "LoCoMo retrieval-depth curve, v0.6.6 code (all fixes), PYTHONHASHSEED=0, clock-pinned, measured LOCALLY. The canonical k=60 number is the 10-shard GitHub Actions aggregate (0.9294, 1,342/1,444, provenance-stamped in locomo_full.json); identical code measures 0.9294-0.9335 across runs (fact-tier tie-break variance). k=30/k=120 points summarized here to keep the repo lean.",
   "dataset": "snap-research/locomo locomo10.json (10 convs, 1,986 QA)",
   "curve": {
     "k30": {

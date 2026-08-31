@@ -3577,3 +3577,27 @@ Stage Summary:
   + lexical variants); depth curve + variance note published
 - No pending work: runner, aggregate, workflow, tests, docs, results,
   version bump all committed together
+
+---
+Task ID: 22 (addendum)
+Agent: main (Super Z)
+Task: Post-push GHA verification + canonical-number consistency
+
+Work Log:
+- Pushed v0.6.6 (efb21f4); the new locomo.yml triggered automatically:
+  11/11 jobs green in ~60s (10 conversation shards + guarded aggregate),
+  results auto-committed as 16ca126 with provenance sha efb21f4.
+- GHA-MEASURED: 0.9294 (1,342/1,444) vs local 0.9328 (1,347/1,444) —
+  within the fact-tier tie-break variance band (local pinned runs:
+  1,345-1,348; GHA: 1,342; observed spread 92.94-93.35%).
+- Honesty fix: per the 500-Q convention (canonical = the committed,
+  sha-stamped GHA aggregate), README + docs/BENCHMARKS.md + the depth-
+  curve note now headline the GHA number 92.94% with the run-to-run
+  band 92.9-93.3% and the variance root-cause (random fact-id
+  tie-breaking; verbatim tier fully deterministic; clock-pinned).
+- The committed locomo_full.json and the README number now agree.
+
+Stage Summary:
+- Canonical LoCoMo number: 0.9294 (1,342/1,444) GHA-measured,
+  provenance-stamped; comparison-table row consistent with the
+  committed artifact; variance honestly labeled

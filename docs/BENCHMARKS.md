@@ -758,7 +758,7 @@ python scripts/locomo_canonical.py --conv-indices all \
 
 | metric | score |
 |---|---:|
-| **comparable subset (single_hop + multi_hop + temporal)** | **0.9328 (1,347/1,444)** |
+| **comparable subset (single_hop + multi_hop + temporal)** | **0.9294 (1,342/1,444)** — 10-shard GitHub Actions aggregate, provenance-stamped; identical code measures 0.9294–0.9335 across runs |
 | single_hop | 0.9667 (813/841) |
 | temporal | 0.9377 (301/321) |
 | multi_hop | 0.8262 (233/282) |
@@ -766,7 +766,7 @@ python scripts/locomo_canonical.py --conv-indices all \
 | adversarial (speaker-swap traps, our rubric) | 0.8206 (366/446) |
 | Top-5-memory budget sub-score (VoiceMem's protocol) | 0.428 (618/1,444) |
 | median search latency | 0.019 s |
-| retrieval depth curve | k=30: 0.9231 · k=60: **0.9328** · k=120: 0.9481 |
+| retrieval depth curve (local, same code) | k=30: 0.9231 · k=60: 0.9328 · k=120: 0.9481 |
 
 The failure→fix ladder (all deterministic, all general):
 baseline 0.8698 → relative-time resolution 0.8878 (gold "2022" is
@@ -774,7 +774,7 @@ derived from "last year" + the session date, not stated anywhere in
 the corpus) → depth k=60 0.9127 → absolute-date windows 0.9211
 ("Which outdoor spot did Joanna visit in May?" — the question spends
 its tokens on the date; chunk timestamps pin the answer) →
-participant-scoped recall 0.9328 (answer chunks share zero query
+participant-scoped recall 0.9294 canonical / 0.9328 local (answer chunks share zero query
 vocabulary, but ingest stores speaker prefixes). Plus: calendar
 month arithmetic, a regex alternation-order bug that shadowed
 derived dates, number-word normalization, and an eval clock pin
@@ -784,7 +784,8 @@ derived dates, number-word normalization, and an eval clock pin
 Remaining 94 comparable failures are the honest μ=0 floor: mostly
 inference answers ("What do Melanie's kids like?" → "dinosaurs,
 nature") and lexical variants ("names" vs "name's"). Run-to-run
-variance ±0.1% (fact-tier tie-breaking on random ids).
+variance ±0.2pp (92.94–93.35% observed; fact-tier tie-breaking on
+random ids — the canonical number is the sha-stamped GHA aggregate).
 
 **History — the old synthetic demo (kept for the record):**
 

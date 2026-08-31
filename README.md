@@ -87,16 +87,16 @@ The official LoCoMo corpus ([snap-research/locomo](https://github.com/snap-resea
 
 | LoCoMo (official, full corpus, μ=0) | v0.6.6 measured |
 |---|---|
-| **single_hop + multi_hop + temporal (comparable subset)** | **93.28% (1,347/1,444)** |
+| **single_hop + multi_hop + temporal (comparable subset)** | **92.94% (1,342/1,444)** — 10-shard GitHub Actions run, provenance-stamped; identical code measures 92.9–93.3% across runs (see variance note) |
 | single_hop | 96.67% (813/841) |
-| temporal | 93.77% (301/321) |
-| multi_hop | 82.62% (233/282) |
+| temporal | 92.83–93.77% (301–302/321) |
+| multi_hop | 81.91–82.62% (231–233/282) |
 | open_domain (inference questions, labeled, not comparable) | 41.67% (40/96) |
-| adversarial (speaker-swap traps — our rubric: abstain or show the misattribution) | 82.06% (366/446) |
+| adversarial (speaker-swap traps — our rubric: abstain or show the misattribution) | 81.61–82.06% (364–366/446) |
 | same judge on a 5-memory budget (VoiceMem's Top-5 protocol) | 42.80% (618/1,444) |
 | median search latency | 19 ms |
 
-> **Protocol labels matter here.** VoiceMem's 91.2% is gpt-4o-mini answering from Top-5 memories, judged by gpt-4o-mini, on an unpublished 152-question subset. Our 93.28% is a deterministic judge verifying that the gold answer is derivable from the retrieved context, on all 1,444 comparable questions of all 10 conversations at retrieval depth k=60. Both numbers sit next to each other with labels — neither is "the same benchmark". What IS directly comparable: same corpus, same three categories, 9.5× the questions, zero LLM calls, $0 to re-verify.
+> **Protocol labels matter here.** VoiceMem's 91.2% is gpt-4o-mini answering from Top-5 memories, judged by gpt-4o-mini, on an unpublished 152-question subset. Our 92.94% is a deterministic judge verifying that the gold answer is derivable from the retrieved context, on all 1,444 comparable questions of all 10 conversations at retrieval depth k=60 — measured on 10 GitHub Actions shards with a provenance-stamped aggregate (`benchmarks/results/locomo/locomo_full.json`). Both numbers sit next to each other with labels — neither is "the same benchmark". What IS directly comparable: same corpus, same three categories, 9.5× the questions, zero LLM calls, $0 to re-verify.
 
 **The failure→fix ladder (all boring, all measured):**
 
@@ -106,13 +106,13 @@ The official LoCoMo corpus ([snap-research/locomo](https://github.com/snap-resea
 | + relative-time resolution | 88.8% | "When did Melanie paint a sunrise?" → gold **2022** appears nowhere in the corpus — the answer is "last year" + the session's date. New TEMPORAL EVIDENCE pass renders resolved dates; also fixed a swallowed IndexError (non-capturing regex group) that silently killed the pass |
 | + retrieval depth k=30→60 | 91.3% | chit-chat corpora need a deeper window — the depth curve (k=30: 92.3%, k=60: 93.3%, k=120: 94.8% with all fixes) is published, we quote the mid-curve, not the max |
 | + absolute-date windows | 92.1% | "Which outdoor spot did Joanna visit in May?" spends its tokens on the date, not the answer — chunks carry session timestamps, so a calendar-window pull finds them deterministically |
-| + participant-scoped recall | **93.3%** | "What does Melanie do to destress?" — answer chunks share zero query vocabulary, but ingest stores speaker prefixes, so one SQL scan scopes to the asked participant (guarded off bool questions) |
+| + participant-scoped recall | **92.9–93.3%** | "What does Melanie do to destress?" — answer chunks share zero query vocabulary, but ingest stores speaker prefixes, so one SQL scan scopes to the asked participant (guarded off bool questions) |
 
 Also fixed along the way: calendar months ("two months ago" is month arithmetic, not 30-day subtraction), a regex alternation-order bug that shadowed derived dates down to bare years, number-word normalization ("six months" ↔ "6 months"), and a **clock pin** — `search()` resolved "recently"-style phrases against wall-clock NOW, so two runs minutes apart disagreed on 12/1444 verdicts; the runner now pins the eval clock to the conversation's last session date.
 
 Run it yourself: `python scripts/locomo_canonical.py --conv-indices all --out results.json` (~2 minutes on a laptop), or via GitHub Actions: `.github/workflows/locomo.yml` — 10 shards × 1 conversation, contamination-guarded aggregation, results auto-committed to `benchmarks/results/locomo/`.
 
-> **What the remaining 6.7% is (and isn't):** of the 94 remaining comparable failures, the majority are inference answers an LLM would synthesize ("What do Melanie's kids like?" → "dinosaurs, nature" — stated across scattered chunks with no shared vocabulary) and lexical variants ("names" vs "name's"). That's the honest μ=0 floor: no LLM to paraphrase-match, no fabrication. Run-to-run variance is ±0.1% (≤7/1444 verdict flips from tie-breaking on randomly-generated fact ids in the structured tier; the verbatim tier is fully deterministic).
+> **What the remaining ~7% is (and isn't):** of the ~100 remaining comparable failures, the majority are inference answers an LLM would synthesize ("What do Melanie's kids like?" → "dinosaurs, nature" — stated across scattered chunks with no shared vocabulary) and lexical variants ("names" vs "name's"). That's the honest μ=0 floor: no LLM to paraphrase-match, no fabrication. Run-to-run variance is ±0.2pp (92.94–93.35% observed; the clock pin removed the wall-clock dependency, what remains is tie-breaking on randomly-generated fact ids in the structured tier — the verbatim tier is fully deterministic, and the canonical number is the committed, sha-stamped 10-shard GitHub Actions aggregate).
 
 ### How cortexm compares (search-momentum table, honest numbers)
 
@@ -121,7 +121,7 @@ VoiceMem ([xzf-thu/VoiceMem](https://github.com/xzf-thu/VoiceMem), Aug 2026) pop
 | | cortexm v0.6.6 | VoiceMem v0.0.1 | Mem0 |
 |---|---|---|---|
 | LongMemEval-S | **500-Q full corpus: 100% (500/500)** (μ=0, deterministic judge) | — | — |
-| LoCoMo (same corpus as VoiceMem) | **93.28% (1,347/1,444)** — full 10-conversation corpus, single/multi/temporal, μ=0 det judge, retrieval depth k=60 (measured) | 91.2% (152-Q unpublished subset, gpt-4o-mini answer + judge, Top-5) | 61.68% (top-200, as reported by VoiceMem) |
+| LoCoMo (same corpus as VoiceMem) | **92.94% (1,342/1,444)** — full 10-conversation corpus, single/multi/temporal, μ=0 det judge, retrieval depth k=60 (measured, 10 GitHub shards, provenance-stamped; identical code measures 92.9–93.3% across runs) | 91.2% (152-Q unpublished subset, gpt-4o-mini answer + judge, Top-5) | 61.68% (top-200, as reported by VoiceMem) |
 | LLM calls at ingest | **0** (μ=0 deterministic extractor) | OpenAI API required for extraction | LLM extractor required |
 | retrieval | local, deterministic | local | cloud or local |
 | retrieval latency (p50, warmed corpus) | **~50 ms** on a 636-message corpus, 2-CPU VM (1.6 ms on small corpora) | 134 ms | 1,440 ms (as reported by VoiceMem) |
