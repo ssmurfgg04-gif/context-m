@@ -6,7 +6,9 @@ FROM python:3.12-slim AS builder
 WORKDIR /build
 COPY pyproject.toml README.md LICENSE ./
 COPY cortexm ./cortexm
-COPY context_m.py ./
+# v0.6.4: context_m.py was deleted in the v0.6.3 cleanup (e215723) but
+# this COPY kept referencing it — every container build since then died
+# with 'failed to calculate checksum: "/context_m.py": not found'.
 RUN pip install --no-cache-dir --target=/deps . cryptography
 
 FROM python:3.12-slim
