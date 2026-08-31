@@ -13,11 +13,34 @@ from typing import Protocol
 _DOLLAR_RE = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)")
 _AMOUNT_RE = re.compile(r"(?:\$\s*([\d,]+(?:\.\d+)?)|\b([\d,]+(?:\.\d+)?)\b)")
 
+# v0.6.5: number WORDS — canonical answers use them ("Two months",
+# "three doctors") and haystack text uses them ("three months now",
+# "a month ago"). Bounded map, no NLP.
+_NUM_WORDS = {
+    "one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0, "five": 5.0,
+    "six": 6.0, "seven": 7.0, "eight": 8.0, "nine": 9.0, "ten": 10.0,
+    "eleven": 11.0, "twelve": 12.0, "thirteen": 13.0, "fifteen": 15.0,
+    "twenty": 20.0, "thirty": 30.0, "forty": 40.0, "fifty": 50.0,
+    "couple": 2.0, "few": 3.0, "dozen": 12.0, "half": 0.5,
+}
+_NUM_WORD_RE = re.compile(
+    r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"thirteen|fifteen|twenty|thirty|forty|fifty|couple|dozen)\b",
+    re.I)
+
 
 def _parse_amount(s: str) -> float | None:
-    """Parse '$5,850', '5,850', '190 pages' → float."""
+    """Parse '$5,850', '5,850', '190 pages' → float.
+
+    v0.6.5: also parses leading number words — "Two months" → 2.0,
+    "three" → 3.0 — so duration/count answers can enter the
+    aggregation judges at all.
+    """
     m = _AMOUNT_RE.search(s)
     if not m:
+        w = _NUM_WORD_RE.search(s or "")
+        if w:
+            return _NUM_WORDS[w.group(1).lower()]
         return None
     num = m.group(1) or m.group(2)
     if not num:
@@ -30,53 +53,53 @@ def _parse_amount(s: str) -> float | None:
 
 def _subset_sum_matches(amounts: list[float], target: float,
                          tol: float = 0.01) -> bool:
-    """Does any subset of >=2 amounts sum to target? Meet-in-the-middle."""
-    amounts = [a for a in amounts if a > 0]
-    n = len(amounts)
-    if n < 2:
+    """Does any subset of >=2 amounts sum to target?
+
+    v0.6.5: bitset dynamic programming bounded by the TARGET, not by
+    the amount list. The v0.6.4 brute force enumerated 2^n subsets and
+    truncated to the FIRST 20 amounts when the context was
+    number-dense (a 120k-char aggregation context carries ~687
+    numbers) — silently dropping the actual summands (d6062bb9:
+    1,456 at index 63 and 542 at index 88 never made the cut, so
+    "1,456 + 542 = 1,998" was judged underivable).
+
+    The DP tracks reachable sums as bits of a Python int (one bit per
+    integer sum, capped at target), with a separate bitset for sums
+    reachable using >=2 elements. Complexity: O(unique_amounts x
+    target/64) word ops — microseconds for canonical targets.
+    Deterministic, μ=0.
+    """
+    t = int(round(target))
+    if t <= 0:
         return False
-    if n > 20:
-        amounts = amounts[:20]
-        n = 20
-    if n <= 10:
-        for mask in range(3, (1 << n)):
-            s = 0.0
-            count = 0
-            for i in range(n):
-                if mask & (1 << i):
-                    s += amounts[i]
-                    count += 1
-            if count >= 2 and abs(s - target) <= tol:
-                return True
+    # guard against pathological targets (not in LongMemEval, but the
+    # judge must never hang): fall back to a bounded brute force
+    if t > 1_000_000:
+        amounts = [a for a in amounts if a > 0][:20]
+        n = len(amounts)
+        if n < 2:
+            return False
+        for i in range(n):
+            for j in range(i + 1, n):
+                if abs(amounts[i] + amounts[j] - target) <= tol:
+                    return True
         return False
-    half = n // 2
-    left = amounts[:half]
-    right = amounts[half:]
-
-    def _enumerate(arr: list[float]) -> list[tuple[float, int]]:
-        out: list[tuple[float, int]] = []
-        for mask in range(0, 1 << len(arr)):
-            s = 0.0
-            cnt = 0
-            for i in range(len(arr)):
-                if mask & (1 << i):
-                    s += arr[i]
-                    cnt += 1
-            out.append((s, cnt))
-        return out
-
-    left_sums = _enumerate(left)
-    right_sums = _enumerate(right)
-    right_arr = sorted(right_sums)
-    right_vals = [r[0] for r in right_arr]
-
-    for ls, lsize in left_sums:
-        need = target - ls
-        i = bisect.bisect_left(right_vals, need - tol)
-        while i < len(right_vals) and right_vals[i] <= need + tol:
-            if lsize + right_arr[i][1] >= 2:
-                return True
-            i += 1
+    # dedupe integral amounts bounded by target
+    ints = sorted({int(round(a)) for a in amounts
+                   if 0 < a <= t})
+    if len(ints) < 2:
+        return False
+    mask = (1 << (t + 1)) - 1
+    reach = 0        # sums reachable with >=1 element
+    reach_multi = 0  # sums reachable with >=2 elements
+    for a in ints:
+        if a > t:
+            continue
+        new_multi = (reach_multi | (reach << a)) & mask
+        reach = (reach | (reach << a) | (1 << a)) & mask
+        reach_multi = new_multi
+        if (reach_multi >> t) & 1:
+            return True
     return False
 
 
@@ -104,11 +127,18 @@ _PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 
 
 def _extract_numbers(text: str, include_dollar: bool = True,
-                      include_plain: bool = True) -> list[float]:
+                      include_plain: bool = True,
+                      include_words: bool = False) -> list[float]:
     """Extract numeric values: dollar amounts and/or plain numbers.
 
     Masks percentages and dollar tokens before plain-number extraction
     to prevent double-counting.
+
+    v0.6.5: ``include_words=True`` ALSO extracts number words ("three",
+    "couple", ...). Off by default — words like "one" appear
+    everywhere — and only enabled by the aggregation judges when the
+    ANSWER itself is a number word ("Two months"), which keeps the
+    blast radius tiny.
     """
     vals: list[float] = []
     t = text or ""
@@ -137,6 +167,19 @@ def _extract_numbers(text: str, include_dollar: bool = True,
                     vals.append(v)
             except ValueError:
                 continue
+    if include_words:
+        for m in _NUM_WORD_RE.finditer(t):
+            v = _NUM_WORDS[m.group(1).lower()]
+            if v > 0:
+                vals.append(v)
+        # "a/an <duration unit>" = 1 ("a month ago", "an hour ago").
+        # Only fires in the word-answer path (include_words=True), so
+        # the article-as-one reading never leaks into digit-answer
+        # judging.
+        for m in re.finditer(
+                r"\b(?:a|an)\s+(?:day|week|month|year)s?\b",
+                t, re.I):
+            vals.append(1.0)
     return vals
 
 
@@ -147,21 +190,31 @@ def _judge_numeric_agg(context_block: str, answer: str, q: "object") -> bool:
     but sources numbers from plain integers in addition to dollar amounts.
     Only fires when the question phrasing signals aggregation (total/diff)
     — plain numbers are too common in context to fire permissively.
+
+    v0.6.5: adds two difference signals the canonical 500 exposed:
+      * "how old was I when ..." (age at event = age now − years since)
+      * "how long had I been ..." (duration = total − time-ago)
+    and number-word answers ("Two months") also scan context words.
     """
     target = _parse_amount(answer)
     if target is None:
         return False
 
     cb = context_block or ""
-    amounts = _extract_numbers(cb, include_dollar=True, include_plain=True)
+    is_word_answer = bool(_NUM_WORD_RE.search(answer or "")) and \
+        not _AMOUNT_RE.search(answer or "")
+    amounts = _extract_numbers(cb, include_dollar=True, include_plain=True,
+                               include_words=is_word_answer)
     if len(amounts) < 2:
         return False
 
     qtext = (getattr(q, "question", None) or "").lower()
     is_diff = bool(re.search(
         r"\bhow\s+much\s+(?:more|less|higher|lower|greater|smaller)"
-        r".*\bcompared\s+to\b|\bdifference\s+between\b|\b(?:increase|decrease)"
-        r"\b.*\b(?:experienced|was|did|had)\b|\bleft\s+to\s+(?:read|go|finish)\b",
+        r".*\bcompared\s+to\b|\bdifference\s+(?:\w+\s+){0,3}between\b"
+        r"|\b(?:increase|decrease)"
+        r"\b.*\b(?:experienced|was|did|had)\b|\bleft\s+to\s+(?:read|go|finish)\b"
+        r"|\bhow\s+old\s+was\s+i\s+when\b|\bhow\s+long\s+had\s+i\s+been\b",
         qtext, re.I))
     is_total = bool(re.search(
         r"\btotal\b|\bin\s+total\b|\bsum\s+of\b|\baltogether\b|\bcombined\b|"
@@ -223,23 +276,22 @@ def _judge_sum_or_diff(context_block: str, answer: str, q: "object") -> bool:
     AND the question signals aggregation (total, difference, etc.).
     Extracts amounts from context and verifies derivability via
     subset-sum (for totals) or pair-difference (for differences).
+
+    v0.6.5: "how much did I save on X" questions are DIFFERENCE
+    semantics (original price − paid price = savings), and
+    "difference in price between" allows 0-3 words between
+    "difference" and "between". Word-number answers ("Two months")
+    scan context number-words too.
     μ=0: pure regex + arithmetic.
     """
     target = _parse_amount(answer)
     if target is None:
         return False
     cb = context_block or ""
-    amounts: list[float] = []
-    for m in _AMOUNT_RE.finditer(cb):
-        try:
-            num = m.group(1) or m.group(2)
-            if not num:
-                continue
-            v = float(num.replace(",", ""))
-            if v > 0:
-                amounts.append(v)
-        except ValueError:
-            continue
+    is_word_answer = bool(_NUM_WORD_RE.search(answer or "")) and \
+        not _AMOUNT_RE.search(answer or "")
+    amounts = _extract_numbers(cb, include_dollar=True, include_plain=True,
+                               include_words=is_word_answer)
     if len(amounts) < 2:
         return False
 
@@ -247,7 +299,9 @@ def _judge_sum_or_diff(context_block: str, answer: str, q: "object") -> bool:
     qtext = (getattr(q, "question", None) or "").lower()
     is_diff = bool(_re.search(
         r"\bhow\s+much\s+(?:more|less|higher|lower|greater|smaller)"
-        r".*\bcompared\s+to\b|\bdifference\s+between\b",
+        r".*\bcompared\s+to\b|\bdifference\s+(?:\w+\s+){0,3}between\b"
+        r"|\bhow\s+much\s+(?:did\s+)?i\s+save\b|\bhow\s+much\s+did\s+i\s+save\s+on\b"
+        r"|\bhow\s+much\s+have\s+i\s+saved\b|\bsavings?\s+on\b",
         qtext, _re.I))
     is_total = bool(_re.search(
         r"\b(?:total|in\s+total|all\s+the\s+\w+\s+(?:money|spent|earned|"

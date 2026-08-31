@@ -98,37 +98,22 @@ def _flatten_haystack(haystack_sessions: list,
                        include_assistant: bool = False,
                        max_assistant_chars: int = 800) -> list[str]:
     """Flatten the haystack's role/content messages into a list of
-    natural-language strings (one per message).
+    natural-language strings (one per message). See
+    ``_flatten_haystack_rich`` for the v0.6.5 rich form (timestamps +
+    assistant segmenting); this string form remains for backward
+    compatibility with the small canonical runner.
 
     Each entry in haystack_sessions is a list of {role, content} dicts.
     For ingest, we use:
       - role=user → ingest content as user statement
-      - role=assistant → v0.5.3: SKIP by default (was tried but ingest
-        of long assistant responses doubles wall-clock time per
-        question without proportional accuracy gain). v0.5.4: opt-in
-        via ``include_assistant=True`` — needed for "Target" / "Veja" /
-        other short-brand-name answers where the user message says
-        "I redeemed a $5 coupon on coffee creamer" and the assistant
-        reply that follows says "Many retailers, like Target, send
-        exclusive coupons..." Without the assistant chunk, the verbatim
-        tier can't surface the answer. To bound ingest cost, we cap
-        each assistant message at ``max_assistant_chars`` (default 800
-        — keeps the answer-bearing opening sentences, drops the rest).
+      - role=assistant → v0.5.3: SKIP by default. v0.5.4: opt-in via
+        ``include_assistant=True``, capped at ``max_assistant_chars``.
       - role=system → skip (system prompt, not user-stated fact)
-
-    v0.5.3: bumped the per-message char cap from 500 to 5000. The
-    old cap was truncating answer-bearing chunks mid-sentence (e.g.
-    "Andy wears an untidy, stained white shirt" at position 638 of
-    a 1735-char chunk got cut off). 5000 covers LongMemEval's longest
-    messages while keeping ingest bounded (the extractor's DisSim
-    clause splitter handles long text via recursive splits).
 
     v0.5.4: ``include_assistant=True`` ingests assistant responses too
     (capped at ``max_assistant_chars``). The chunks land in conversation
     order, so verbatim's ``fetch_neighbors()`` can pull the assistant
-    response that immediately follows a user-message BM25 hit. This
-    closes the "2-3 word brand-name answer in assistant reply" failure
-    mode without needing a real sentence-embedding model.
+    response that immediately follows a user-message BM25 hit.
     """
     out: list[str] = []
     for session in haystack_sessions:
@@ -152,6 +137,143 @@ def _flatten_haystack(haystack_sessions: list,
                 if len(content) > max_assistant_chars:
                     content = content[:max_assistant_chars]
                 out.append(content)
+    return out
+
+
+# ------------------------ v0.6.5 rich ingest helpers ------------------------
+
+# LongMemEval date format: "2023/05/20 (Sat) 14:29"
+_SESSION_DATE_RE = re.compile(
+    r"(\d{4})/(\d{2})/(\d{2})\s+\([A-Za-z]{3}\)\s+(\d{2}):(\d{2})")
+
+
+def parse_session_date(s: str):
+    """Parse a LongMemEval haystack date into a UTC datetime (or None).
+
+    Timezone-aware (UTC) so the chunk store's ISO serialization
+    round-trips without local-time skew on different machines.
+    """
+    if not s or not isinstance(s, str):
+        return None
+    m = _SESSION_DATE_RE.search(s)
+    if not m:
+        return None
+    from datetime import datetime, timezone
+    try:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                        int(m.group(4)), int(m.group(5)),
+                        tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9*`\-\u2022])")
+_LIST_SPLIT_RE = re.compile(r"\n{2,}")
+
+
+def split_long_message(content: str, max_chars: int = 2000) -> list[str]:
+    """Split a long message into sentence-aligned segments.
+
+    v0.6.5: the v0.5.4 ingest truncated assistant messages at 800 chars,
+    which DISCARDED the answer for 7+ canonical questions where the
+    answer token sits at position 800-2000 of the assistant reply
+    (e.g. "Veja" at 903/1279, "Absinthe" at 817/1288, "Nu, pogodi!"
+    at 1306/1920, "@jessica_poole_jewellery" at 1149/2588).
+
+    The boring fix: segment instead of truncate. Every char of the
+    message survives ingest; each segment becomes its own chunk, which
+    also IMPROVES BM25 granularity (a segment containing "Veja - This
+    French brand..." ranks higher for the query than the whole reply).
+
+    Splits at sentence boundaries (". ", "! ", "? ") first, then at
+    blank lines, then hard-splits as a last resort. Segments are
+    <= max_chars (a couple of chars over when a single sentence
+    exceeds the budget and can't be split cleanly — acceptable).
+    Deterministic: same input -> same output, always.
+    """
+    if not content:
+        return []
+    if len(content) <= max_chars:
+        return [content]
+    # 1) sentence split
+    sentences = _SENTENCE_SPLIT_RE.split(content)
+    # 2) any sentence still > max_chars: split at blank lines, then hard
+    refined: list[str] = []
+    for s in sentences:
+        if len(s) <= max_chars:
+            refined.append(s)
+            continue
+        parts = _LIST_SPLIT_RE.split(s)
+        if len(parts) > 1:
+            refined.extend(parts)
+        else:
+            # hard split at max_chars, aligned to the last space
+            while len(s) > max_chars:
+                cut = s.rfind(" ", 0, max_chars)
+                if cut < max_chars // 2:
+                    cut = max_chars
+                refined.append(s[:cut])
+                s = s[cut:].lstrip()
+            if s:
+                refined.append(s)
+    # 3) greedy pack into segments <= max_chars
+    segments: list[str] = []
+    buf = ""
+    for piece in refined:
+        piece = piece.strip()
+        if not piece:
+            continue
+        if not buf:
+            buf = piece
+        elif len(buf) + 1 + len(piece) <= max_chars:
+            buf = buf + " " + piece
+        else:
+            segments.append(buf)
+            buf = piece
+    if buf:
+        segments.append(buf)
+    return segments if segments else [content[:max_chars]]
+
+
+def _flatten_haystack_rich(haystack_sessions: list,
+                           haystack_dates: list | None = None,
+                           include_assistant: bool = True,
+                           segment_max_chars: int = 2000) -> list[dict]:
+    """Flatten the haystack into message dicts for rich ingest.
+
+    Returns list of {role, content, timestamp} dicts:
+      - user messages: capped at 5000 chars (v0.5.3 behavior)
+      - assistant messages: SEGMENTED (not truncated) into
+        sentence-aligned pieces <= segment_max_chars (v0.6.5)
+      - timestamp: the session's haystack_date parsed to a datetime —
+        this lands in the chunk store's `ts` column, enabling the
+        temporal-window retrieval pass for "two weeks ago" / "last
+        Saturday" style questions.
+
+    μ=0: pure string/date operations. Deterministic.
+    """
+    out: list[dict] = []
+    dates = haystack_dates or []
+    for si, session in enumerate(haystack_sessions):
+        if not isinstance(session, list):
+            continue
+        ts = parse_session_date(dates[si]) if si < len(dates) else None
+        for msg in session:
+            if not isinstance(msg, dict):
+                continue
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if not content or not isinstance(content, str):
+                continue
+            if role == "user":
+                if len(content) > 5000:
+                    content = content[:5000]
+                out.append({"role": "user", "content": content,
+                            "timestamp": ts})
+            elif role == "assistant" and include_assistant:
+                for seg in split_long_message(content, segment_max_chars):
+                    out.append({"role": "assistant", "content": seg,
+                                "timestamp": ts})
     return out
 
 

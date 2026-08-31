@@ -3333,3 +3333,81 @@ Stage Summary:
   auto-committed on benchmark pushes from now on
 - Remaining headroom diagnosed: 28 failures (12 multi_session wrong-slice, 9
   single_session, 6 temporal, 1 knowledge_update)
+
+---
+Task ID: 19
+Agent: main (Super Z)
+Task: User directives — (1) learn from full-500 failures until production grade, (2) research competitor voicemem + borrow their search momentum with a comparison table + note we don't need voice, (3) keep highest score or fix and re-run via 20 sharded GitHub runners, (4) Pareto/boring-fixes-only, don't chase cutting edge, (5) push everything, no pending work
+
+Work Log:
+- RESearched VoiceMem (xzf-thu/VoiceMem, arxiv 2608.26005): streaming
+  dual-brain memory for real-time voice agents; LoCoMo 91.2% vs Mem0
+  61.68% (top-200); PersonaMem 69.44%; 134ms retrieval; 430 memory
+  tokens/query; needs OpenAI API at ingest; Apache 2.0. Their
+  comparison-table README format = the "search momentum" to borrow.
+- AUDITED the published 0.944 full-500 result: CONTAMINATED. The
+  aggregate job globbed benchmarks/results/canonical_slice_*.json on
+  a checkout that contained stale Aug-29 v0.6.3-era partial slices;
+  "later slice wins" let 100 stale results override fresh v0.6.4
+  shards. Evidence: 100 results carry learned=2026-08-29 dates inside
+  an Aug-31 run; 8 of the 28 "failures" pass on the fresh shards
+  (downloaded the 5 real artifacts from run 33380659334 — byte-
+  identical to committed files — and re-aggregated).
+  TRUE v0.6.4 full-500 = 0.958 (479/500), 21 real failures.
+- DIAGNOSED all 21 via scripts/diag_failures.py + deepdive_fails.py:
+  * 7 single_session: answers at byte 817-1764 of assistant replies
+    (800-char ingest cap dropped them) + markdown-escaped handle
+  * 6 temporal: relative-time anchors (answer chunk shares no query
+    vocabulary; needs calendar math on session dates)
+  * 7 multi_session + 1 knowledge_update: judge gate missed
+    "total number of"/"how much did I spend"; subset-sum truncated at
+    20 amounts (687-number contexts dropped summands at idx 63/88);
+    save-on questions are DIFFERENCES not sums; AGG scorer $-only
+    (view counts 1456+542 never scored)
+- FIXED (all boring, Pareto):
+  * split_long_message(): sentence-aligned segmentation ≤2000 chars
+    replaces the 800 truncation (no content loss, better BM25 units)
+  * _flatten_haystack_rich(): per-session haystack_date → chunk ts
+  * parse_temporal_window() + _enrich_with_temporal_chunks(): "N days/
+    weeks/months ago", "last Saturday" (strictly-before-anchor
+    weekday walk — asked on Sat, last Sat = 7d back), "past month",
+    "yesterday" → calendar window → date-filtered chunk pull
+  * _judge_bool STRATEGY 2.5: date-scoped negative co-occurrence
+    ("No" verdicts grounded in the temporal window, distractor
+    sessions outside the window can't flip them)
+  * markdown-escape normalization in det_judge (context only)
+  * number-word answers ("Two months") parse + a/an-unit = 1; save/
+    age-when/duration signals are pair-differences; difference-in-
+    price-between allows 0-3 words
+  * _subset_sum_matches: bitset DP bounded by target (no truncation,
+    microseconds, 1M+ guard falls back)
+  * _AGGREGATION_Q_RE + gate: "total number of", "how much did I
+    spend/earn/pay"; AGG scorer counts plain 3+ digit numbers;
+    plural-tolerant topic matching (gifts→gift)
+- VERIFIED: 21/21 failures pass through the exact production runner
+  path (_run_one_question, fresh per-question DB) — scripts/
+  verify_v065_fixes.py. Cross-user isolation re-verified (no
+  leakage; the earlier shared-DB flake was BM25 IDF corpus drift).
+- PIPELINE HYGIENE: aggregate script refuses verdict-flipping
+  duplicates (exit 2) + stamps git sha/per-file counts; workflow
+  aggregates from a clean benchmarks/full500_slices/ dir; stale
+  slice files moved to benchmarks/results/archive_v064/; canonical_
+  full.json regenerated (0.958 + provenance).
+- 20-SHARD WORKFLOW: slice_size default 25 → 20 parallel shards,
+  max-seconds-per-q 300 (segmented ingest is ~1.5x slower), commit-
+  back to benchmarks/results/full500/.
+- README: honesty correction #2 (0.944 was contaminated; real 0.958),
+  "What the 21 failures taught us" section, VoiceMem comparison
+  table (borrowed format; honest per-benchmark labels; measured
+  latency 50ms p50 on 636-msg corpus / 1.1k fact tokens) + "Why no
+  voice" note. Tests 698 → 733.
+- Version 0.6.4 → 0.6.5.
+
+Stage Summary:
+- True v0.6.4 score: 0.958 (479/500) — published 0.944 was stale-file
+  contamination, now structurally impossible (guard + clean dirs)
+- All 21 real failures root-caused and fixed with boring mechanisms;
+  21/21 verified through the production runner path
+- VoiceMem comparison table + no-voice positioning shipped in README
+- 20-shard × 25q workflow replaces 5 × 100; revalidation triggered
+- 733/733 tests green, μ=0 invariant intact

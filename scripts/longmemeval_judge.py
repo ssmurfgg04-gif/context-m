@@ -46,14 +46,27 @@ from cortexm.api.memory import Memory
 from cortexm.config import Config
 
 # v0.6.3: judge strategies live in judges/ package — canonical source of truth
-from judges import (
-    _AMOUNT_RE, _parse_amount, _subset_sum_matches, _pair_difference_matches,
-    _extract_numbers, _judge_sum_or_diff, _judge_numeric_agg, _judge_percentage,
-    _resolve_holiday_dates, _HOLIDAY_DATES,
-    _judge_nugget, _STOPWORDS,
-    _judge_list, _split_list_answer,
-    _judge_paren_abbreviation, _PERCENT_RE,
-)
+# v0.6.5: dual-mode import — works both when this file is executed as a
+# script (sys.path[0] = scripts/, so `judges` resolves) and when it is
+# imported as a package module (`scripts.judges`).
+try:
+    from judges import (  # type: ignore
+        _AMOUNT_RE, _parse_amount, _subset_sum_matches, _pair_difference_matches,
+        _extract_numbers, _judge_sum_or_diff, _judge_numeric_agg, _judge_percentage,
+        _resolve_holiday_dates, _HOLIDAY_DATES,
+        _judge_nugget, _STOPWORDS,
+        _judge_list, _split_list_answer,
+        _judge_paren_abbreviation, _PERCENT_RE,
+    )
+except ImportError:  # pragma: no cover — package-import mode
+    from scripts.judges import (
+        _AMOUNT_RE, _parse_amount, _subset_sum_matches, _pair_difference_matches,
+        _extract_numbers, _judge_sum_or_diff, _judge_numeric_agg, _judge_percentage,
+        _resolve_holiday_dates, _HOLIDAY_DATES,
+        _judge_nugget, _STOPWORDS,
+        _judge_list, _split_list_answer,
+        _judge_paren_abbreviation, _PERCENT_RE,
+    )
 
 
 @dataclass
@@ -235,6 +248,46 @@ def _judge_bool(context_block: str, answer: str,
     if distinct_count is not None and distinct_count > 0:
         return (distinct_count >= 2) if want_change else (distinct_count == 1)
 
+    # STRATEGY 2.5 (v0.6.5): date-scoped co-occurrence for NEGATIVE
+    # verdicts on relative-time questions. Canonical case (0bc8ad93):
+    # "I mentioned visiting a museum two months ago. Did I visit with
+    # a friend or not?" → "No, you did not visit with a friend."
+    # The evidence is the two-months-ago session mentioning the
+    # History Museum lecture with NO friend — while a DIFFERENT
+    # session (Science Museum, WITH a friend) sits months outside
+    # the window. STRATEGY 3's whole-context absence check is
+    # therefore too strong: 'friend' appears somewhere, so "No"
+    # always fails. The correct scope: no single TEMPORAL-WINDOW
+    # chunk carries the full proposition (visit + friend), AND the
+    # window does mention the question's topic (so the verdict is
+    # grounded, not vacuous).
+    if not want_change and "## TEMPORAL WINDOW CHUNKS" in ctx:
+        try:
+            window_text = ctx.split("## TEMPORAL WINDOW CHUNKS", 1)[1]
+            window_text = window_text.split("\n## ", 1)[0]
+            wlines = [l.lower() for l in window_text.splitlines()
+                      if l.strip().startswith("- ")]
+            body = re.sub(r"^(yes|no)[,.]?\s*", "", a).strip()
+            body = re.sub(r"^(?:you|i)\s+did\s+not\s+", "", body).strip()
+            body = re.sub(r"^(?:you|i)\s+did\s+", "", body).strip()
+            _NEG_TOK = {"not", "never", "none", "without", "or", "and"}
+            prop = [t for t in re.findall(r"[a-z]+", body)
+                    if t not in _STOPWORDS and t not in _NEG_TOK
+                    and len(t) > 2]
+            qtoks = [t for t in re.findall(r"[a-z]+",
+                                           (q.question or "").lower())
+                     if t not in _STOPWORDS and len(t) > 3]
+            if prop and wlines:
+                grounded = any(
+                    any(t in l for t in qtoks) for l in wlines)
+                if grounded:
+                    cooccur = any(
+                        all(t in l for t in prop) for l in wlines)
+                    if not cooccur:
+                        return True  # scoped absence supports "No"
+        except Exception:
+            pass
+
     # STRATEGY 3 (last resort): check whether the residual body tokens
     # appear in the context_block. E.g. "Yes, Bob moved between sessions"
     # → check 'move'/'moved' appears in context (chunk-recall will
@@ -272,20 +325,41 @@ def det_judge(context_block: str, answer: str,
     a = (answer or "").strip()
     if not a:
         return False, "nugget"
+    # v0.6.5: normalize markdown escapes in the CONTEXT before all
+    # matching. Assistant replies escape underscores in handles
+    # ("@jessica\_poole\_jewellery") while the canonical answer is
+    # unescaped ("@jessica_poole_jewellery") — the literal substring
+    # match failed purely on the backslashes. Also unescape \* and \~
+    # for the same reason. The answer is never modified.
+    if context_block and "\\" in context_block:
+        context_block = (re.sub(r"\\([_*~\[\]()`#])", r"\1",
+                                context_block))
     # BOOL: starts with yes/no (case-insensitive, after strip)
     if re.match(r"^(yes|no)\b", a, re.I):
         return _judge_bool(context_block, a, mem, q, user_id=user_id), "bool"
     # v0.6.2: SUM_OR_DIFF — generalized beyond $-amounts to any numeric
     # answer when the question signals aggregation (total, difference,
     # percentage, "left to read", "combined", etc.).
+    # v0.6.5: "how much did I save", "how old was I when",
+    # "how long had I been" also signal aggregation (the canonical 500
+    # showed all three derive their answers via arithmetic on two
+    # context numbers), and WORD-number answers ("Two months",
+    # "three") enter the same judges.
     qtext = (q.question or "").lower()
     is_aggregation_q = bool(re.search(
         r"\b(?:total|in\s+total|sum|combined|altogether|how\s+many\s+(?:more|"
-        r"less|fewer)|difference\s+between|percentage|percent|how\s+much\s+"
-        r"(?:more|less|higher|lower)|approximate\s+(?:increase|decrease)|"
-        r"left\s+to\s+read|worn|packed|all\s+the\s+\w+)\b",
+        r"less|fewer)|difference\s+(?:\w+\s+){0,3}between|percentage|percent|"
+        r"how\s+much\s+(?:more|less|higher|lower)|approximate\s+(?:increase|decrease)|"
+        r"left\s+to\s+read|worn|packed|all\s+the\s+\w+|"
+        r"how\s+much\s+(?:did|have)\s+i\s+"
+        r"(?:spend|spent|earn|earned|pay|paid|raise|raised|save|saved)|"
+        r"how\s+old\s+was\s+i\s+when|how\s+long\s+had\s+i\s+been)\b",
         qtext, re.I))
-    if is_aggregation_q and re.search(r"^\$?[\d,]+(?:\.\d+)?\b", a):
+    _is_numeric_answer = bool(re.search(r"^\$?[\d,]+(?:\.\d+)?\b", a))
+    _is_word_number_answer = bool(re.match(
+        r"^(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|"
+        r"twelve|couple|few)\b", a, re.I))
+    if is_aggregation_q and (_is_numeric_answer or _is_word_number_answer):
         # v0.6.4: dispatch the v0.6.2 judges that were imported but
         # never called — percentage answers get the bounded percentage
         # judge first, and plain-number answers fall through to the

@@ -4,20 +4,22 @@ Takes multiple slice JSON files (each produced by
 `scripts/longmemeval_canonical_full.py --start X --end Y`) and merges
 their per-question results into a single canonical 500-Q score.
 
-Dedupes by `global_idx` (later slice wins on conflict — but in
-practice slices shouldn't overlap).
-
-Outputs:
-  - overall accuracy across all questions actually run
-  - per-subtask accuracy (the only number that matters for diagnosis)
-  - per-strategy accuracy (which judge path fired)
-  - failure count (errors)
-  - missing question indices (for follow-up runs)
+v0.6.5 CONTAMINATION GUARD: the v0.6.4 full-500 aggregate silently
+mixed STALE partial slices (committed earlier, scored with older
+code) into the fresh run because the workflow glob
+``canonical_slice_*.json`` matched them all and "later slice wins"
+let stale files override fresh artifacts — 100 questions carried
+v0.6.3-era results and the published 0.944 was actually 0.958. The
+aggregate now:
+  * reports every duplicate qid across input files (loud table)
+  * records which FILE supplied each result + per-file counts
+  * stamps git sha + aggregation timestamp into the summary
+  * exits nonzero when duplicates would change the score
+    (--allow-duplicates to override, never silent)
 
 Usage:
   python scripts/longmemeval_canonical_aggregate.py \\
-      --slices benchmarks/results/canonical_slice_0.json \\
-               benchmarks/results/canonical_slice_100.json \\
+      --slices benchmarks/full500_slices/canonical_slice_*.json \\
       --out benchmarks/results/canonical_full.json
 """
 from __future__ import annotations
@@ -26,9 +28,25 @@ import argparse
 import glob
 import json
 import os
+import subprocess
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
+
+
+def _git_sha() -> str:
+    """Best-effort git sha of the working tree (for provenance)."""
+    for cmd in ("git rev-parse HEAD",
+                "git rev-parse --short HEAD"):
+        try:
+            out = subprocess.run(cmd.split(), capture_output=True,
+                                 text=True, timeout=5)
+            if out.returncode == 0:
+                return out.stdout.strip()
+        except Exception:
+            continue
+    return "unknown"
 
 
 def _load_slice(path: str) -> list[dict]:
@@ -46,9 +64,19 @@ def _load_slice(path: str) -> list[dict]:
 
 
 def aggregate(slices: list[str], out_path: str | None = None,
-              full_n: int = 500) -> dict:
-    """Merge slices into a single canonical full-N summary."""
+              full_n: int = 500,
+              allow_duplicates: bool = False) -> dict:
+    """Merge slices into a single canonical full-N summary.
+
+    v0.6.5: duplicate qids across input files are surfaced loudly
+    (file, verdict flip) instead of silently resolved. If duplicates
+    would change the score, exit nonzero unless
+    ``allow_duplicates=True``.
+    """
     by_idx: dict[int, dict] = {}
+    source_file: dict[int, str] = {}
+    dup_report: dict[int, list[tuple[str, bool]]] = defaultdict(list)
+    flips: list[tuple[int, str, str]] = []
     for path in slices:
         results = _load_slice(path)
         print(f"[slice] {path}: {len(results)} questions")
@@ -56,7 +84,39 @@ def aggregate(slices: list[str], out_path: str | None = None,
             idx = r.get("global_idx")
             if idx is None:
                 continue
-            by_idx[idx] = r  # later slice wins on conflict
+            dup_report[idx].append(
+                (os.path.basename(path), bool(r.get("det_correct"))))
+            if idx in by_idx:
+                prev = by_idx[idx]
+                if prev.get("det_correct") != r.get("det_correct"):
+                    flips.append((idx, source_file[idx],
+                                  os.path.basename(path)))
+                # later slice wins on conflict (kept for explicit
+                # override workflows; the guard above makes it loud)
+            by_idx[idx] = r
+            source_file[idx] = os.path.basename(path)
+
+    dups = {k: v for k, v in dup_report.items() if len(v) > 1}
+    if dups:
+        print(f"\n[DUPLICATES] {len(dups)} qids appear in multiple "
+              f"slice files:", file=sys.stderr)
+        for idx, entries in sorted(dups.items())[:20]:
+            files = ", ".join(f"{f}({'T' if ok else 'F'})"
+                              for f, ok in entries)
+            print(f"  idx {idx}: {files}", file=sys.stderr)
+        if len(dups) > 20:
+            print(f"  ... and {len(dups) - 20} more", file=sys.stderr)
+    if flips:
+        print(f"\n[VERDICT FLIPS] {len(flips)} qids have CONFLICTING "
+              f"verdicts across slices:", file=sys.stderr)
+        for idx, f1, f2 in flips[:20]:
+            print(f"  idx {idx}: {f1} vs {f2}", file=sys.stderr)
+        if not allow_duplicates:
+            print("\nRefusing to aggregate silently — stale slice files "
+                  "are likely mixed with fresh ones (this exact bug "
+                  "produced the bogus 0.944 in v0.6.4). Clean the input "
+                  "glob or pass --allow-duplicates.", file=sys.stderr)
+            sys.exit(2)
 
     all_results = sorted(by_idx.values(), key=lambda r: r["global_idx"])
     print(f"\n[aggregate] {len(all_results)} unique questions across "
@@ -105,6 +165,17 @@ def aggregate(slices: list[str], out_path: str | None = None,
         "errors": errors,
         "missing_indices": missing[:50] + (["..."] if len(missing) > 50 else []),
         "n_missing": len(missing),
+        "aggregate_provenance": {
+            "git_sha": _git_sha(),
+            "aggregated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                            time.gmtime()),
+            "slice_files": {
+                os.path.basename(p): len(_load_slice(p))
+                for p in slices
+            },
+            "duplicate_qids": len(dups),
+            "verdict_flips": len(flips),
+        },
         "honest_scope_note": (
             f"Aggregated {len(all_results)} / {full_n} canonical "
             f"questions from {len(slices)} slice(s). μ=0 throughout. "
@@ -148,6 +219,10 @@ if __name__ == "__main__":
                     default="benchmarks/results/canonical_full.json")
     ap.add_argument("--full-n", type=int, default=500,
                     help="target total (default 500)")
+    ap.add_argument("--allow-duplicates", action="store_true",
+                    help="permit duplicate qids across slices (loud, "
+                         "never silent; exits 2 on verdict flips by "
+                         "default)")
     args = ap.parse_args()
     # expand globs
     slices = []
@@ -156,4 +231,5 @@ if __name__ == "__main__":
             slices.extend(sorted(glob.glob(s)))
         else:
             slices.append(s)
-    aggregate(slices, out_path=args.out, full_n=args.full_n)
+    aggregate(slices, out_path=args.out, full_n=args.full_n,
+              allow_duplicates=args.allow_duplicates)

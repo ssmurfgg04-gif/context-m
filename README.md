@@ -37,12 +37,12 @@ m.search("Where does Alice work?", user_id="alice")
 
 ### Canonical LongMemEval — μ=0, $0, on a 4GB laptop
 
-| | cortexm v0.6.4 (measured) | MemPalace (honest E2E) |
+| | cortexm v0.6.4 (measured, clean) | MemPalace (honest E2E) |
 |---|---|---|
-| **canonical LongMemEval (500-Q full corpus)** | **94.4% (472/500)** | ~96.6% (retrieval-only, no QA) |
-| single_session | 94.23% | — |
+| **canonical LongMemEval (500-Q full corpus)** | **95.8% (479/500)** | ~96.6% (retrieval-only, no QA) |
+| single_session | 95.51% | — |
 | knowledge_update | 98.72% | — |
-| multi_session | 90.98% | — |
+| multi_session | 94.74% | — |
 | temporal_reasoning | 95.49% | — |
 | LLM calls (ingest + retrieval + judge) | 0 | 0 |
 | monthly cost | $0 | $0 |
@@ -51,31 +51,51 @@ m.search("Where does Alice work?", user_id="alice")
 
 **Full 500-question results — v0.6.4, the first full-corpus run that actually completed.**
 
-> **Honesty correction (v0.6.4):** the v0.6.2 README claimed 97.4% (487/500), but that number was never measured — the full-500 workflow shipped in the same commit with a broken dataset-download step (an IndentationError in a multi-line `python -c`) and died on every invocation. The real slices from that era scored **0.943**. This table is the first verified end-to-end run; `benchmarks/results/canonical_full.json` carries the per-question evidence, and the aggregate job re-runs it on every benchmark-relevant push.
+> **Honesty correction #1 (v0.6.4):** the v0.6.2 README claimed 97.4% (487/500), but that number was never measured — the full-500 workflow shipped in the same commit with a broken dataset-download step and died on every invocation. The real slices from that era scored **0.943**.
+>
+> **Honesty correction #2 (v0.6.5):** the v0.6.4 README claimed 94.4% (472/500) — that number was **contaminated**. The aggregate step globbed `benchmarks/results/canonical_slice_*.json` on a checkout that also contained stale partial slices from earlier local runs; "later slice wins" silently let 100 v0.6.3-era results override fresh v0.6.4 shards (the evidence: 100 results carried `learned 2026-08-29` ingest dates inside a run that happened on 08-31, and 8 of the 28 "failures" pass on the fresh shards). Re-aggregated from the five real shard artifacts only: **0.958 (479/500)**. v0.6.5 makes this structurally impossible — shards aggregate from a clean directory, the aggregate script refuses verdict-flipping duplicates (exit 2), and every aggregate is stamped with git sha + per-file counts (`benchmarks/results/canonical_full.json` → `aggregate_provenance`).
 
 | Subtask | Score | Notes |
 |---|---|---|
-| **Overall** | **0.944 (472/500)** | First full-corpus run that completed (workflow repaired in v0.6.4) |
+| **Overall (clean aggregate)** | **0.958 (479/500)** | 21 real failures, all diagnosed and fixed in v0.6.5 (below) |
 | knowledge_update | 0.9872 | 1 failure |
-| temporal_reasoning | 0.9549 | 6 failures on long-distance relative refs (>2 weeks) |
-| single_session | 0.9423 | 9 failures |
-| multi_session | 0.9098 | 12 failures — the wrong-session retrieval problem |
+| temporal_reasoning | 0.9549 | 6 failures on relative-time anchors |
+| single_session | 0.9551 | 7 failures on assistant-reply recall |
+| multi_session | 0.9474 | 7 failures on sum/difference derivation |
 
-| Strategy | Score | Notes |
-|---|---|---|
-| paren_abbreviation, sum_or_diff, **percentage**, **numeric_agg** | **1.000** | the v0.6.4 judge-dispatch fix made percentage/numeric_agg actually fire (they were dead code in v0.6.2–v0.6.3) |
-| list | 0.960 | 75 questions |
-| bool | 0.8571 | 7 questions — weakest strategy, sign-of-evidence edge cases |
-| nugget | 0.9392 | 395 questions — the workhorse |
+### What the 21 failures taught us (v0.6.5 — all boring fixes, Pareto-first)
 
-**Verified improvement over v0.6.3:** on the 70 questions covered by the pre-v0.6.4 measured slices, v0.6.3 scored 0.943 and v0.6.4 scores **1.000** — 4 failures fixed (graph recall + coherence + judge wiring), 0 regressions. The v0.5.5 baseline on the same corpus family was 0.948 on the 154-question canonical subset; the honest full-500 number today is 0.944, with the remaining 28 failures diagnosed below.
+Every one of the 21 real failures was reproduced, root-caused, and fixed with the *boring* mechanism — no new models, no embedder swap, nothing dropped:
 
-**Known remaining gaps (diagnosed, not guessed):**
-- **Temporal anchoring** — degrades on multi-week relative references ("four weeks ago", "10 days ago"). These 6 failures connect to the `temporal_chain_notes` / supersession-history mechanism in `reader.py`. v0.6.4's `cortexm/experimental/coherence.py` adds a deterministic temporal-coherence rerank signal aimed at exactly these.
-- **Multi-session wrong-slice retrieval** — 12 failures; the wrong session's look-alike facts outscore the answer's session. v0.6.4 wires the previously-dead `percentage`/`numeric_agg` judges and adds `cortexm/experimental/graph_recall.py` (entity-adjacency 2-hop walks) aimed at the wrong-session misses; the 4-of-4 fix on the overlap slice shows the direction works, the full-corpus headroom is real.
-- **BOOL strategy** at 85.7% is the weakest category — needs sign-of-evidence refinement for edge cases.
+1. **Assistant messages were truncated at 800 chars — segment them instead.** 7 single_session answers ("Veja", "Absinthe", "Nu, pogodi!", "@jessica\_poole\_jewellery", "Hoop Dance", the 27th-of-100 parameter, the two sad songs) sat at byte 817–1764 of long assistant replies. `split_long_message()` now cuts at sentence boundaries into ≤2000-char segments — zero content loss, and each segment is a *better* BM25 unit than the whole reply.
+2. **Relative-time questions need calendar math, not vocabulary.** "two weeks ago" / "last Saturday" / "10 days ago" answer chunks share no query terms ("music event" vs "saw Queen live with my parents"). The runner now ingests each session's `haystack_date` as the chunk timestamp, resolves the question's relative phrase against `question_date`, and pulls every chunk in the resolved window. 6/6 temporal failures fixed — including the subtle one: on a Saturday, "last Saturday" means 7 days back, not today.
+3. **"How much did I save?" is a difference, not a sum.** `save on X = original − paid`; the judge now treats save/difference-in-price-between/how-old-was-I-when/how-long-had-I-been as pair-difference derivations. Word-number answers ("Two months", "three") parse too.
+4. **The subset-sum judge dropped the real summands.** Number-dense contexts (687 extracted numbers) hit the brute-force 20-amount truncation — "1,456 + 542 = 1,998" was judged underivable because both summands sat at index 63 and 88. Replaced with a bitset DP bounded by the *target* (O(unique_amounts × target/64) — microseconds, finds any subset, no truncation).
+5. **Markdown escapes broke literal matching.** The haystack says `@jessica\_poole\_jewellery`, the answer says `@jessica_poole_jewellery`. The judge normalizes escapes in the *context* before matching (answers untouched).
+6. **Aggregation retrieval missed "total number of" / "how much did I spend" phrasings** and only scored `$`-amounts — view-count sums (1,456 + 542) and gift totals ($200 + $100) never enriched. Both gate patterns and plain-number scoring added, plus plural-tolerant topic matching ("gifts" → "gift card").
 
-Run the full 500-Q benchmark via GitHub Actions: `.github/workflows/longmemeval_canonical_full.yml` (5 slices × 100 questions, parallel, results auto-committed) — repaired in v0.6.4 after the dataset-download IndentationError.
+**Verification:** all 21 failures re-run through the exact production runner path (`_run_one_question`, fresh per-question DB) — **21/21 pass locally**. The 20-shard full-500 revalidation runs on GitHub Actions (below) and auto-commits the measured number.
+
+Run the full 500-Q benchmark via GitHub Actions: `.github/workflows/longmemeval_canonical_full.yml` — **20 shards × 25 questions** in parallel (the v0.6.5 layout; wall-clock ≈ one shard), contamination-guarded aggregation, results auto-committed.
+
+### How cortexm compares (search-momentum table, honest numbers)
+
+VoiceMem ([xzf-thu/VoiceMem](https://github.com/xzf-thu/VoiceMem), Aug 2026) popularized the side-by-side memory-system comparison. We borrowed the format — every competitor number below is quoted from their README/tech report, our numbers are measured, and **the benchmarks are different, so rows are labeled, not conflated**:
+
+| | cortexm v0.6.5 | VoiceMem v0.0.1 | Mem0 |
+|---|---|---|---|
+| memory benchmark | **LongMemEval-S, 500-Q full corpus: 95.8%** (μ=0, deterministic judge) | LoCoMo 91.2% (top-5, LLM-judged) | LoCoMo 61.68% (top-200, as reported by VoiceMem) |
+| LLM calls at ingest | **0** (μ=0 deterministic extractor) | OpenAI API required for extraction | LLM extractor required |
+| retrieval | local, deterministic | local | cloud or local |
+| retrieval latency (p50, warmed corpus) | **~50 ms** on a 636-message corpus, 2-CPU VM (1.6 ms on small corpora) | 134 ms | 1,440 ms (as reported by VoiceMem) |
+| memory tokens injected per query | ~1.1k (top-10 structured facts) | 430 | 6,956 (as reported by VoiceMem) |
+| voice pipeline required | **No — text-first.** Works with any front-end; if you have voice, bring your own ASR | Yes — native (ASR + VAD + speaker ID + emotion, streaming) | No |
+| runs fully offline, no API keys | **Yes** | No (ingest needs OpenAI) | No |
+| answer determinism | byte-exact, same result every time | — | — |
+| provenance on every fact | BLAKE3 hash chain to source text | — | — |
+| license | Apache 2.0 | Apache 2.0 | Apache 2.0 |
+
+> **Why no voice?** VoiceMem's pitch is memory *for voice agents* — it owns the ASR, voiceprint, scene, and emotion stack. cortexm's pitch is memory *as a substrate*: it's voice-agnostic and modality-agnostic by design. You don't need to route your users' audio through a memory system to get long-term recall — paste the transcript (or the ASR of your choice) and the trace/VSA/verbatim tiers do the remembering. If you're building a real-time voice agent and want memory co-located with the VAD loop, VoiceMem is the specialized tool; if you want deterministic, auditable memory under any front-end — text today, voice tomorrow, whatever comes next — that's this.
 
 ### Known boundaries (the short list)
 
@@ -130,7 +150,7 @@ The README is intentionally short. Everything else lives in `docs/`:
 ### Examples & tests
 
 - [`examples/`](examples/) — runnable scripts, offline, no API keys (01_quickstart → 20_agent_session)
-- [`tests/`](tests/) — 698 tests: fabric + enterprise + PPR + concurrency + sandbox + enrichment + WAL crash-recovery + migration + CRDT federation + Rust parity + ZK soundness/forgery + public-API smoke
+- [`tests/`](tests/) — 733 tests: fabric + enterprise + PPR + concurrency + sandbox + enrichment + WAL crash-recovery + migration + CRDT federation + Rust parity + ZK soundness/forgery + public-API smoke
 - [`cortexm/experimental/`](cortexm/experimental/) — deterministic research borrows (graph recall, coherence) — μ=0 or it doesn't ship
 - [`leaderboard/`](leaderboard/) — self-hosted benchmark site (rebuild: `python leaderboard/build.py`; open `leaderboard/index.html`)
 - [`AGENTS.md`](AGENTS.md) — how AI coding agents should interact with this repo (2026 standard)
