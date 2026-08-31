@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortexm"
-version = "0.6.5"
+version = "0.6.6"
 description = "Context-M: deterministic, auditable, zero-cost memory for AI agents"
 readme = "README.md"
 license = {text = "MIT"}

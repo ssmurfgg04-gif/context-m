@@ -1,0 +1,114 @@
+{
+  "note": "LoCoMo retrieval-depth curve, v0.6.6 code (all fixes), PYTHONHASHSEED=0, clock-pinned. Canonical = k=60. Full per-question evidence for k=60 lives in locomo_full.json; k=30/k=120 points regenerated with final code and summarized here to keep the repo lean.",
+  "dataset": "snap-research/locomo locomo10.json (10 convs, 1,986 QA)",
+  "curve": {
+    "k30": {
+      "comparable_accuracy": 0.9231,
+      "comparable_counts": [
+        1333,
+        1444
+      ],
+      "by_category": {
+        "adversarial (rubric)": 0.8229,
+        "multi_hop": 0.7872,
+        "open_domain": 0.4062,
+        "single_hop": 0.9655,
+        "temporal": 0.9315
+      },
+      "by_category_counts": {
+        "adversarial (rubric)": [
+          367,
+          446
+        ],
+        "multi_hop": [
+          222,
+          282
+        ],
+        "open_domain": [
+          39,
+          96
+        ],
+        "single_hop": [
+          812,
+          841
+        ],
+        "temporal": [
+          299,
+          321
+        ]
+      }
+    },
+    "k60": {
+      "comparable_accuracy": 0.9328,
+      "comparable_counts": [
+        1347,
+        1444
+      ],
+      "by_category": {
+        "adversarial (rubric)": 0.8206,
+        "multi_hop": 0.8262,
+        "open_domain": 0.4167,
+        "single_hop": 0.9667,
+        "temporal": 0.9377
+      },
+      "by_category_counts": {
+        "adversarial (rubric)": [
+          366,
+          446
+        ],
+        "multi_hop": [
+          233,
+          282
+        ],
+        "open_domain": [
+          40,
+          96
+        ],
+        "single_hop": [
+          813,
+          841
+        ],
+        "temporal": [
+          301,
+          321
+        ]
+      }
+    },
+    "k120": {
+      "comparable_accuracy": 0.9481,
+      "comparable_counts": [
+        1369,
+        1444
+      ],
+      "by_category": {
+        "adversarial (rubric)": 0.8161,
+        "multi_hop": 0.883,
+        "open_domain": 0.4688,
+        "single_hop": 0.9738,
+        "temporal": 0.9377
+      },
+      "by_category_counts": {
+        "adversarial (rubric)": [
+          364,
+          446
+        ],
+        "multi_hop": [
+          249,
+          282
+        ],
+        "open_domain": [
+          45,
+          96
+        ],
+        "single_hop": [
+          819,
+          841
+        ],
+        "temporal": [
+          301,
+          321
+        ]
+      }
+    }
+  }
+}

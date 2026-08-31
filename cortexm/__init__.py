@@ -18,7 +18,7 @@ Plugin kernel:            ``from cortexm import Context, mount_default``
 
 from __future__ import annotations
 
-__version__ = "0.6.5"
+__version__ = "0.6.6"
 
 # μ=0 protocol counter: number of LLM invocations used by this process.
 # The BEAM-honest protocol requires this to stay 0 during ingest & retrieval.

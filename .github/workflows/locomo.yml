@@ -1,0 +1,165 @@
+name: LoCoMo Canonical (Full 10)
+
+# Runs the official LoCoMo benchmark (10 conversations, 1,986 QA)
+# end-to-end with the μ=0 pipeline (no LLM at ingest, retrieval, or
+# judging) — the measured LoCoMo number for the README comparison
+# table row quoted against VoiceMem's 91.2%.
+#
+# Sharding: 10 jobs, ONE conversation per runner (the heaviest
+# conversation completes in ~30s locally; a whole-corpus run is
+# ~2 minutes of compute, sharded purely for the same parallel
+# wall-clock + per-shard auditability the full-500 run has).
+#
+# Hygiene (same lessons as the full-500 pipeline):
+#   * shard artifacts download into a CLEAN directory
+#     (benchmarks/locomo_shards/) that never contains repo files
+#   * the aggregate script REFUSES (exit 2) on verdict-flipping
+#     duplicate conversation ids and stamps git sha + per-file counts
+#   * results commit into benchmarks/results/locomo/locomo_full.json
+#
+# Determinism: PYTHONHASHSEED=0 + the runner's clock pin (search()
+# timestamp = last session date) keep the run reproducible except
+# for a ±0.1% (≤7/1444) fact-tier tie-break variance documented in
+# the results summary.
+#
+# Trigger: workflow_dispatch (manual) + nightly 04:30 UTC + pushes
+# that touch the LoCoMo runner/judge paths on main.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 4 * * *"   # nightly 04:30 UTC (offset from full-500)
+  push:
+    paths:
+      - "scripts/locomo_canonical.py"
+      - "scripts/locomo_aggregate.py"
+      - "scripts/longmemeval_judge.py"
+      - "cortexm/plugins/verbatim.py"
+      - "cortexm/api/memory.py"
+      - "cortexm/bridge/reader.py"
+      - ".github/workflows/locomo.yml"
+    branches:
+      - main
+
+permissions:
+  contents: write   # allow the aggregate job to commit results to repo
+
+concurrency:
+  group: locomo-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # One shard per conversation (0..9).
+  slice:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        conv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    name: "conversation ${{ matrix.conv }}"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+      - name: Cache LoCoMo dataset
+        uses: actions/cache@v4
+        with:
+          path: data/locomo/
+          key: locomo10-snap-research-v1
+      - name: Download LoCoMo dataset (if cache miss)
+        run: |
+          if [ ! -f data/locomo/locomo10.json ]; then
+            mkdir -p data/locomo
+            curl -sL --retry 3 --retry-all-errors \
+              -o data/locomo/locomo10.json \
+              https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json
+          fi
+          python -c "import json; d = json.load(open('data/locomo/locomo10.json')); assert len(d) == 10, len(d); print('dataset OK:', len(d), 'conversations,', sum(len(c.get('qa', [])) for c in d), 'questions')"
+      - name: Run shard (one conversation)
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          mkdir -p benchmarks/locomo_shards
+          python scripts/locomo_canonical.py \
+            --conv-indices ${{ matrix.conv }} \
+            --verbatim-k 60 \
+            --max-seconds-per-conv 1200 \
+            --out benchmarks/locomo_shards/locomo_conv_${{ matrix.conv }}.json
+      - name: Upload shard results
+        uses: actions/upload-artifact@v4
+        with:
+          name: locomo-shard-${{ matrix.conv }}
+          path: benchmarks/locomo_shards/locomo_conv_${{ matrix.conv }}.json
+          retention-days: 30
+
+  # Aggregate all conversation shards into one canonical score and
+  # commit it back to the repo (contamination-guarded).
+  aggregate:
+    needs: [slice]
+    runs-on: ubuntu-latest
+    name: "aggregate → canonical LoCoMo"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (no test deps — just need the cortexm package)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Download all shard artifacts into a CLEAN directory
+        uses: actions/download-artifact@v4
+        with:
+          pattern: locomo-shard-*
+          path: benchmarks/locomo_shards
+          merge-multiple: true
+      - name: Aggregate shards (contamination-guarded)
+        env:
+          PYTHONHASHSEED: "0"
+        run: |
+          mkdir -p benchmarks/results/locomo
+          # aggregate ONLY from the clean artifact directory — never
+          # from benchmarks/results/ (committed historical files live
+          # there). Exits 2 on verdict-flipping duplicate cids.
+          python scripts/locomo_aggregate.py \
+            --shards "benchmarks/locomo_shards/locomo_conv_*.json" \
+            --out benchmarks/results/locomo/locomo_full.json
+          cp benchmarks/locomo_shards/locomo_conv_*.json \
+             benchmarks/results/locomo/ || true
+      - name: Print summary
+        run: |
+          echo "## Canonical LoCoMo (μ=0, full corpus)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          python - <<'PY' | tee -a $GITHUB_STEP_SUMMARY
+          import json
+          d = json.load(open('benchmarks/results/locomo/locomo_full.json'))
+          s = d['summary']
+          cs = s['comparable_subset']
+          print(f"Questions: {s['n_questions']} across {s['n_conversations']} conversations")
+          print(f"Comparable (single/multi/temporal): {cs['accuracy']} ({cs['counts'][0]}/{cs['counts'][1]})")
+          print()
+          print('| category | accuracy | correct |')
+          print('|---|---|---|')
+          for k, v in s['by_category'].items():
+              c = s['by_category_counts'][k]
+              print(f'| {k} | {v} | {c[0]}/{c[1]} |')
+          PY
+      - name: Commit results back
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benchmarks/results/locomo/ || true
+          git commit -m "chore(bench): canonical LoCoMo full corpus (μ=0, 10 shards)
+
+          Measured on the official snap-research locomo10.json.
+          Comparable subset (single_hop + multi_hop + temporal) at
+          verbatim_k=60. μ=0 throughout — no LLM at ingest, retrieval,
+          or judging. Contamination-guarded aggregation." || echo "nothing to commit"
+          git pull --rebase || true
+          git push
