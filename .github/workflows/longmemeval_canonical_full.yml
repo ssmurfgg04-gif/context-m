@@ -98,13 +98,11 @@ jobs:
         run: |
           if [ ! -f data/longmemeval/longmemeval_s_cleaned.json ]; then
             mkdir -p data/longmemeval
-            python -c "
-            from huggingface_hub import hf_hub_download
-            p = hf_hub_download(
-                repo_id='xiaowu0162/longmemeval-cleaned',
-                repo_type='dataset',
-                filename='longmemeval_s_cleaned.json')
-            import shutil; shutil.copy(p, 'data/longmemeval/longmemeval_s_cleaned.json')"
+            # v0.6.4: single-line -c — the v0.6.3 multi-line form fed
+            # indented source to python (IndentationError at line 2),
+            # so every slice job died here and the full-500 workflow
+            # never produced a result.
+            python -c "from huggingface_hub import hf_hub_download; import shutil; shutil.copy(hf_hub_download(repo_id='xiaowu0162/longmemeval-cleaned', repo_type='dataset', filename='longmemeval_s_cleaned.json'), 'data/longmemeval/longmemeval_s_cleaned.json')"
           fi
       - name: Run slice
         run: |
@@ -157,18 +155,20 @@ jobs:
         run: |
           echo "## Canonical LongMemEval (μ=0, full 500)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          python -c "
+          # v0.6.4: heredoc form — the v0.6.3 multi-line python -c had the
+          # same IndentationError as the download step
+          python - <<'PY' | tee -a $GITHUB_STEP_SUMMARY
           import json
           d = json.load(open('benchmarks/results/canonical_full.json'))
           s = d['summary']
-          print(f\"Coverage: {s['coverage_pct']}% ({s['n_total_questions']}/{s['n_target']})\")
-          print(f\"Overall: {s['det_judge_accuracy']}\")
+          print(f"Coverage: {s['coverage_pct']}% ({s['n_total_questions']}/{s['n_target']})")
+          print(f"Overall: {s['det_judge_accuracy']}")
           print()
           print('| Subtask | n | accuracy | correct | wrong |')
           print('|---|---|---|---|---|')
           for k, v in s['by_subtask'].items():
-              print(f'| {k} | {v[\"n\"]} | {v[\"accuracy\"]} | {v[\"correct\"]} | {v[\"wrong\"]} |')
-          " | tee -a $GITHUB_STEP_SUMMARY
+              print(f'| {k} | {v["n"]} | {v["accuracy"]} | {v["correct"]} | {v["wrong"]} |')
+          PY
       - name: Commit results back
         run: |
           git config user.name "github-actions[bot]"
