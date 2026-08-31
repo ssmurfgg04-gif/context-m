@@ -3302,3 +3302,34 @@ Work Log:
 Stage Summary:
 - v0.6.4 + 2 CI fixes pushed; full-500 workflow functional for the first time
 - Awaiting: full-500 aggregate results → README v0.6.4 number update
+
+---
+Task ID: 18
+Agent: main (Super Z)
+Task: Full-500 validation results + honesty correction
+
+Work Log:
+- All 5 slices of the repaired full-500 workflow completed (first successful full-corpus
+  run in repo history); aggregate computed results but its commit-back step lost the
+  race with newer pushes — downloaded the 5 slice artifacts and aggregated locally
+- RESULT: v0.6.4 full 500-Q = 0.944 (472/500)
+  * knowledge_update 0.9872 (1 wrong), temporal 0.9549 (6 wrong),
+    single_session 0.9423 (9 wrong), multi_session 0.9098 (12 wrong)
+  * percentage (4/4) and numeric_agg (4/4) — the newly-wired judges fire and are perfect
+- Overlap audit vs the pre-v0.6.4 measured slices (70 questions): v0.6.3 = 0.943,
+  v0.6.4 = 1.000 — 4 failures fixed, 0 regressions (qids 58ef2f1c, 25e5aa4f,
+  2318644b, 129d1232)
+- HONESTY CORRECTION: the v0.6.2 README claim of 97.4% (487/500) was never measured —
+  it shipped in the same commit (0fe7fc0) as the full-500 workflow whose dataset
+  download step died with an IndentationError on every invocation; the real slices
+  from that era scored 0.943. README updated with the real 0.944 + correction note
+- Committed the real evidence: canonical_full.json + 5 slice jsons + 5 ckpt.jsonl
+- container-smoke CI: Docker build fixed (deleted context_m.py reference) exposed a
+  second layer — curl exit 56 (connection RESET before the container's python listens;
+  --retry-connrefused doesn't retry RESETs) → --retry-all-errors
+
+Stage Summary:
+- v0.6.4 measured honestly: 0.944 full-corpus, first working 500-Q pipeline, results
+  auto-committed on benchmark pushes from now on
+- Remaining headroom diagnosed: 28 failures (12 multi_session wrong-slice, 9
+  single_session, 6 temporal, 1 knowledge_update)

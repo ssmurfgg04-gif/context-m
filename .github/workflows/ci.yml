@@ -52,6 +52,11 @@ jobs:
       - uses: actions/checkout@v5
       - run: docker build -f deploy/Dockerfile -t cortexm-smoke .
       - run: docker run -d --rm --name cortexm-smoke -p 8900:8900 cortexm-smoke
-      - run: curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8900/healthz
+        # v0.6.4: --retry-all-errors — docker's userland proxy accepts the
+        # TCP connection and RESETs it until the container's python is
+        # actually listening (~1s after docker run). --retry-connrefused
+        # alone treats that first RESET as fatal (curl exit 56) even
+        # though the server boots fine.
+      - run: curl --retry 10 --retry-all-errors --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8900/healthz
       - if: always()
         run: docker logs cortexm-smoke || true

@@ -37,42 +37,45 @@ m.search("Where does Alice work?", user_id="alice")
 
 ### Canonical LongMemEval — μ=0, $0, on a 4GB laptop
 
-| | cortexm v0.6.4 | MemPalace (honest E2E) |
+| | cortexm v0.6.4 (measured) | MemPalace (honest E2E) |
 |---|---|---|
-| **canonical LongMemEval (500-Q full corpus)** | **97.4% (487/500)** | ~96.6% (retrieval-only, no QA) |
-| single_session | **100.0%** | — |
-| knowledge_update | **100.0%** | — |
-| multi_session | 94.74% | — |
+| **canonical LongMemEval (500-Q full corpus)** | **94.4% (472/500)** | ~96.6% (retrieval-only, no QA) |
+| single_session | 94.23% | — |
+| knowledge_update | 98.72% | — |
+| multi_session | 90.98% | — |
 | temporal_reasoning | 95.49% | — |
 | LLM calls (ingest + retrieval + judge) | 0 | 0 |
 | monthly cost | $0 | $0 |
 | determinism | byte-exact across 3× runs | byte-exact |
 | owns your data | ✓ single `.db` file | ✓ |
 
-**Full 500-question results** (v0.6.2 baseline; v0.6.4 re-run lands the experimental graph-recall + coherence modules below):
+**Full 500-question results — v0.6.4, the first full-corpus run that actually completed.**
+
+> **Honesty correction (v0.6.4):** the v0.6.2 README claimed 97.4% (487/500), but that number was never measured — the full-500 workflow shipped in the same commit with a broken dataset-download step (an IndentationError in a multi-line `python -c`) and died on every invocation. The real slices from that era scored **0.943**. This table is the first verified end-to-end run; `benchmarks/results/canonical_full.json` carries the per-question evidence, and the aggregate job re-runs it on every benchmark-relevant push.
 
 | Subtask | Score | Notes |
 |---|---|---|
-| **Overall** | **0.974 (487/500)** | Full corpus, not a proxy sample |
-| single_session | **1.000** | Perfect retrieval across all sessions |
-| knowledge_update | **1.000** | Supersession edges working correctly |
+| **Overall** | **0.944 (472/500)** | First full-corpus run that completed (workflow repaired in v0.6.4) |
+| knowledge_update | 0.9872 | 1 failure |
 | temporal_reasoning | 0.9549 | 6 failures on long-distance relative refs (>2 weeks) |
-| multi_session | 0.9474 | 7 failures; 4 retrieval misses, 2–3 arithmetic aggregation gaps |
+| single_session | 0.9423 | 9 failures |
+| multi_session | 0.9098 | 12 failures — the wrong-session retrieval problem |
 
-| Strategy | Score |
-|---|---|
-| holiday_date, paren_abbreviation, list, sum_or_diff | **1.000** |
-| nugget | 0.9691 |
-| bool | 0.8571 |
+| Strategy | Score | Notes |
+|---|---|---|
+| paren_abbreviation, sum_or_diff, **percentage**, **numeric_agg** | **1.000** | the v0.6.4 judge-dispatch fix made percentage/numeric_agg actually fire (they were dead code in v0.6.2–v0.6.3) |
+| list | 0.960 | 75 questions |
+| bool | 0.8571 | 7 questions — weakest strategy, sign-of-evidence edge cases |
+| nugget | 0.9392 | 395 questions — the workhorse |
 
-**Baseline beaten:** v0.5.5 baseline was 0.948; this is a **+2.6 pp** improvement on the full 500-question corpus.
+**Verified improvement over v0.6.3:** on the 70 questions covered by the pre-v0.6.4 measured slices, v0.6.3 scored 0.943 and v0.6.4 scores **1.000** — 4 failures fixed (graph recall + coherence + judge wiring), 0 regressions. The v0.5.5 baseline on the same corpus family was 0.948 on the 154-question canonical subset; the honest full-500 number today is 0.944, with the remaining 28 failures diagnosed below.
 
 **Known remaining gaps (diagnosed, not guessed):**
 - **Temporal anchoring** — degrades on multi-week relative references ("four weeks ago", "10 days ago"). These 6 failures connect to the `temporal_chain_notes` / supersession-history mechanism in `reader.py`. v0.6.4's `cortexm/experimental/coherence.py` adds a deterministic temporal-coherence rerank signal aimed at exactly these.
-- **Arithmetic aggregation** — the generalized `sum_or_diff` judge (v0.6.2) fixes the 2–3 real computation gaps. The remaining multi_session failures are **retrieval misses** (wrong session pulled: poetry instead of podcasts, marketing facts instead of video views), not judge failures. v0.6.4 wires the previously-dead `percentage`/`numeric_agg` judges and adds `cortexm/experimental/graph_recall.py` (entity-adjacency 2-hop walks) aimed at the wrong-session misses.
+- **Multi-session wrong-slice retrieval** — 12 failures; the wrong session's look-alike facts outscore the answer's session. v0.6.4 wires the previously-dead `percentage`/`numeric_agg` judges and adds `cortexm/experimental/graph_recall.py` (entity-adjacency 2-hop walks) aimed at the wrong-session misses; the 4-of-4 fix on the overlap slice shows the direction works, the full-corpus headroom is real.
 - **BOOL strategy** at 85.7% is the weakest category — needs sign-of-evidence refinement for edge cases.
 
-Run the full 500-Q benchmark via GitHub Actions: `.github/workflows/longmemeval.yml` (20 shards, ~30s/q with per-shard DB caching).
+Run the full 500-Q benchmark via GitHub Actions: `.github/workflows/longmemeval_canonical_full.yml` (5 slices × 100 questions, parallel, results auto-committed) — repaired in v0.6.4 after the dataset-download IndentationError.
 
 ### Known boundaries (the short list)
 
