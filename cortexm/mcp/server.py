@@ -251,25 +251,24 @@ TOOLS = [
     },
     {
         "name": "contextm_zk_sql_proof",
-        "description": "ZK-SQL proof (Halo2/PLONKish-inspired, pure-Python): "
-                       "prove a SQL-style aggregate over the Trace without "
-                       "revealing the underlying facts. PoneglyphDB-style — "
-                       "verifier sees only the claimed result + Merkle root + "
-                       "a non-interactive PLONKish transcript, never the actual "
-                       "matching facts. Requires Config.zk_sql_enabled=True "
-                       "(default OFF — proof generation is O(N) in trace size). "
-                       "query: 'membership' | 'count' | 'sum' | 'avg' | 'min' | "
-                       "'max'. For 'membership', supply subject+relation (and "
-                       "optionally value). For aggregates, supply relation; "
-                       "value_filter narrows by substring; user_id scopes the "
-                       "trace. Returns {proof_id, query, claimed_result, "
-                       "merkle_root, verify, transcript_size}.",
+        "description": "ZK proof over numeric fact values (Pedersen + "
+                       "Sigma protocols, pure-Python, secp256k1): prove a "
+                       "SUM over a relation's numeric values, or set "
+                       "MEMBERSHIP of a value in a relation's value set, "
+                       "without revealing the individual values. The "
+                       "verifier checks the Pedersen homomorphism and a "
+                       "range proof cryptographically. Trusted-prover "
+                       "attestation mode: values are fetched server-side "
+                       "at prove-time. Requires Config.zk_sql_enabled=True "
+                       "(default OFF). query: 'sum' | 'membership'. Supply "
+                       "relation (user_id scopes the trace); 'membership' "
+                       "also needs value. Returns {query, relation, "
+                       "claimed_result, verify, mode}.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string",
-                            "enum": ["membership", "count", "sum", "avg",
-                                      "min", "max"]},
+                            "enum": ["sum", "membership"]},
                 "subject": {"type": "string"},
                 "relation": {"type": "string"},
                 "value": {"type": "string"},
@@ -859,7 +858,7 @@ class MCPServer:
                   threshold: int = 32) -> dict:
         """Hamming ZK proof on binary codec vectors."""
         try:
-            from cortexm.security.hamming_attestation import HammingZKProof
+            from cortexm.security.hamming_attestation import HammingZKProver
             palace = self.memory.palace
             # fetch the memory's packed vector
             row = palace._id2row.get(memory_id)
@@ -871,13 +870,17 @@ class MCPServer:
             private = bytes(packed.tobytes())
             prover = HammingZKProver(dims=palace.dims, threshold=threshold)
             proof = prover.prove(public, private)
-            verified = prover.verify(public, proof)
+            # v0.6.4: verify() takes the public vector and internally
+            # enforces distance <= threshold (the v0.6.3 API was
+            # deleted in the refactor and left a NameError behind).
+            verified = proof.verify(public)
             return {
                 "memory_id": memory_id,
                 "verified": verified,
-                "weight": proof.weight,
                 "threshold": proof.threshold,
-                "commitment": proof.commitment[:32] + "...",
+                "public_vec_hash": proof.public_vec_hash[:16] + "…",
+                "n_bits_proved": len(proof.bit_commitments),
+                "n_bit_proofs": len(proof.bit_proofs),
             }
         except Exception as e:
             return {"memory_id": memory_id, "error": str(e)}
@@ -992,48 +995,78 @@ class MCPServer:
                     "reason": "Config.zk_sql_enabled is False — set it True "
                               "to opt into ZK-SQL proofs (O(N) in trace size).",
                 }
-            from cortexm.security.zk_proofs import ZKProver, SQLAggregateProof
-            prover = ZkSqlProver(self.memory.store,
-                                  self.memory.store.hasher)
+            from cortexm.security.zk_proofs import ZKProver, ZKVerifier
+            store = self.memory.store
             q = (query or "").lower()
-            if q == "membership":
-                if not subject or not relation:
-                    return {"error": "membership requires subject + relation"}
-                proof = prover.membership_proof(subject, relation, value=value)
-            elif q == "count":
-                proof = prover.count_proof(relation or "", user_id=user_id)
-            elif q == "sum":
-                proof = prover.sum_proof(relation or "",
-                                          value_filter=value_filter,
-                                          user_id=user_id)
-            elif q == "avg":
-                proof = prover.avg_proof(relation or "",
-                                          value_filter=value_filter,
-                                          user_id=user_id)
-            elif q == "min":
-                proof = prover.minmax_proof(relation or "", "MIN",
-                                              value_filter=value_filter,
-                                              user_id=user_id)
-            elif q == "max":
-                proof = prover.minmax_proof(relation or "", "MAX",
-                                              value_filter=value_filter,
-                                              user_id=user_id)
-            else:
-                return {"error": f"unknown query type {query!r}"}
-            verified = prover.verify(proof)
-            # Public view: only the claimed result + root + proof_id.
-            # The actual fact values are NOT in the public view (the
-            # serialized proof also does not contain them — see tests).
+            # v0.6.4: the deleted ZkSqlProver API (count/avg/min/max over
+            # the trace) has no sound equivalent in the new ZK backend —
+            # those need per-row commitments inside the store. We expose
+            # what the backend can prove HONESTLY: homomorphic SUM and
+            # set MEMBERSHIP over the relation's numeric values
+            # (values fetched server-side at prove-time = trusted-prover
+            # attestation mode).
+            if q not in ("sum", "membership"):
+                return {
+                    "query": query,
+                    "error": "supported query types: 'sum', 'membership'. "
+                             "COUNT/AVG/MIN/MAX need per-row store "
+                             "commitments — not implemented (the v0.6.3 "
+                             "tool advertised them but crashed with a "
+                             "NameError before producing any proof).",
+                }
+            if not relation:
+                return {"error": "sum/membership require a relation"}
+            facts = store.query_facts(relation=relation, user_id=user_id,
+                                      active=True)
+            vals: list[int] = []
+            for f in facts:
+                try:
+                    fv = float(f.value)
+                except (TypeError, ValueError):
+                    continue
+                if fv == int(fv) and abs(fv) < 2 ** 40:
+                    vals.append(int(fv))
+            prover = ZKProver()
+            if q == "sum":
+                if len(vals) < 2:
+                    return {"error": f"relation {relation!r} has <2 numeric "
+                                     "values — nothing to prove"}
+                claimed = sum(vals)
+                proof = prover.prove_sum(vals, claimed)
+                verified = ZKVerifier().verify_sum(proof)
+                return {
+                    "query": "SUM",
+                    "relation": relation,
+                    "n_values": len(vals),
+                    "claimed_result": claimed,
+                    "verify": verified,
+                    "mode": "trusted-prover attestation (values fetched "
+                            "server-side; homomorphism + range verified "
+                            "cryptographically)",
+                }
+            # membership
+            if value is None:
+                return {"error": "membership requires a numeric value"}
+            try:
+                target = int(float(value))
+            except (TypeError, ValueError):
+                return {"error": f"membership requires a numeric value, "
+                                 f"got {value!r}"}
+            if target not in vals:
+                return {"error": f"{value!r} is not among the numeric "
+                                 f"values of relation {relation!r}"}
+            idx = vals.index(target)
+            proof = prover.prove_membership(target, vals, idx)
+            verified = ZKVerifier().verify_membership(proof, vals)
             return {
-                "proof_id": proof.proof_id,
-                "query": proof.query,
-                "claimed_result": proof.claimed_result,
-                "merkle_root": proof.merkle_root[:32] + "…",
-                "n_facts_committed": proof.n_facts_committed,
-                "circuit_gates": proof.circuit_gates,
+                "query": "MEMBERSHIP",
+                "relation": relation,
+                "set_size": len(vals),
+                "leaf_index_revealed": idx,
                 "verify": verified,
-                "transcript_size_bytes": len(proof.serialize()),
-                "n_matching": proof.transcript.get("n_matching"),
+                "mode": "value hidden via random-blinding Pedersen "
+                        "commitment; leaf INDEX is revealed (documented "
+                        "limitation)",
             }
         except Exception as e:
             return {"query": query, "error": str(e)}

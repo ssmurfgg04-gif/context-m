@@ -52,7 +52,7 @@ from judges import (
     _resolve_holiday_dates, _HOLIDAY_DATES,
     _judge_nugget, _STOPWORDS,
     _judge_list, _split_list_answer,
-    _judge_paren_abbreviation,
+    _judge_paren_abbreviation, _PERCENT_RE,
 )
 
 
@@ -286,8 +286,18 @@ def det_judge(context_block: str, answer: str,
         r"left\s+to\s+read|worn|packed|all\s+the\s+\w+)\b",
         qtext, re.I))
     if is_aggregation_q and re.search(r"^\$?[\d,]+(?:\.\d+)?\b", a):
+        # v0.6.4: dispatch the v0.6.2 judges that were imported but
+        # never called — percentage answers get the bounded percentage
+        # judge first, and plain-number answers fall through to the
+        # generalized numeric-agg judge (pages read, episodes watched)
+        # after the $-amount sum/diff judge.
+        if _PERCENT_RE.search(a):
+            if _judge_percentage(context_block, a):
+                return True, "percentage"
         if _judge_sum_or_diff(context_block, a, q):
             return True, "sum_or_diff"
+        if _judge_numeric_agg(context_block, a, q):
+            return True, "numeric_agg"
     # v0.5.5: Parenthetical-abbreviation match — fire BEFORE LIST
     # so "X (ABBR)" answers don't get mis-routed to LIST just because
     # the full expansion contains a comma (e.g. "University of

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from .amount import (
     _AMOUNT_RE,
+    _DOLLAR_RE,
+    _PERCENT_RE,
     _parse_amount,
     _subset_sum_matches,
     _pair_difference_matches,
@@ -23,6 +25,8 @@ from .paren import _judge_paren_abbreviation
 
 __all__ = [
     "_AMOUNT_RE",
+    "_DOLLAR_RE",
+    "_PERCENT_RE",
     "_parse_amount",
     "_subset_sum_matches",
     "_pair_difference_matches",

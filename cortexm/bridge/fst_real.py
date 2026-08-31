@@ -40,41 +40,41 @@ class QueryFST:
         self._spelling = dict(spelling or {})
         # Merge both dictionaries
         self._all = {**self._abbreviations, **self._spelling}
-        # Build trie from lowercase keys
-        self._trie = self._marisa.Trie(self._all.keys())
-        # Compile reverse index for fast lookup
-        self._rev = {v.lower(): k for k, v in self._all.items()}
+        # Build trie from lowercase keys (single-token keys only —
+        # normalize() works token-by-token, so multi-word keys could
+        # never fire; v0.6.3 stored an unreachable "ut austin" key)
+        keys = [k for k in self._all.keys() if " " not in k]
+        self._trie = self._marisa.Trie(keys)
 
     def normalize(self, query: str) -> str:
         """Normalize query using FST lookup.
 
         Order: abbreviations first (so "MIT" expands before token-level
         spelling correction), then spelling corrections.
+
+        v0.6.4: WHOLE-TOKEN matching only. The v0.6.3 code took the
+        longest trie key that was a PREFIX of the token and replaced
+        the entire token with its expansion — turning "important" into
+        "I am" (key "im"), "university" into "United Nations" ("un"),
+        "language" into "Los Angeles" ("la"), "search" into "Seattle"
+        ("sea"), "hello" into "he will" ("hell"). A trie key fires
+        only when it equals the full token, matching the conservative
+        \b-bounded semantics of the production bridge/fst.py.
         """
         if not query:
             return query
         tokens = query.split()
         out = []
-        i = 0
-        while i < len(tokens):
+        for tok in tokens:
             _punct = chr(34) + chr(39) + ',.!?;:'
-            token = tokens[i].lower().strip(_punct)
-            # Try longest prefix match in trie
-            # marisa_trie.prefixes() returns all prefixes
-            prefixes = list(self._trie.prefixes(token))
-            if prefixes:
-                # Use longest match
-                best = max(prefixes, key=len)
-                expansion = self._all[best]
-                out.append(expansion)
-                i += 1
-                continue
-            # Try spelling correction (exact match)
-            if token in self._spelling:
+            token = tok.lower().strip(_punct)
+            # whole-token match in the trie (O(L) lookup)
+            if token and token in self._trie:
+                out.append(self._all[token])
+            elif token in self._spelling:
                 out.append(self._spelling[token])
             else:
-                out.append(tokens[i])
-            i += 1
+                out.append(tok)
         return " ".join(out)
 
     def expand_prefix(self, prefix: str) -> List[Tuple[str, str]]:
@@ -179,11 +179,11 @@ DEFAULT_SPELLING: Dict[str, str] = {
     "independant": "independent",
     "existance": "existence",
     "arguement": "argument",
-    "suprise": "surprise",
     "noticable": "noticeable",
     "peice": "piece",
     "untill": "until",
     "tommorow": "tomorrow",
+    "tommorrow": "tomorrow",
     "truely": "truly",
     "beleive": "believe",
     "acheive": "achieve",
@@ -210,11 +210,19 @@ DEFAULT_SPELLING: Dict[str, str] = {
     "suprise": "surprise",
     "tatoo": "tattoo",
     "tendancy": "tendency",
-    "tommorrow": "tomorrow",
     "wierd": "weird",
     "whereever": "wherever",
     "wich": "which",
-    "wont": "will not",
+    "thier": "their",
+    "teh": "the",
+    "adn": "and",
+    "taht": "that",
+    # Unambiguous contractions ONLY. v0.6.4 removed the ambiguous
+    # common-word entries that corrupted queries even with exact-token
+    # matching: "well"→"we will" ("how well did..."), "were"→"we are"
+    # ("where were they"), "hell", "shell", "shed", "wed", "ill", "id",
+    # "its" (possessive!), "wont". The production bridge/fst.py has
+    # always been this conservative — this module now matches it.
     "wouldnt": "would not",
     "cant": "cannot",
     "dont": "do not",
@@ -229,68 +237,31 @@ DEFAULT_SPELLING: Dict[str, str] = {
     "hadnt": "had not",
     "couldnt": "could not",
     "shouldnt": "should not",
-    "wouldnt": "would not",
     "mightnt": "might not",
     "mustnt": "must not",
     "shant": "shall not",
     "neednt": "need not",
     "darent": "dare not",
-    "oughtnt": "ought not",
-    "usednt": "used not",
     "aint": "am not",
     "im": "I am",
     "ive": "I have",
-    "ill": "I will",
-    "id": "I would",
     "youre": "you are",
     "youve": "you have",
     "youll": "you will",
-    "youd": "you would",
     "hes": "he is",
-    "hes": "he has",
-    "hell": "he will",
-    "hed": "he would",
     "shes": "she is",
-    "shes": "she has",
-    "shell": "she will",
-    "shed": "she would",
-    "its": "it is",
-    "its": "it has",
-    "itll": "it will",
-    "itd": "it would",
-    "were": "we are",
-    "weve": "we have",
-    "well": "we will",
-    "wed": "we would",
     "theyre": "they are",
     "theyve": "they have",
     "theyll": "they will",
-    "theyd": "they would",
     "thats": "that is",
-    "thats": "that has",
-    "thatll": "that will",
-    "whos": "who is",
-    "whos": "who has",
-    "wholl": "who will",
-    "whatre": "what are",
     "whats": "what is",
-    "whats": "what has",
     "wheres": "where is",
-    "wheres": "where has",
-    "wherell": "where will",
+    "whos": "who is",
     "whens": "when is",
-    "whenll": "when will",
     "whys": "why is",
-    "whyll": "why will",
     "hows": "how is",
-    "hows": "how has",
-    "howll": "how will",
     "theres": "there is",
-    "theres": "there has",
-    "therell": "there will",
     "heres": "here is",
-    "heres": "here has",
-    "herell": "here will",
 }
 
 

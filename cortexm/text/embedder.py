@@ -214,6 +214,13 @@ class HashingEmbedder:
                 vec = np.zeros(self.dims, dtype=np.float32)
                 toks = words(texts[i])
                 if not toks:
+                    # v0.6.4: match embed()'s empty-token fallback —
+                    # embed() returns [1, 0, 0, ...] (a non-zero
+                    # sentinel that keeps cosine similarity well
+                    # defined), but embed_many() returned a zero
+                    # vector, so the same text embedded differently
+                    # depending on the call path.
+                    vec[0] = 1.0
                     vecs[i] = vec
                     continue
                 counts = {}

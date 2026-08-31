@@ -6,6 +6,11 @@ import re
 from typing import Protocol
 
 # v0.6.2: generalized to match both $-amounts and plain numbers
+# v0.6.4: dollar-only regex split out of the alternation — the old
+# combined form made group(2) capture EVERY number, so
+# _extract_numbers(include_dollar=True, include_plain=True) counted
+# each plain number twice (once per pass).
+_DOLLAR_RE = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)")
 _AMOUNT_RE = re.compile(r"(?:\$\s*([\d,]+(?:\.\d+)?)|\b([\d,]+(?:\.\d+)?)\b)")
 
 
@@ -91,7 +96,10 @@ def _pair_difference_matches(amounts: list[float], target: float,
 
 
 # v0.6.2: generalized numeric extraction and aggregation judges
-_PLAIN_NUM_RE = re.compile(r"(?<![\d.\w])(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d)")
+# v0.6.4: decimals are INSIDE the capture group ("2.5" used to be
+# captured as "2"), and the dollar branch uses the $-anchored regex
+# so plain numbers are never double-extracted.
+_PLAIN_NUM_RE = re.compile(r"(?<![\d.\w])(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)(?!\d)")
 _PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 
 
@@ -105,13 +113,14 @@ def _extract_numbers(text: str, include_dollar: bool = True,
     vals: list[float] = []
     t = text or ""
     if include_dollar:
-        for m in _AMOUNT_RE.finditer(t):
+        # $-prefixed amounts only (group 1) — the combined _AMOUNT_RE
+        # alternation also captured plain numbers here, which were
+        # then extracted AGAIN by the plain pass below.
+        for m in _DOLLAR_RE.finditer(t):
             try:
-                num = m.group(1) or m.group(2)
-                if num:
-                    v = float(num.replace(",", ""))
-                    if v > 0:
-                        vals.append(v)
+                v = float(m.group(1).replace(",", ""))
+                if v > 0:
+                    vals.append(v)
             except ValueError:
                 continue
     if include_plain:

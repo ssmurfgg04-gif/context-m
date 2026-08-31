@@ -151,21 +151,27 @@ def import_zep(memory, path: str, user_id: str = "migrated") -> dict:
     n_triples, n_texts = 0, 0
     commit = memory.store.create_commit("migrate: zep")
     memory.store.begin_batch()
-    for row in _iter_zep_rows(path):
-        if all(k in row for k in ("subject", "relation", "object")):
-            f = make_fact(row["subject"], row["relation"], row["object"],
-                          now=parse_ts(row.get("valid_at")) or
-                          datetime.now(timezone.utc),
-                          valid_to=row.get("invalid_at"),
-                          user_id=user_id, confidence=0.8,
-                          provenance={"migrated_from": "zep"})
-            memory.store.insert_fact(f, commit)
-            memory.palace.add(f.id, memory.palace.encode_fact(f))
-            n_triples += 1
-        elif row.get("text"):
-            memory.add(row["text"], user_id=user_id)
-            n_texts += 1
-    memory.store.end_batch()
+    # v0.6.4: begin_batch() acquires a re-entrant lock and bumps a depth
+    # counter — an exception mid-loop used to leave both held forever,
+    # deadlocking every later begin_batch() call (including from other
+    # threads). end_batch() now runs no matter how the loop exits.
+    try:
+        for row in _iter_zep_rows(path):
+            if all(k in row for k in ("subject", "relation", "object")):
+                f = make_fact(row["subject"], row["relation"], row["object"],
+                              now=parse_ts(row.get("valid_at")) or
+                              datetime.now(timezone.utc),
+                              valid_to=row.get("invalid_at"),
+                              user_id=user_id, confidence=0.8,
+                              provenance={"migrated_from": "zep"})
+                memory.store.insert_fact(f, commit)
+                memory.palace.add(f.id, memory.palace.encode_fact(f))
+                n_triples += 1
+            elif row.get("text"):
+                memory.add(row["text"], user_id=user_id)
+                n_texts += 1
+    finally:
+        memory.store.end_batch()
     memory.reader.invalidate_caches()
     return {"source": "zep", "triples": n_triples, "texts": n_texts}
 

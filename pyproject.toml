@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortexm"
-version = "0.6.3"
+version = "0.6.4"
 description = "Context-M: deterministic, auditable, zero-cost memory for AI agents"
 readme = "README.md"
 license = {text = "MIT"}
@@ -28,12 +28,15 @@ dependencies = [
     "numpy>=1.24.0",
     "cryptography>=41.0.0",
     "fastecdsa>=2.3.0",
-    "marisa-trie>=1.2.0",
 ]
 
 [project.optional-dependencies]
 blake3 = ["blake3>=0.3.0"]
 crypto = ["cryptography>=41.0.0"]
+# v0.6.4: marisa-trie moved from hard deps to optional — the production
+# query-rewrite path uses the pure-dict bridge/fst.py; bridge/fst_real.py
+# (the only marisa consumer) is an opt-in accelerated variant.
+fst = ["marisa-trie>=1.2.0"]
 test = ["pytest>=7.0", "pytest-cov>=4.0"]
 all = [
     "blake3>=0.3.0",

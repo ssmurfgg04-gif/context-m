@@ -3245,3 +3245,37 @@ Stage Summary:
 - Lazy QueryRewriter restores fast-path read latency for 95% of queries.
 - Shannon tiered storage keeps the "doesn't forget" promise while deduplicating the VSA holographic superposition.
 - All 5 promises intact (Always remembers / Flat cost μ=0 / Own your data / Doesn't lie / Same every time).
+
+---
+Task ID: 16
+Agent: main (Super Z)
+Task: v0.6.3 incoming review + fix + RuVector Pareto borrows → v0.6.4
+
+Work Log:
+- Synced local 5fa6368 (content-identical to remote 9607aab) → hard reset to origin/main 49a3bca (v0.6.3)
+- Smoke test: 14 failures, all "fastecdsa required" (installed for py3.12 via python -m pip) → 647 passed
+- Delegated deep review of the new v0.6.2/v0.6.3 code (zk_proofs, hamming_attestation, fst_real, judges/, labse, embedder, config, parallel runner, importers)
+- CRITICAL findings fixed:
+  * MCP tools always NameError (HammingZKProver / ZkSqlProver from deleted modules) → rewrote both tools to the new API; honest error for unsupported COUNT/AVG/MIN/MAX
+  * ZK forgeable (empirically demonstrated by reviewer): OR-proof verified only the real branch + challenge not bound to announcements; H had public DLOG (commitments malleable); SetMembership trusted prover root + no C binding; Hamming threshold never enforced + bit leak via branch flag; RangeProof no bit-count check; SQLAggregate not homomorphic
+  * zk_proofs.py rewritten: hash-to-curve H (unknown DLOG), CDS OR-proof (e = H(C,R0,R1), both branches verified, identical transcript shape for 0/1), verifier-computed Merkle roots + EqualityProof leaf binding, homomorphic sum + range proof, RangeProof length check, fresh-import lazy curve
+  * hamming_attestation.py rewritten: slack commitment (threshold - distance) + link proof + range proof → distance <= threshold actually enforced; empty-vector guards
+- Dead judges wired: det_judge now dispatches _judge_percentage (bounded ±1pp a/b derivation) and _judge_numeric_agg (was imported but never called — v0.6.2 intended work completed)
+- amount.py fixed: _DOLLAR_RE split out (plain numbers were double-extracted), decimals captured fully ("2.5" was "2")
+- fst_real.py fixed: whole-token matching only (prefix bug replaced "important"→"I am", "university"→"United Nations", "hello"→"he will"); ambiguous contraction entries (well/were/hell/shell/its/id/ill/wed/shed) removed; dup keys deduped; marisa-trie → optional dep (fst extra)
+- embedder.embed_many: empty-token fallback now matches embed() ([1,0,0,...] sentinel, was zero-vector)
+- importers.import_zep: begin_batch wrapped in try/finally (exception mid-loop used to deadlock the batch lock forever)
+- parallel runner: spawn-fallback now skips already-scored qids + qid dedupe after each block; version bumped
+- Version mismatch fixed (pyproject 0.6.3 vs __init__ 0.6.1 → 0.6.4 both); config.py BOM stripped; judges/base.py dead duplicate deleted
+- RuVector Pareto borrows (cortexm/experimental/, all μ=0):
+  * graph_recall.py: entity→fact inverted adjacency index, query-token anchored 2-hop BFS with cross-confirmation scoring + deterministic ordering (sorted walks) + generation-checked cache
+  * coherence.py: two-pointer temporal-coherence scoring (shared-entity facts within ±window_days corroborate; normalized capped score)
+  * Wired into reader.search() behind Config.graph_recall_enabled / coherence_weight_enabled (defaults ON, additive boosts, best-effort guarded)
+- README: "Known boundaries (the short list)" section (RuVector trust pattern — 6 numbered honest limitations incl. trusted-prover ZK attestation scope, leaf-index reveal, 61-pattern lookup limits)
+- Tests: +51 (ZK forgery/negative suite, experimental modules, MCP ZK tool regression) → 698 passed, 24 skipped, 0 failed
+- Full 500-Q canonical benchmark launched (background processes killed by the sandbox per tool call → switched to chunked foreground + GitHub Actions workflow_dispatch)
+
+Stage Summary:
+- v0.6.4 code complete: all v0.6.3 critical bugs fixed, judges wired, RuVector borrows landed behind config flags
+- 698/698 tests green; ZK sanity 10/10 incl. forgery rejection
+- 500-Q full-corpus validation: GitHub Actions longmemeval.yml + local chunked run in progress

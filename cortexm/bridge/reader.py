@@ -998,6 +998,32 @@ class MemoryReader:
         if chunk_recall_notes:
             notes = (notes or []) + chunk_recall_notes
 
+        # --- graph recall (v0.6.4, RuVector borrow, μ=0) ------------------
+        # Entity→fact adjacency walk anchored on the query's tokens.
+        # Pulls facts CONNECTED to the query's entities even when their
+        # lexical/VSA similarity is low — the multi-session failure
+        # mode where a look-alike fact from the wrong session wins on
+        # similarity alone. Additive boost like chunk-recall; facts hit
+        # through multiple query tokens cross-confirm (higher score).
+        graph_recall_stats: dict = {}
+        if getattr(self.cfg, "graph_recall_enabled", True) and query:
+            try:
+                from cortexm.experimental.graph_recall import graph_recall_boost
+                gr_boosts, graph_recall_stats = graph_recall_boost(
+                    self.store, query, user_id, scope=scope,
+                    max_hops=int(getattr(self.cfg, "graph_recall_max_hops", 2)))
+                gr_weight = float(getattr(self.cfg, "graph_recall_weight", 0.25))
+                for fid, b in gr_boosts.items():
+                    if fid in candidates:
+                        # already retrieved by VSA/symbolic: reward the
+                        # cross-confirmation, don't double-count
+                        candidates[fid] += gr_weight * min(b, 2.0) * 0.5
+                    else:
+                        candidates[fid] = gr_weight * min(b, 2.0)
+            except Exception:
+                # graph recall is best-effort; never block retrieval
+                graph_recall_stats = {"skipped": "exception"}
+
         # prefetch boost (MBTB) — cache-warming heuristic ONLY for simple
         # recall/current intents: for precision intents (multihop,
         # temporal, ordering, count) the co-access boost reorders the
@@ -1038,6 +1064,31 @@ class MemoryReader:
                                    iters=self.cfg.ppr_iters)
                 for fid, b in boosts.items():
                     candidates[fid] += self.cfg.ppr_weight * b
+
+        # --- temporal coherence boost (v0.6.4, RuVector borrow, μ=0) ----
+        # Facts whose time window contains many OTHER facts sharing an
+        # entity are corroborated clusters; look-alike facts from the
+        # wrong session have no temporal neighborhood. Small additive
+        # rerank signal on the intents where the wrong-slice failure
+        # mode lives (precision intents keep their exact ranking).
+        if (getattr(self.cfg, "coherence_weight_enabled", True)
+                and plan.intent in ("temporal", "recall", "multihop", "current")
+                and len(candidates) >= 2):
+            try:
+                from cortexm.experimental.coherence import coherence_scores
+                coh_facts = self.store.get_facts(list(candidates.keys()))
+                if coh_facts:
+                    coh = coherence_scores(
+                        coh_facts,
+                        window_days=int(getattr(self.cfg,
+                                                "coherence_window_days", 30)))
+                    coh_boost = float(getattr(self.cfg, "coherence_boost", 0.15))
+                    for fid, c in coh.items():
+                        if c > 0.0:
+                            candidates[fid] += coh_boost * c
+            except Exception:
+                # coherence is best-effort; never block retrieval
+                pass
 
         _f1 = {f.id: f for f in self.store.get_facts(list(candidates))}
         ranked_ids = self._diversify(

@@ -1,4 +1,4 @@
-﻿"""Central configuration for the memory fabric.
+"""Central configuration for the memory fabric.
 
 Every knob the strategic plan calls out is expressed here so the whole
 system is reproducible from one dataclass. Codec selection implements the
@@ -418,6 +418,25 @@ class Config:
     shannon_tiered_storage: bool = True
     shannon_overlap_threshold: float = 0.9
     shannon_min_facts: int = 10
+
+    # RuVector-inspired deterministic retrieval borrows (v0.6.4,
+    # cortexm/experimental/). Both are μ=0: pure index lookups and
+    # count-based scoring, no learned components, no LLM.
+    #   * graph_recall: entity→relation adjacency index over extracted
+    #     facts. Query entities anchor a 2-hop walk that pulls facts
+    #     CONNECTED to the query's entities even when lexical/VSA
+    #     similarity is low (the multi-session failure mode where the
+    #     wrong session wins on similarity).
+    #   * coherence_weight: temporal-coherence reranking — facts that
+    #     cluster with many other facts in the same time window get a
+    #     small additive boost. Targets the temporal_reasoning failures
+    #     on multi-week relative references ("two weeks after X").
+    graph_recall_enabled: bool = True
+    graph_recall_weight: float = 0.25
+    graph_recall_max_hops: int = 2
+    coherence_weight_enabled: bool = True
+    coherence_boost: float = 0.15
+    coherence_window_days: int = 30
 
     # IR fundamentals (Lucene/Solr-grade primitives). See
     # cortexm/bridge/ir_pro.py for the implementations.

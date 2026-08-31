@@ -15,9 +15,11 @@ import secrets
 from cortexm.security.zk_proofs import (
     PedersenCommitment, SchnorrProof,
     RangeProof, SetMembershipProof,
-    SQLAggregateProof, ZKProver, ZKVerifier,
+    SQLAggregateProof, ZKProver, ZKVerifier, _ensure_curve, _q,
 )
 from cortexm.security.hamming_attestation import HammingZKProof
+
+_ensure_curve()  # module import order safety: _q is usable below
 
 
 class TestPedersenCommitment:
@@ -65,28 +67,60 @@ class TestSetMembership:
     def test_member_passes(self):
         public_set = [10, 20, 30, 40]
         proof = SetMembershipProof.prove(30, secrets.randbelow(2**256), public_set, 2)
-        assert proof.verify()
+        # v0.6.4: verify takes the public set and recomputes the root
+        assert proof.verify(public_set)
 
     def test_non_member_fails(self):
-        # This would need a fake proof to test — in practice the prover
-        # would raise if the value is not in the set
-        pass
+        # v0.6.4: REAL negative test — a proof built for a value in one
+        # set must NOT verify against a different set (the v0.6.3 code
+        # trusted a prover-supplied Merkle root, so this passed).
+        public_set = [10, 20, 30, 40]
+        other_set = [10, 20, 30, 41]
+        proof = SetMembershipProof.prove(30, secrets.randbelow(2**256), public_set, 2)
+        assert not proof.verify(other_set)
+
+    def test_value_mismatch_fails(self):
+        # commit to 99 but prove membership of 30's leaf — the equality
+        # proof binds the commitment to the leaf value, so this fails
+        public_set = [10, 20, 30, 40]
+        r = secrets.randbelow(2**256)
+        proof = SetMembershipProof.prove(30, r, public_set, 2)
+        # tamper: swap the commitment for one of a different value
+        C_bad, _ = PedersenCommitment.create(99)
+        import dataclasses
+        forged = dataclasses.replace(proof, commitment=C_bad)
+        assert not forged.verify(public_set)
 
 
 class TestSQLAggregate:
     def test_sum_correct(self):
         values = [10, 20, 30]
-        blindings = [secrets.randbelow(2**256) for _ in values]
-        sum_blinding = sum(blindings) % (2**256)
+        # blindings kept < 2^200 (< curve order) so the homomorphic sum
+        # needs no modular reduction — _q is set lazily at first curve
+        # use, so importing it at module load gives a stale None.
+        blindings = [secrets.randbelow(2**200) for _ in values]
+        sum_blinding = sum(blindings)
         proof = SQLAggregateProof.prove_sum(values, blindings, 60, sum_blinding)
         assert proof.verify()
 
     def test_sum_incorrect_raises(self):
         values = [10, 20, 30]
-        blindings = [secrets.randbelow(2**256) for _ in values]
-        sum_blinding = sum(blindings) % (2**256)
+        blindings = [secrets.randbelow(2**200) for _ in values]
+        sum_blinding = sum(blindings)
         with pytest.raises(ValueError):
             SQLAggregateProof.prove_sum(values, blindings, 61, sum_blinding)
+
+    def test_homomorphism_tamper_fails(self):
+        # v0.6.4: a proof whose C_sum is NOT the homomorphic sum of the
+        # per-value commitments must fail verification
+        values = [10, 20, 30]
+        blindings = [secrets.randbelow(2**200) for _ in values]
+        sum_blinding = sum(blindings)
+        proof = SQLAggregateProof.prove_sum(values, blindings, 60, sum_blinding)
+        C_bad, _ = PedersenCommitment.create(60)
+        import dataclasses
+        forged = dataclasses.replace(proof, commitment=C_bad)
+        assert not forged.verify()
 
 
 class TestHammingZK:

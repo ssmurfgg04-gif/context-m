@@ -836,12 +836,31 @@ def main(argv: List[str] | None = None) -> int:
                         print(f"[progress] {completed}/{len(worker_args)} qid={r.get('qid')} elapsed={elapsed_q:.2f}s det_correct={r.get('det_correct')}", file=sys.stderr)
                 except Exception as e:
                     print(f"[error] worker pool died: {e}, retrying remaining with spawn fallback", file=sys.stderr)
+                    # v0.6.4: only re-run the questions whose qids are NOT
+                    # already in block_results — re-running the whole block
+                    # used to duplicate the partial results (duplicate qids,
+                    # over-counted `completed`, double-weighted scores)
+                    done_qids = {r.get("qid") for r in block_results}
+                    remaining = [a for a in block
+                                 if a["question"].get("question_id", f"q{a['global_idx']}") not in done_qids]
+                    if not remaining:
+                        remaining = block  # qids unavailable — full retry
                     # Fallback to spawn if fork failed
                     if ctx_name == "fork":
                         ctx2 = mp.get_context("spawn")
                         with ctx2.Pool(processes=args.workers, initializer=_worker_init, initargs=(args.db_path, args.bm25_k1, args.bm25_b, args.max_messages_per_q, args.max_seconds_per_q)) as pool2:
-                            for r in pool2.imap_unordered(_eval_one_question, block, chunksize=8):
+                            for r in pool2.imap_unordered(_eval_one_question, remaining, chunksize=8):
                                 block_results.append(r)
+        # v0.6.4: dedupe by qid across blocks (spawn-fallback safety net)
+        _seen_qids = set()
+        _deduped: list[dict] = []
+        for r in block_results:
+            _qid = r.get("qid")
+            if _qid is not None and _qid in _seen_qids:
+                continue
+            _seen_qids.add(_qid)
+            _deduped.append(r)
+        block_results = _deduped
         results.extend(block_results)
         # Checkpoint after each block
         results.sort(key=lambda r: r["global_idx"])
@@ -874,7 +893,7 @@ def main(argv: List[str] | None = None) -> int:
 
     overall = sum(1.0 for r in results if r["det_correct"]) / max(len(results), 1)
     summary = {
-        "version": "v0.6.1",
+        "version": "v0.6.4",
         "n_total": len(results),
         "n_per_type": args.n_per_type,
         "workers": args.workers,

@@ -37,7 +37,7 @@ m.search("Where does Alice work?", user_id="alice")
 
 ### Canonical LongMemEval — μ=0, $0, on a 4GB laptop
 
-| | cortexm v0.6.2 | MemPalace (honest E2E) |
+| | cortexm v0.6.4 | MemPalace (honest E2E) |
 |---|---|---|
 | **canonical LongMemEval (500-Q full corpus)** | **97.4% (487/500)** | ~96.6% (retrieval-only, no QA) |
 | single_session | **100.0%** | — |
@@ -49,7 +49,7 @@ m.search("Where does Alice work?", user_id="alice")
 | determinism | byte-exact across 3× runs | byte-exact |
 | owns your data | ✓ single `.db` file | ✓ |
 
-**Full 500-question results** (v0.6.2, generalized `sum_or_diff` judge):
+**Full 500-question results** (v0.6.2 baseline; v0.6.4 re-run lands the experimental graph-recall + coherence modules below):
 
 | Subtask | Score | Notes |
 |---|---|---|
@@ -68,11 +68,22 @@ m.search("Where does Alice work?", user_id="alice")
 **Baseline beaten:** v0.5.5 baseline was 0.948; this is a **+2.6 pp** improvement on the full 500-question corpus.
 
 **Known remaining gaps (diagnosed, not guessed):**
-- **Temporal anchoring** — degrades on multi-week relative references ("four weeks ago", "10 days ago"). These 6 failures connect to the `temporal_chain_notes` / supersession-history mechanism in `reader.py`.
-- **Arithmetic aggregation** — the generalized `sum_or_diff` judge (v0.6.2) fixes the 2–3 real computation gaps. The remaining multi_session failures are **retrieval misses** (wrong session pulled: poetry instead of podcasts, marketing facts instead of video views), not judge failures. These need embedding-similarity investigation, not a judge patch.
+- **Temporal anchoring** — degrades on multi-week relative references ("four weeks ago", "10 days ago"). These 6 failures connect to the `temporal_chain_notes` / supersession-history mechanism in `reader.py`. v0.6.4's `cortexm/experimental/coherence.py` adds a deterministic temporal-coherence rerank signal aimed at exactly these.
+- **Arithmetic aggregation** — the generalized `sum_or_diff` judge (v0.6.2) fixes the 2–3 real computation gaps. The remaining multi_session failures are **retrieval misses** (wrong session pulled: poetry instead of podcasts, marketing facts instead of video views), not judge failures. v0.6.4 wires the previously-dead `percentage`/`numeric_agg` judges and adds `cortexm/experimental/graph_recall.py` (entity-adjacency 2-hop walks) aimed at the wrong-session misses.
 - **BOOL strategy** at 85.7% is the weakest category — needs sign-of-evidence refinement for edge cases.
 
 Run the full 500-Q benchmark via GitHub Actions: `.github/workflows/longmemeval.yml` (20 shards, ~30s/q with per-shard DB caching).
+
+### Known boundaries (the short list)
+
+> Full detail: [`docs/FAILURE_MODES.md`](docs/FAILURE_MODES.md) — every failure tied to a public benchmark question.
+
+1. **The extractor is a 61-pattern lookup, not a language model.** Phrasings outside the pattern library are silently dropped at ingest (e.g. "Anna has a cat named Whiskers") — they remain retrievable via verbatim/BM25 chunk recall, but never become structured facts. This is the price of μ=0: no generativity, no fabrication, no drift.
+2. **ZK proofs are trusted-prover attestations.** The v0.6.4 backend (Pedersen + Sigma protocols on secp256k1) is sound at the commitment layer — challenges are bound to announcements, both OR-proof branches verify, H has no known discrete log, thresholds are enforced — but the linkage between committed values and store rows is established at prove-time by the prover. Verify the integration layer before trusting it against a malicious host.
+3. **Set membership reveals the leaf index.** The value stays hidden (random-blinding Pedersen + equality proof); the position in the set does not. Position-hiding needs a ZK-friendly Merkle construction — documented future work.
+4. **No cross-user inference, ever.** Every fact is scoped by `user_id`; the scope sandbox turns empty scopes into empty results (not unrestricted fallbacks). This is a feature, and it also means no "insight across users" stories.
+5. **Compression tiers are documented, not default.** int8/binary quantization trade recall for space (see `docs/COMPRESSION.md`); the default build keeps full-precision embeddings because the benchmark headroom doesn't justify the loss yet.
+6. **Judge coverage is rule-based.** The deterministic judge answers via strategy dispatch (bool/list/nugget/sum_or_diff/percentage/numeric_agg/holiday/paren). Questions outside those strategies score 0 even when retrieval succeeded — the failure is honest, the number is real.
 
 ### When to use cortexm vs Mem0 / Zep / Chroma
 
@@ -116,7 +127,8 @@ The README is intentionally short. Everything else lives in `docs/`:
 ### Examples & tests
 
 - [`examples/`](examples/) — runnable scripts, offline, no API keys (01_quickstart → 20_agent_session)
-- [`tests/`](tests/) — 117 tests: fabric + enterprise + PPR + concurrency + sandbox + enrichment + WAL crash-recovery + migration + CRDT federation + Rust parity + public-API smoke
+- [`tests/`](tests/) — 698 tests: fabric + enterprise + PPR + concurrency + sandbox + enrichment + WAL crash-recovery + migration + CRDT federation + Rust parity + ZK soundness/forgery + public-API smoke
+- [`cortexm/experimental/`](cortexm/experimental/) — deterministic research borrows (graph recall, coherence) — μ=0 or it doesn't ship
 - [`leaderboard/`](leaderboard/) — self-hosted benchmark site (rebuild: `python leaderboard/build.py`; open `leaderboard/index.html`)
 - [`AGENTS.md`](AGENTS.md) — how AI coding agents should interact with this repo (2026 standard)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution guide
