@@ -12,7 +12,7 @@
     "precision_at_k": 1.0,
     "n_queries": 10,
     "n_correct": 10,
-    "cross_talk": 0.02099588668594758
+    "cross_talk": 0.020998233929276466
   },
   "delta": {
     "precision_at_5": 0.0,
@@ -24,11 +24,11 @@
     "dims": 768,
     "n_roles": 3,
     "epochs": 30,
-    "final_loss": 0.9460536574019867,
-    "initial_loss": 0.946553094857404,
-    "loss_reduction_pct": 0.05276380777061718,
-    "off_diag_sum": 0.1635730266571045,
-    "condition_number": 1.079732060432434
+    "final_loss": 0.9462010921264181,
+    "initial_loss": 0.9466561443951665,
+    "loss_reduction_pct": 0.04806943592376989,
+    "off_diag_sum": 0.16360552608966827,
+    "condition_number": 1.0797569751739502
   },
   "saved_to": "/tmp/role_vectors.npz"
 }
