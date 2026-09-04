@@ -27,12 +27,14 @@ abstraction engine's. We only emit the membership edges here.
 
 from __future__ import annotations
 
+import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
 from cortexm.cognition.scanner import Pattern, ScanResult
 from cortexm.trace.store import TraceStore
+from cortexm.trace.fact import deterministic_fact_id
 from cortexm.util import iso, new_id
 
 
@@ -150,19 +152,29 @@ class AbstractionEngine:
             ts = iso(_now())
             for ab in abstractions:
                 for member in ab.members:
-                    fid = new_id()
-                    self.store.conn.execute(
-                        "INSERT INTO facts "
-                        "(id, subject, relation, value, valid_from, "
-                        " tx_from, confidence, user_id, memory_type, "
-                        " is_derived, is_active, birth_commit, provenance) "
-                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (fid, ab.name, "member_of", member, ts, ts,
-                         ab.confidence, user_id or "default",
-                         "long_term", 1, 1,
-                         commit_id,
-                         _prov_json(ab)))
-                    n_added += 1
+                    # NOTE: the id deliberately EXCLUDES the derivation
+                    # timestamp — re-running the engine (consolidate
+                    # twice, replay, crash-retry) must find the prior
+                    # row and skip, not mint a near-duplicate edge whose
+                    # only difference is valid_from microseconds.
+                    fid = deterministic_fact_id(
+                        user_id=user_id or "default", subject=ab.name,
+                        relation="member_of", value=member)
+                    try:
+                        self.store.conn.execute(
+                            "INSERT INTO facts "
+                            "(id, subject, relation, value, valid_from, "
+                            " tx_from, confidence, user_id, memory_type, "
+                            " is_derived, is_active, birth_commit, provenance) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            (fid, ab.name, "member_of", member, ts, ts,
+                             ab.confidence, user_id or "default",
+                             "long_term", 1, 1,
+                             commit_id,
+                             _prov_json(ab)))
+                        n_added += 1
+                    except sqlite3.IntegrityError:
+                        pass  # already derived (deterministic id)
             if commit_id:
                 self.store.update_commit_n_facts(commit_id, n_added)
 

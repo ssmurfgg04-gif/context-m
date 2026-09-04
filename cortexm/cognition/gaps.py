@@ -35,6 +35,7 @@ hypothesis fact, so audits can trace the reasoning chain.
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -43,6 +44,7 @@ from typing import Any
 from cortexm.cognition.abstraction import Abstraction
 from cortexm.cognition.scanner import ScanResult
 from cortexm.trace.store import TraceStore
+from cortexm.trace.fact import deterministic_fact_id
 from cortexm.util import iso, new_id
 
 
@@ -223,26 +225,34 @@ class HypothesisEngine:
                 continue
 
             # write the hypothesis as a derived fact
-            fid = new_id()
-            self.store.conn.execute(
-                "INSERT INTO facts "
-                "(id, subject, relation, value, valid_from, tx_from, "
-                " confidence, user_id, memory_type, is_derived, "
-                " is_active, birth_commit, provenance) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (fid, proposed.subject, proposed.relation,
-                 proposed.proposed_value, ts, ts,
-                 proposed.confidence,
-                 user_id or "default",
-                 "long_term", 1, 1, commit_id,
-                 json.dumps({
-                     "kind": "hypothesis",
-                     "basis": proposed.basis,
-                     "supporting_facts": proposed.supporting_facts,
-                     "peer_count": gap.peer_count,
-                     "peer_values_sample": gap.peer_values,
-                     "generated_by": "cognition.hypothesis",
-                 })))
+            # id excludes the derivation timestamp — see the matching
+            # note in abstraction.py (re-runs skip)
+            fid = deterministic_fact_id(
+                user_id=user_id or "default",
+                subject=proposed.subject, relation=proposed.relation,
+                value=proposed.proposed_value)
+            try:
+                self.store.conn.execute(
+                    "INSERT INTO facts "
+                    "(id, subject, relation, value, valid_from, tx_from, "
+                    " confidence, user_id, memory_type, is_derived, "
+                    " is_active, birth_commit, provenance) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (fid, proposed.subject, proposed.relation,
+                     proposed.proposed_value, ts, ts,
+                     proposed.confidence,
+                     user_id or "default",
+                     "long_term", 1, 1, commit_id,
+                     json.dumps({
+                         "kind": "hypothesis",
+                         "basis": proposed.basis,
+                         "supporting_facts": proposed.supporting_facts,
+                         "peer_count": gap.peer_count,
+                         "peer_values_sample": gap.peer_values,
+                         "generated_by": "cognition.hypothesis",
+                     })))
+            except sqlite3.IntegrityError:
+                continue  # already derived (deterministic id) — idempotent
             # wire HYPOTHESIZED_BY edges from each supporting fact
             for support_fid in proposed.supporting_facts:
                 if support_fid:

@@ -630,21 +630,55 @@ class TraceStore:
         row = fact.to_row()
         cols = ", ".join(row.keys())
         ph = ", ".join("?" for _ in row)
-        self.conn.execute(f"INSERT INTO facts({cols}) VALUES({ph})", tuple(row.values()))
+        try:
+            self.conn.execute(f"INSERT INTO facts({cols}) VALUES({ph})",
+                              tuple(row.values()))
+        except sqlite3.IntegrityError:
+            # Content-derived ids (make_fact) collide when identical
+            # content is legitimately re-ingested after a soft delete
+            # or inside one batch. Fall back to a fresh random id so
+            # the new row is still recorded with its own bi-temporal
+            # history — identical to the legacy uuid4 behavior.
+            fact.id = new_id()
+            row = fact.to_row()
+            self.conn.execute(f"INSERT INTO facts({cols}) VALUES({ph})",
+                              tuple(row.values()))
         return fact
 
     def insert_facts_bulk(self, facts: list[Fact], commit_id: str | None = None) -> int:
         for f in facts:
             if commit_id:
                 f.birth_commit = commit_id
-        rows = [f.to_row() for f in facts]
-        if not rows:
+        if not facts:
             return 0
+        # Pre-resolve id collisions BEFORE the executemany. sqlite3's
+        # executemany applies rows one at a time and does NOT roll back
+        # the rows that succeeded before an IntegrityError — a naive
+        # except→retry-row-by-row would re-insert those partial rows
+        # under fresh random ids (measured: 3 facts with 2 same-content
+        # duplicates produced 4 rows). Resolving collisions up front
+        # (in-table ids + in-batch duplicates) keeps the fast path
+        # intact and the semantics identical to the legacy uuid4
+        # scheme: re-ingested content gets its own bi-temporal row.
+        ids = [f.id for f in facts]
+        taken: set[str] = set()
+        for i in range(0, len(ids), 900):  # sqlite bind-var limit ~999
+            chunk = ids[i:i + 900]
+            q = ",".join("?" for _ in chunk)
+            for row in self.conn.execute(
+                    f"SELECT id FROM facts WHERE id IN ({q})", chunk):
+                taken.add(row["id"])
+        seen: set[str] = set()
+        for f in facts:
+            if f.id in taken or f.id in seen:
+                f.id = new_id()
+            seen.add(f.id)
+        rows = [f.to_row() for f in facts]
         cols = ", ".join(rows[0].keys())
         ph = ", ".join("?" for _ in rows[0])
         self.conn.executemany(f"INSERT INTO facts({cols}) VALUES({ph})",
                               [tuple(r.values()) for r in rows])
-        return len(rows)
+        return len(facts)
 
     def update_commit_n_facts(self, commit_id: str, n_facts: int) -> None:
         """Update the n_facts counter on a commit (after cognition engine

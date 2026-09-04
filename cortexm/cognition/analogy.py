@@ -31,12 +31,14 @@ equivalents across domains.
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from cortexm.cognition.scanner import ScanResult
 from cortexm.trace.store import TraceStore
+from cortexm.trace.fact import deterministic_fact_id
 from cortexm.util import iso, new_id
 
 
@@ -125,24 +127,32 @@ class AnalogyDetector:
         if not dry_run and analogies:
             ts = iso(_now())
             for a in analogies:
-                fid = new_id()
-                self.store.conn.execute(
-                    "INSERT INTO facts "
-                    "(id, subject, relation, value, valid_from, tx_from, "
-                    " confidence, user_id, memory_type, is_derived, "
-                    " is_active, birth_commit, provenance) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (fid, a.relation_a, ANALOGOUS_TO, a.relation_b,
-                     ts, ts, a.confidence,
-                     user_id or "default", "long_term",
-                     1, 1, commit_id,
-                     json.dumps({
-                         "kind": "analogy",
-                         "overlap_score": round(a.overlap_score, 4),
-                         "shared_fanout": a.shared_fanout,
-                         "generated_by": "cognition.analogy",
-                     })))
-                edges_added += 1
+                # id excludes the derivation timestamp — see the
+                # matching note in abstraction.py (re-runs skip)
+                fid = deterministic_fact_id(
+                    user_id=user_id or "default",
+                    subject=a.relation_a, relation=ANALOGOUS_TO,
+                    value=a.relation_b)
+                try:
+                    self.store.conn.execute(
+                        "INSERT INTO facts "
+                        "(id, subject, relation, value, valid_from, tx_from, "
+                        " confidence, user_id, memory_type, is_derived, "
+                        " is_active, birth_commit, provenance) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (fid, a.relation_a, ANALOGOUS_TO, a.relation_b,
+                         ts, ts, a.confidence,
+                         user_id or "default", "long_term",
+                         1, 1, commit_id,
+                         json.dumps({
+                             "kind": "analogy",
+                             "overlap_score": round(a.overlap_score, 4),
+                             "shared_fanout": a.shared_fanout,
+                             "generated_by": "cognition.analogy",
+                         })))
+                    edges_added += 1
+                except sqlite3.IntegrityError:
+                    pass  # already derived (deterministic id) — idempotent
             if commit_id:
                 self.store.update_commit_n_facts(commit_id, edges_added)
 

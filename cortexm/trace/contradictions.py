@@ -85,8 +85,14 @@ def find_conflicts(store: TraceStore, candidate: Fact) -> Conflict:
         matching.extend(
             f for f in store.query_facts(
                 subject=candidate.subject, relation=rel,
-                user_id=candidate.user_id, active=True)
-            if f.id != candidate.id)
+                user_id=candidate.user_id, active=True))
+    # NOTE: no `f.id != candidate.id` exclusion. With content-derived
+    # deterministic ids (v0.6.7), a stored fact whose id equals the
+    # candidate's id IS the same content — it must flow into the
+    # exact-duplicate SKIP path below, otherwise re-ingest of the
+    # same statement would fall through to COMMIT and insert a
+    # duplicate row. Callers only pass fresh (not-yet-stored)
+    # candidates, so a matching id always means "already recorded".
     # de-dup by fact id (a fact stored under the canonical rel could
     # appear in both queries if candidate.relation == canon_rel)
     seen_ids: set[str] = set()

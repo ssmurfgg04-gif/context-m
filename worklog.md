@@ -3601,3 +3601,84 @@ Stage Summary:
 - Canonical LoCoMo number: 0.9294 (1,342/1,444) GHA-measured,
   provenance-stamped; comparison-table row consistent with the
   committed artifact; variance honestly labeled
+
+---
+Task ID: 23
+Agent: main (Super Z)
+Task: Adversarial stress test of the public Memory API (8 scenarios,
+harness kept outside the repo) + fix everything that broke + verify +
+ship as v0.6.7
+
+Work Log:
+- Built an 8-scenario stress harness (volume ingest, multi-user
+  isolation, threaded concurrency, adversarial/fuzz inputs, churn
+  cycles, determinism, fork-crash WAL recovery, chaos_ingest) and ran
+  it against a fresh clone. Three real breaks found:
+  * PERF COLLAPSE (S1): the fade-pressure auto-sweep fired on EVERY
+    add() once a user crossed CORTEXM_PRESSURE_THRESHOLD with mostly
+    fresh facts (retention ~0.85, legitimately never deactivated) —
+    measured 26x throughput collapse (350/s -> 13/s at 2.2k facts),
+    worsening linearly forever. FIXED with hysteresis: the sweep now
+    backs off until the active count grows 10% past a watermark
+    recorded in the kv table (persists across processes); the
+    watermark anchors on the post-sweep count so repeated sweeps
+    still bound growth. 20k-msg ingest now sustains without collapse.
+  * QUADRATIC INGEST (S1): PerUserIdiolectNormalizer re-stacked the
+    full (up to 50k x dims) vocab matrix on every new-token message —
+    np.stack over the entire vocabulary per OOV lookup. FIXED with an
+    incremental sync: append-only vocab growth concatenates only the
+    new tail rows (O(delta)); full rebuild reserved for first build,
+    LRU eviction, and load_state (new _vocab_evicted flag).
+  * DETERMINISM LEAK (S6): make_fact defaulted to uuid4().hex, so two
+    identical ingest runs produced different fact ids that surface in
+    search() results ("id 3f2a91c2...") — breaking the byte-exact
+    reproducibility the project's mu=0 claim rests on. FIXED with
+    content-derived deterministic_fact_id (scope + triple + validity
+    window, tx time deliberately excluded); TraceStore.insert_fact
+    falls back to a fresh random id on PK collision so re-ingest
+    after a soft delete still records its own bi-temporal row
+    (identical semantics to the legacy uuid4 scheme).
+- Three residual bugs found while unit-testing the fixes themselves:
+  * insert_facts_bulk's collision retry double-inserted: sqlite3
+    executemany applies rows one at a time and does NOT roll back
+    partial rows before the IntegrityError, so the except->retry loop
+    re-inserted the partial rows under fresh random ids (measured:
+    3 facts with 2 same-content duplicates -> 4 rows). FIXED by
+    pre-resolving id collisions (in-table + in-batch) before the
+    executemany — fast path intact, semantics unchanged.
+  * derived-fact ids in the cognition engines hashed the wall-clock
+    derivation timestamp, so "idempotent" re-runs actually minted
+    near-duplicate edges differing only in microseconds. FIXED: the
+    id now derives from content alone (re-derive = skip, first
+    tx_from preserved — correct bi-temporal semantics).
+  * contradictions.find_conflicts excluded f.id == candidate.id from
+    the exact-duplicate match, which under content-derived ids would
+    let a re-ingested statement fall through to COMMIT. FIXED by
+    letting the id-equal fact flow into the SKIP path.
+- VERIFICATION (all green before shipping):
+  * stress harness re-run: 41/41 pass — S6 two identical runs are
+    byte-exact; S1 20k ingest 0 errors, no throughput collapse; S7
+    fork-crash WAL recovery intact; adversarial inputs (NUL, 2MB
+    payloads, SQL injection strings, RTL overrides, combining-char
+    bombs) all handled cleanly.
+  * full suite: 803 passed, 24 skipped, 0 failures (baseline 777
+    passed + 26 new tests in tests/test_stress_v067.py covering
+    every fix: id determinism/collisions/SKIP path, engine re-run
+    idempotence, hysteresis watermark math, incremental-vs-full
+    matrix equality, pinned end-to-end mu=0).
+  * new test file ruff-clean; S5/S8 outputs byte-identical to the
+    pre-fix tree (no behavior change on unaffected paths).
+
+Stage Summary:
+- v0.6.7 ships three stress fixes (fade hysteresis, incremental
+  vocab sync, deterministic fact ids) + three follow-on correctness
+  fixes (bulk-insert pre-resolve, time-independent derived ids,
+  SKIP-path id equality), all unit-tested, suite green, stress
+  harness 41/41.
+- The mu=0 determinism claim is now structural (content-derived ids)
+  rather than incidental; re-ingest/soft-delete semantics preserved
+  by design and pinned by tests.
+- Known residual: benchmark-scale determinism still requires the
+  documented clock pin (fact-tier tie-breaking on ids is now
+  content-derived, so the residual run-to-run band should shrink —
+  measured bands re-quoted in the LoCoMo/LongMemEval notes stand).

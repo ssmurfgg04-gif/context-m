@@ -56,6 +56,12 @@ class PerUserIdiolectNormalizer:
         self._vocab_ids: list[str] = []
         self._vocab_matrix: np.ndarray | None = None
         self._vocab_dirty = True
+        # True when entries were REMOVED from the vocab (LRU eviction or
+        # load_state) since the last matrix sync.  Removal invalidates
+        # row alignment, so the matrix must be rebuilt from scratch;
+        # without a removal, growth is append-only and the matrix can
+        # be extended with only the new rows (O(delta) instead of O(n)).
+        self._vocab_evicted = False
         # user_id → (centroid_emb, raw_count)
         self._users: dict[str, tuple[np.ndarray, int]] = {}
         # (user_id, slang_token, canonical_token) → co-occurrence count
@@ -120,6 +126,7 @@ class PerUserIdiolectNormalizer:
             while len(self._vocab) > self.vocab_cap:
                 self._vocab.popitem(last=False)
             self._vocab_dirty = True
+            self._vocab_evicted = True
 
     def observe_pair(self, user_id: str, slang: str, canonical: str) -> None:
         """Promote a slang→canonical mapping after multiple confirmations."""
@@ -159,16 +166,7 @@ class PerUserIdiolectNormalizer:
             return token
         q = self.embedder.embed(token)
         if self._vocab_dirty or self._vocab_matrix is None or len(self._vocab_ids) != len(self._vocab):
-            self._vocab_ids = list(self._vocab.keys())
-            materialized: list[np.ndarray] = []
-            for vocab_token in self._vocab_ids:
-                emb, count = self._vocab[vocab_token]
-                if emb is None:
-                    emb = self.embedder.embed(vocab_token)
-                    self._vocab[vocab_token] = (emb, count)
-                materialized.append(emb)
-            self._vocab_matrix = np.stack(materialized)
-            self._vocab_dirty = False
+            self._sync_vocab_matrix()
         ids = self._vocab_ids
         embs = self._vocab_matrix
         sims = embs @ q  # (N,)
@@ -183,6 +181,56 @@ class PerUserIdiolectNormalizer:
         if sims[best_idx] < self.threshold:
             return token  # OOV — preserve original
         return ids[best_idx]  # might be lowercased canonical
+
+    def _sync_vocab_matrix(self) -> None:
+        """Re-materialize the k-NN codebook matrix — incrementally when
+        possible.
+
+        The vocab is an ``OrderedDict``: assignments to EXISTING keys
+        preserve position and new keys append at the end, so when nothing
+        was evicted since the last sync the old ``_vocab_ids`` are still
+        a prefix of the current key order and the matrix only needs the
+        new tail rows concatenated (O(delta)).  A full O(n) rebuild is
+        reserved for the first build, LRU eviction, and load_state.
+
+        This is what keeps sustained ingest linear: previously every
+        message containing a new token triggered a full ``np.stack``
+        over the entire (up to 50k x dims) vocabulary, making ingest
+        quadratic in messages (measured: 20k msgs projected > 9 min).
+        """
+        ids = list(self._vocab.keys())
+        n = len(ids)
+        old_n = len(self._vocab_ids)
+        if (self._vocab_matrix is not None and self._vocab_ids
+                and not self._vocab_evicted and n > old_n):
+            # append-only growth: embed only the new tail tokens
+            tail_ids = ids[old_n:]
+            rows: list[np.ndarray] = []
+            for vocab_token in tail_ids:
+                emb, count = self._vocab[vocab_token]
+                if emb is None:
+                    emb = self.embedder.embed(vocab_token)
+                    self._vocab[vocab_token] = (emb, count)
+                rows.append(emb)
+            if rows:
+                block = (np.stack(rows) if len(rows) > 1
+                         else np.asarray(rows[0], dtype=rows[0].dtype)[None, :])
+                self._vocab_matrix = np.concatenate(
+                    [self._vocab_matrix, block], axis=0)
+            self._vocab_ids = ids
+        else:
+            # full rebuild: first build, eviction, or load_state
+            materialized: list[np.ndarray] = []
+            for vocab_token in ids:
+                emb, count = self._vocab[vocab_token]
+                if emb is None:
+                    emb = self.embedder.embed(vocab_token)
+                    self._vocab[vocab_token] = (emb, count)
+                materialized.append(emb)
+            self._vocab_matrix = np.stack(materialized) if materialized else None
+            self._vocab_ids = ids
+            self._vocab_evicted = False
+        self._vocab_dirty = False
 
     def _find_promoted(self, user_id: str, token: str) -> str | None:
         """Return promoted canonical if (user, slang) co-occurred >= min_count."""
@@ -276,6 +324,7 @@ class PerUserIdiolectNormalizer:
         self._vocab_ids = []
         self._vocab_matrix = None
         self._vocab_dirty = True
+        self._vocab_evicted = True  # force full rebuild on next sync
         self._users = {k: (np.asarray(v[0], dtype=np.float32), v[1])
                        for k, v in state.get("users", {}).items()}
         self._co_counts = {tuple(k) if isinstance(k, list) else k: v

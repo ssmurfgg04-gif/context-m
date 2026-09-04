@@ -18,7 +18,7 @@ import datetime as _dt
 import re
 from dataclasses import dataclass
 
-from cortexm.trace.fact import Fact
+from cortexm.trace.fact import Fact, deterministic_fact_id
 from cortexm.trace.store import TraceStore
 from cortexm.util import iso, new_id
 
@@ -168,7 +168,10 @@ class RuleEngine:
                                               active=None):
                         continue
                     f = Fact(
-                        id=new_id(), subject=s, relation=rel, value=v,
+                        id=deterministic_fact_id(
+                            user_id=scope, subject=s, relation=rel,
+                            value=v, valid_from=iso(now)[:10]),
+                        subject=s, relation=rel, value=v,
                         valid_from=iso(now)[:10], tx_from=iso(now),
                         user_id=scope,
                         confidence=0.75, memory_type="long_term",

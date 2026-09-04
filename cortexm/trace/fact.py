@@ -109,13 +109,54 @@ class Fact:
         return True
 
 
+def deterministic_fact_id(*, user_id: str = "default",
+                          agent_id: str | None = None,
+                          run_id: str | None = None,
+                          subject: str = "", relation: str = "",
+                          value: str = "",
+                          valid_from: str | None = None,
+                          valid_to: str | None = None) -> str:
+    """Content-derived fact id (32 hex, same shape as uuid4().hex).
+
+    μ=0 stress fix: make_fact previously defaulted to ``uuid4().hex``,
+    so two identical ingest runs produced different fact ids — the ids
+    surface in search() results ("id 3f2a91c2"), breaking the
+    byte-exact determinism the project claims. Deriving the id from
+    the fact's semantic content (scope + triple + validity window,
+    deliberately EXCLUDING transaction time) makes re-running the
+    same corpus yield identical ids.
+
+    Collisions (same content legitimately re-ingested after a soft
+    delete, or two identical facts inserted in one batch) are handled
+    by TraceStore.insert_fact, which falls back to a fresh random id
+    on primary-key conflict — same behavior as the uuid4 scheme, so
+    no insert path can fail.
+    """
+    import hashlib
+    payload = "\x1f".join((
+        str(user_id or ""), str(agent_id or ""), str(run_id or ""),
+        str(subject or ""), str(relation or ""), str(value or ""),
+        str(valid_from or ""), str(valid_to or ""),
+    ))
+    return hashlib.sha256(
+        payload.encode("utf-8", "surrogatepass")).hexdigest()[:32]
+
+
 def make_fact(subject: str, relation: str, value: str, *,
               now: datetime, valid_from: datetime | str | None = None,
               valid_to: datetime | str | None = None, **kwargs) -> Fact:
     """Convenience constructor normalizing timestamps to ISO strings."""
     vf = iso(parse_ts(valid_from) or now)[:10] if valid_from else iso(now)[:10]
     vt = iso(parse_ts(valid_to))[:10] if valid_to else None
+    fid = kwargs.pop("id", "") or ""
+    if not fid:
+        fid = deterministic_fact_id(
+            user_id=kwargs.get("user_id", "default"),
+            agent_id=kwargs.get("agent_id"),
+            run_id=kwargs.get("run_id"),
+            subject=subject, relation=relation, value=value,
+            valid_from=vf, valid_to=vt)
     return Fact(
-        id=kwargs.pop("id", "") or __import__("uuid").uuid4().hex,
+        id=fid,
         subject=subject, relation=relation, value=value,
         valid_from=vf, valid_to=vt, tx_from=iso(now), **kwargs)

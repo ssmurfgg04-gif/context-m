@@ -478,7 +478,19 @@ class Memory:
         """If user_id has more than CORTEXM_PRESSURE_THRESHOLD active
         facts, run an inline fade_sweep to reclaim space. Idempotent
         and bi-temporal safe. No-op if the threshold is not crossed
-        or FadeMem is disabled in config."""
+        or FadeMem is disabled in config.
+
+        Hysteresis (v0.6.7 stress fix): the sweep only fires when the
+        active-fact count has grown at least CORTEXM_PRESSURE_BACKOFF
+        (default 10%) beyond the watermark recorded at the last sweep
+        for this user. Without this, once a user crosses the threshold
+        with mostly-fresh facts (which score ~0.85 retention and are
+        legitimately never deactivated), the count never drops back
+        below the threshold and EVERY add() pays a full O(active)
+        sweep — measured: 26x throughput collapse (350/s -> 13/s) at
+        2.2k facts, worsening linearly forever. The watermark lives in
+        the store's kv table so the backoff persists across processes
+        (CLI-style usage opens a fresh Memory per invocation)."""
         if not getattr(self.config, "fade_enabled", True):
             return
         threshold = int(os.environ.get("CORTEXM_PRESSURE_THRESHOLD",
@@ -495,6 +507,16 @@ class Memory:
             return
         if n < threshold:
             return
+        # hysteresis: back off until the count grows past the watermark
+        backoff = float(os.environ.get("CORTEXM_PRESSURE_BACKOFF", 1.10))
+        backoff = max(1.0, backoff)
+        kv_key = f"__fade_pressure:{user_id}"
+        try:
+            watermark = int(self.store.kv_get(kv_key) or 0)
+        except Exception:
+            watermark = 0
+        if watermark > 0 and n < int(watermark * backoff):
+            return  # not enough growth since the last sweep — skip
         try:
             from cortexm.trace.fade import fade_sweep
             fade_sweep(self.store, palace=self.palace,
@@ -503,8 +525,19 @@ class Memory:
                            getattr(self.config, "fade_deactivate_threshold", 0.30)),
                        user_id=user_id)
             self.reader.invalidate_caches()
+            # record the post-sweep count so the backoff anchors on what
+            # the sweep actually left behind
+            try:
+                row = self.store.conn.execute(
+                    "SELECT COUNT(*) AS n FROM facts "
+                    "WHERE user_id=? AND is_active=1", (user_id,)).fetchone()
+                post = int(row["n"]) if row else n
+            except Exception:
+                post = n
+            self.store.kv_set(kv_key, str(post))
             self.audit_log.log("memory.fade_pressure", resource=user_id,
-                               meta={"facts_before": n, "threshold": threshold})
+                               meta={"facts_before": n, "facts_after": post,
+                                     "threshold": threshold})
         except Exception as e:  # never let the auto-pass kill add()
             self.audit_log.log("memory.fade_pressure_failed",
                                resource=user_id,
