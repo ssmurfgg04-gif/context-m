@@ -2,43 +2,55 @@
   "benchmark": "beam10m_real",
   "source": "Mohammadta/BEAM-10M",
   "n_personas": 10,
-  "max_turns_per_persona": 50,
-  "total_chars": 183812,
+  "max_turns_per_persona": 100,
+  "total_chars": 341472,
   "total_ground_truth_facts": 81,
   "configs": {
     "baseline": {
       "config": "baseline",
-      "n_facts_stored": 263,
-      "extraction_recall": 0.8889,
-      "retrieval_precision_at_5": 0.716,
-      "ingest_time_s": 0.46,
-      "query_time_s": 0.3,
-      "ms_per_ingest_persona": 46.3,
-      "ms_per_query": 3.7,
+      "n_facts_stored": 333,
+      "extraction_recall": 0.4568,
+      "retrieval_precision_at_5": 0.2963,
+      "ingest_time_s": 3.94,
+      "query_time_s": 25.08,
+      "ms_per_ingest_persona": 394.1,
+      "ms_per_query": 309.6,
+      "storage_bytes_per_fact": 0,
+      "llm_calls": 0
+    },
+    "+unmess": {
+      "config": "+unmess",
+      "n_facts_stored": 333,
+      "extraction_recall": 0.4568,
+      "retrieval_precision_at_5": 0.2963,
+      "ingest_time_s": 6.1,
+      "query_time_s": 24.95,
+      "ms_per_ingest_persona": 609.6,
+      "ms_per_query": 308.0,
       "storage_bytes_per_fact": 0,
       "llm_calls": 0
     },
     "+unmess+dissim": {
       "config": "+unmess+dissim",
-      "n_facts_stored": 302,
+      "n_facts_stored": 458,
       "extraction_recall": 1.0,
-      "retrieval_precision_at_5": 0.8025,
-      "ingest_time_s": 7.42,
-      "query_time_s": 0.34,
-      "ms_per_ingest_persona": 742.2,
-      "ms_per_query": 4.2,
+      "retrieval_precision_at_5": 0.9506,
+      "ingest_time_s": 12.18,
+      "query_time_s": 12.25,
+      "ms_per_ingest_persona": 1218.4,
+      "ms_per_query": 151.2,
       "storage_bytes_per_fact": 0,
       "llm_calls": 0
     },
-    "+unmess+dissim+rerank": {
-      "config": "+unmess+dissim+rerank",
-      "n_facts_stored": 302,
+    "+unmess+dissim+query": {
+      "config": "+unmess+dissim+query",
+      "n_facts_stored": 458,
       "extraction_recall": 1.0,
-      "retrieval_precision_at_5": 1.0,
-      "ingest_time_s": 6.17,
-      "query_time_s": 0.4,
-      "ms_per_ingest_persona": 617.1,
-      "ms_per_query": 5.0,
+      "retrieval_precision_at_5": 0.9506,
+      "ingest_time_s": 12.1,
+      "query_time_s": 12.25,
+      "ms_per_ingest_persona": 1210.5,
+      "ms_per_query": 151.2,
       "storage_bytes_per_fact": 0,
       "llm_calls": 0
     }
@@ -46,9 +58,9 @@
   "personas": [
     {
       "user_id": "beam_1",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 9,
-      "text_chars": 42418,
+      "text_chars": 67924,
       "facts": [
         {
           "subject": "beam_1",
@@ -99,9 +111,9 @@
     },
     {
       "user_id": "beam_2",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 10,
-      "text_chars": 29096,
+      "text_chars": 55457,
       "facts": [
         {
           "subject": "beam_2",
@@ -157,9 +169,9 @@
     },
     {
       "user_id": "beam_3",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 6,
-      "text_chars": 32261,
+      "text_chars": 52981,
       "facts": [
         {
           "subject": "beam_3",
@@ -195,9 +207,9 @@
     },
     {
       "user_id": "beam_4",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 10,
-      "text_chars": 15090,
+      "text_chars": 27456,
       "facts": [
         {
           "subject": "beam_4",
@@ -253,9 +265,9 @@
     },
     {
       "user_id": "beam_5",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 7,
-      "text_chars": 15647,
+      "text_chars": 43650,
       "facts": [
         {
           "subject": "beam_5",
@@ -296,9 +308,9 @@
     },
     {
       "user_id": "beam_6",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 10,
-      "text_chars": 8457,
+      "text_chars": 15667,
       "facts": [
         {
           "subject": "beam_6",
@@ -354,9 +366,9 @@
     },
     {
       "user_id": "beam_7",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 7,
-      "text_chars": 11547,
+      "text_chars": 18538,
       "facts": [
         {
           "subject": "beam_7",
@@ -397,9 +409,9 @@
     },
     {
       "user_id": "beam_8",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 7,
-      "text_chars": 7779,
+      "text_chars": 14918,
       "facts": [
         {
           "subject": "beam_8",
@@ -440,9 +452,9 @@
     },
     {
       "user_id": "beam_9",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 8,
-      "text_chars": 9868,
+      "text_chars": 23555,
       "facts": [
         {
           "subject": "beam_9",
@@ -488,9 +500,9 @@
     },
     {
       "user_id": "beam_10",
-      "n_turns": 50,
+      "n_turns": 100,
       "n_facts": 7,
-      "text_chars": 11649,
+      "text_chars": 21326,
       "facts": [
         {
           "subject": "beam_10",
