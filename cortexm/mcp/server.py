@@ -803,7 +803,9 @@ class MCPServer:
                 palace, store, embedder, dissim=dissim,
                 idiolect=idiolect,
                 pattern_extractor=self.memory.extractor if hasattr(
-                    self.memory, "extractor") else None)
+                    self.memory, "extractor") else None,
+                writer=self.memory.writer,
+                reader=self.memory.reader)
             results = extractor.query(query, user_id=user_id, k=k)
             return {
                 "query": query,
