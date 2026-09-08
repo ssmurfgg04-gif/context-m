@@ -80,8 +80,8 @@ jobs:
           # step is replaced by mounting the production snapshot.
           python -c "
           import os, datetime as dt
-          from context_m.api.memory import Memory
-          from context_m.config import Config
+          from cortexm.api.memory import Memory
+          from cortexm.config import Config
           cfg = Config.from_env()
           cfg.db_path = os.environ['CORTEXM_DB']
           m = Memory(cfg)
@@ -98,7 +98,7 @@ jobs:
 
       - name: Stats before
         run: |
-          python -m context_m.cli stats --db "$CORTEXM_DB" \
+          python -m cortexm.cli stats --db "$CORTEXM_DB" \
             | tee /tmp/stats_before.json
 
       - name: Consolidate
@@ -108,17 +108,17 @@ jobs:
           [ "${{ inputs.skip_lifecycle }}" = "true" ] && FLAGS="$FLAGS --no-lifecycle"
           [ "${{ inputs.skip_dreaming }}" = "true" ] && FLAGS="$FLAGS --no-dreaming"
           echo "[nightly] flags: $FLAGS"
-          python -m context_m.cli consolidate --db "$CORTEXM_DB" $FLAGS \
+          python -m cortexm.cli consolidate --db "$CORTEXM_DB" $FLAGS \
             | tee /tmp/consolidate_report.json
 
       - name: Stats after
         run: |
-          python -m context_m.cli stats --db "$CORTEXM_DB" \
+          python -m cortexm.cli stats --db "$CORTEXM_DB" \
             | tee /tmp/stats_after.json
 
       - name: Integrity audit (post-consolidation)
         run: |
-          python -m context_m.cli verify --db "$CORTEXM_DB" \
+          python -m cortexm.cli verify --db "$CORTEXM_DB" \
             | tee /tmp/verify_report.json
 
       - name: Build diff summary
