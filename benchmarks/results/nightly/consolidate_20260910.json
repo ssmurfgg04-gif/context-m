@@ -14,9 +14,9 @@
       "deactivated": 0,
       "merged_into": 0,
       "merged_dropped": 0,
-      "min_score": 0.34999973348942737,
-      "max_score": 0.94999927661416,
-      "mean_score": 0.8896584579799423,
+      "min_score": 0.34999961934768653,
+      "max_score": 0.9499989668008634,
+      "mean_score": 0.8896584787927561,
       "dry_run": false
     },
     "tmt_stats": null,
@@ -27,7 +27,7 @@
         "n_relations": 4,
         "n_subjects": 3,
         "n_values": 4,
-        "duration_ms": 230.74,
+        "duration_ms": 212.73,
         "by_kind": {
           "relation_freq": 3,
           "subject_fanout": 1,
@@ -38,12 +38,12 @@
       "abstraction": {
         "abstractions": 2,
         "membership_edges_added": 4,
-        "duration_ms": 0.66
+        "duration_ms": 0.63
       },
       "gaps": {
         "gaps": 5,
         "n_subjects_compared": 5,
-        "duration_ms": 3.21,
+        "duration_ms": 3.06,
         "by_basis": {
           "structural": 5
         }
@@ -51,18 +51,18 @@
       "hypotheses": {
         "hypotheses": 5,
         "facts_added": 1,
-        "duration_ms": 0.36
+        "duration_ms": 0.33
       },
       "analogies": {
         "analogies": 0,
         "edges_added": 0,
-        "duration_ms": 1.56
+        "duration_ms": 1.47
       },
       "total_derived_facts": 5,
-      "duration_ms": 237.11,
-      "cognition_commit_id": "4bd9f8a9d5504983876846024b45143c"
+      "duration_ms": 218.86,
+      "cognition_commit_id": "24bf7e5a54c94bf6865b42fe01272ebd"
     },
-    "commit_id": "ac826278f6e7444483f062b854e98afa",
+    "commit_id": "d5ee33a5465144df81d22b2e9acb6913",
     "dry_run": false
   }
 }
