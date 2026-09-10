@@ -147,7 +147,19 @@ jobs:
           set -eu
           git config user.name "consolidate-bot"
           git config user.email "consolidate-bot@users.noreply.github.com"
-          git checkout -B bench/nightly
+          # actions/checkout fetches only the triggering ref (main). bench/nightly
+          # is a long-lived results branch that run #1 created from the
+          # then-current main — rebuilding it from today's main makes the push
+          # non-fast-forward, which is why every scheduled run since #2 failed
+          # with "! [rejected] bench/nightly -> bench/nightly (fetch first)".
+          # Base the branch on the remote tip so the report commit is always a
+          # child of what is already there.
+          if git ls-remote --exit-code --heads origin bench/nightly >/dev/null 2>&1; then
+            git fetch origin bench/nightly --depth=1
+            git checkout -B bench/nightly FETCH_HEAD
+          else
+            git checkout -B bench/nightly
+          fi
           mkdir -p benchmarks/results/nightly
           cp /tmp/consolidate_report.json \
              benchmarks/results/nightly/consolidate_$(date -u +%Y%m%d).json

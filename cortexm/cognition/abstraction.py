@@ -89,7 +89,13 @@ class AbstractionEngine:
         # value-cluster abstractions: values that appear for the same
         # relation across N subjects form a "value_cluster" prototype
         # (e.g. tech_company for {Google, Stripe, Anthropic, OpenAI})
-        val_groups: dict[tuple[str, list[str]], list[str]] = defaultdict(list)
+        # NOTE: keyed by (relation, value) — a plain (str, str) tuple. The
+        # original (relation, [values]) key embedded a list, which is
+        # unhashable: the first value_fanout pattern raised "TypeError:
+        # unhashable type: 'list'" and consolidate's try/except swallowed
+        # the whole cognition pass (nightly runs have reported
+        # cognition_stats: {"error": ...} ever since the pass landed).
+        val_groups: dict[tuple[str, str], list[str]] = defaultdict(list)
         for p in scan.patterns:
             if p.kind != "value_fanout":
                 continue
@@ -106,7 +112,7 @@ class AbstractionEngine:
                 (val,)).fetchall()
             for r in rel_rows:
                 rel = r[0]
-                key = (rel, [val])
+                key = (rel, val)
                 val_groups[key].extend(subjs)
 
         abstractions: list[Abstraction] = []
@@ -127,9 +133,9 @@ class AbstractionEngine:
         # synthesize value-cluster abstractions
         cluster_idx = 0
         seen_clusters: set[frozenset] = set()
-        for (rel, vals), members in val_groups.items():
-            # collapse duplicates (same values for same relation)
-            key = frozenset(vals + [rel])
+        for (rel, val), members in val_groups.items():
+            # collapse duplicates (same value for same relation)
+            key = frozenset((val, rel))
             if key in seen_clusters:
                 continue
             seen_clusters.add(key)
