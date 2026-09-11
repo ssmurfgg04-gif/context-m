@@ -3682,3 +3682,65 @@ Stage Summary:
   documented clock pin (fact-tier tie-breaking on ids is now
   content-derived, so the residual run-to-run band should shrink —
   measured bands re-quoted in the LoCoMo/LongMemEval notes stand).
+
+---
+Task ID: 24
+Agent: opencode session (Jackb workstation, Windows 11, py3.11)
+Task: Stock-Windows usability — kill the 12s `serve` import, make
+`pip install .` work without MSVC, give ZK proofs a working backend
+
+Work Log:
+- MEASURED on this machine: `from cortexm.api.memory import Memory`
+  took 12.48s (`-X importtime`), all of it a module-level
+  `try: from sklearn... import ENGLISH_STOP_WORDS` in
+  cortexm/text/tokenizer.py firing at import (sklearn IS installed,
+  so the try always succeeds — and drags scipy/pandas/pyarrow with
+  it). The heavy Memory() build runs BEFORE the MCP `initialize`
+  handshake is read, so opencode's 10s MCP timeout fired first,
+  every session: context-m connected nowhere.
+- FIXED by vendoring sklearn's 318 stopwords as a static frozenset
+  (verified: full 318 covered, union byte-identical to old
+  base+sklearn set — all consumers unchanged, and MORE
+  deterministic, no cross-version drift). Import now 0.64s (20x);
+  end-to-end MCP handshake (initialize + tools/list, 29 tools)
+  0.7-1.9s, inside the timeout.
+- `pip install .` failed on stock Windows: 0.6.7 added hard dep
+  fastecdsa>=2.3.0, which ships no Windows wheels (needs MSVC to
+  build). Wrote cortexm/security/_ecdsa_backend.py — pure-Python
+  secp256k1 adapter over the `ecdsa` package exposing the exact
+  duck-type zk_proofs.py uses (G/q/p, validated Point(x,y),
+  rmul/add/sub/neg/eq, .x/.y, infinity); fastecdsa stays preferred,
+  fallback engages with a log line. pyproject: fastecdsa now
+  `sys_platform != 'win32'`-gated, `ecdsa>=0.18.0` hard dep.
+  Plain `pip install .` works on Windows again (0.6.7 reinstalled).
+- VERIFICATION: full suite 804 passed, 24 skipped, 0 failures
+  (incl. all 45 ZK tests via the fallback path and the byte-exact
+  determinism test); new backend file ruff-clean; ZK prove on
+  production-size vectors is minutes not ms under pure Python
+  (documented limitation — install fastecdsa where a compiler
+  exists for speed).
+- Pulled upstream to tip (was 8 behind; 7 bench chores + 1 CI fix,
+  none touching serve) with the local query_extract fix intact.
+
+Stage Summary:
+- Stock-Windows `cortexm serve` is now usable: ~1s startup, clean
+  pip install, working ZK proofs without MSVC
+- No behavior change: identical stopword sets, identical proof
+  math (adapter verified by the 45-test ZK suite, not by review)
+- Known residual: pure-Python EC speed (see above); fastecdsa
+  remains the fast path wherever wheels/compilers exist
+- LIVE MCP STRESS (fresh temp DB, 86s, server alive throughout):
+  40 adds + 25 searches + every other tool once + adversarial
+  inputs (2MB payload, SQLi, RTL/NUL, empty, missing fields,
+  malformed JSON, unknown method). Zero crashes, zero hangs,
+  malformed line skipped cleanly. Normal adds ~6ms, searches
+  ~27ms avg, everything else sub-100ms — EXCEPT the 2MB single
+  message at 83.5s (chunking/extraction constants, O(n) but
+  heavy; batch large ingests in smaller messages). Two harness
+  artifacts, not server bugs: zk_prove length-mismatch (passed
+  32B commitment against 768B int8 palace vectors) and fork
+  untested (replay event key is `id`, harness looked for
+  `event_id`). Follow-up: fork works (1ms, correct prefix);
+  full-size ZK prove (6,144 bits, verified:true) takes 906s
+  pure-Python — minutes not ms, as documented. Private vectors
+  are 768B (dims int8); stats' 770 includes 2B overhead.

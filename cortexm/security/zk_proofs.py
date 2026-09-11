@@ -36,7 +36,9 @@ established by the prover at prove-time; the verifier trusts the
 integration layer for that binding. Cryptographic guarantees start at
 the commitment layer.
 
-Dependencies: fastecdsa (pip install fastecdsa)
+Dependencies: fastecdsa preferred (pip install fastecdsa); pure-Python
+``ecdsa`` package is an automatic fallback when fastecdsa is unavailable
+(e.g. Windows without MSVC). See ``cortexm.security._ecdsa_backend``.
 """
 from __future__ import annotations
 
@@ -73,11 +75,28 @@ def _ensure_curve():
         from fastecdsa.curve import secp256k1 as _curve
         from fastecdsa.point import Point as _Point
     except ImportError:
-        raise RuntimeError(
-            "fastecdsa required for ZK proofs. "
-            "Install: pip install fastecdsa"
+        # No fastecdsa (e.g. stock Windows Python — no wheels, needs
+        # MSVC to build). Fall back to the pure-Python ecdsa adapter:
+        # slower per scalar mult, but API-identical for our use.
+        try:
+            from cortexm.security._ecdsa_backend import BACKEND_NAME as _backend
+            from cortexm.security._ecdsa_backend import EcdsaCurve as _curve
+            from cortexm.security._ecdsa_backend import EcdsaPoint as _Point
+        except ImportError:
+            raise RuntimeError(
+                "ZK proofs need fastecdsa or ecdsa. "
+                "Install: pip install fastecdsa   (fast, needs a C "
+                "compiler on Windows)  or  pip install ecdsa   "
+                "(pure Python fallback)"
+            )
+        _HAVE_FASTECDSA = False
+        import logging as _logging
+        _logging.getLogger("cortexm.zk").info(
+            "using %s secp256k1 backend (fastecdsa unavailable)",
+            _backend,
         )
-    _HAVE_FASTECDSA = True
+    else:
+        _HAVE_FASTECDSA = True
     _G = _curve.G
     _q = _curve.q
     _p = _curve.p

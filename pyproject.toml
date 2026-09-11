@@ -27,7 +27,11 @@ classifiers = [
 dependencies = [
     "numpy>=1.24.0",
     "cryptography>=41.0.0",
-    "fastecdsa>=2.3.0",
+    # fastecdsa is the fast ZK backend where wheels exist; ecdsa is the
+    # pure-Python fallback (no wheels needed) used automatically when the
+    # fastecdsa import fails — see cortexm/security/_ecdsa_backend.py.
+    "fastecdsa>=2.3.0; sys_platform != 'win32'",
+    "ecdsa>=0.18.0",
 ]
 
 [project.optional-dependencies]
