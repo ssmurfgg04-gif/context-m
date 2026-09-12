@@ -1,0 +1,68 @@
+{
+  "lifecycle": {
+    "promoted": 0,
+    "demoted": 0,
+    "deactivated": 0
+  },
+  "dreaming": {
+    "merged_pairs": 0,
+    "retired_facts": 0,
+    "palace_defragged": true,
+    "prefetcher_retrained": true,
+    "fade_stats": {
+      "scanned": 1502,
+      "deactivated": 0,
+      "merged_into": 0,
+      "merged_dropped": 0,
+      "min_score": 0.3499998452241511,
+      "max_score": 0.9499995798941245,
+      "mean_score": 0.8896584627347426,
+      "dry_run": false
+    },
+    "tmt_stats": null,
+    "cognition_stats": {
+      "scan": {
+        "patterns": 6,
+        "n_facts_scanned": 1502,
+        "n_relations": 4,
+        "n_subjects": 3,
+        "n_values": 4,
+        "duration_ms": 206.18,
+        "by_kind": {
+          "relation_freq": 3,
+          "subject_fanout": 1,
+          "value_fanout": 1,
+          "relation_pair": 1
+        }
+      },
+      "abstraction": {
+        "abstractions": 2,
+        "membership_edges_added": 4,
+        "duration_ms": 0.65
+      },
+      "gaps": {
+        "gaps": 5,
+        "n_subjects_compared": 5,
+        "duration_ms": 3.26,
+        "by_basis": {
+          "structural": 5
+        }
+      },
+      "hypotheses": {
+        "hypotheses": 5,
+        "facts_added": 1,
+        "duration_ms": 0.33
+      },
+      "analogies": {
+        "analogies": 0,
+        "edges_added": 0,
+        "duration_ms": 1.65
+      },
+      "total_derived_facts": 5,
+      "duration_ms": 212.71,
+      "cognition_commit_id": "b1d6bbb9acce4195a232b6650141b940"
+    },
+    "commit_id": "fc49cf3e5c3f4ec2b78b5c3abd7d2a8b",
+    "dry_run": false
+  }
+}
