@@ -35,8 +35,11 @@ def _memory(args):
 
 
 def main(argv=None) -> int:
+    from cortexm import __version__
     ap = argparse.ArgumentParser(prog="cortexm",
                                  description="Context-M memory fabric CLI")
+    ap.add_argument("--version", action="version",
+                    version=f"cortexm {__version__}")
     sub = ap.add_subparsers(dest="cmd")
 
     p = sub.add_parser("serve", help="run the MCP server on stdio")
@@ -247,6 +250,14 @@ def main(argv=None) -> int:
     p.add_argument("--window", type=int, default=20)
     p.add_argument("-k", type=int, default=12)
 
+    p = sub.add_parser("add", help="store one memory (CLI shortcut for "
+                                   "MCP contextm_add)")
+    p.add_argument("text", help="the text to remember")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--agent-id", default=None)
+    p.add_argument("--run-id", default=None)
+
     args = ap.parse_args(argv)
     if not args.cmd:
         ap.print_help()
@@ -427,6 +438,18 @@ def main(argv=None) -> int:
                                 current_step=args.current_step,
                                 window=args.window, k=args.k)
             print(json.dumps(out, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "add":
+        m = _memory(args)
+        try:
+            out = m.add(args.text, user_id=args.user_id,
+                        agent_id=args.agent_id, run_id=args.run_id)
+            print(json.dumps({
+                "stored": out.get("stats", {}).get("facts_inserted", 0),
+                "stats": out.get("stats")}, indent=2, default=str))
         finally:
             m.close()
         return 0

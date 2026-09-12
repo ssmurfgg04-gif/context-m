@@ -75,10 +75,15 @@ python scripts/run_beam10m_benchmark.py --config all
   columns precisely to avoid pickle.
 - The SQLite store is read-only-by-default; writes require explicit
   `mode="rw"` on `TraceStore(...)`.
-- The MCP server exposes only the Reader by default; the Writer is
-  opt-in via `--allow-writes` on `cortexm serve-mcp`.
-- PII redaction is on by default at ingest; agents MUST NOT disable it
-  without a recorded justification in the fact's `provenance.pii` field.
+- The MCP server (`cortexm serve`) exposes Reader and Writer tools
+  alike over stdio — there is no `--allow-writes` gate (and no
+  `serve-mcp` subcommand); restrict writes at the client (e.g.
+  opencode `permission`) when the deployment needs it.
+- PII redaction is OFF by default (`Config.pii_mode="off"`); enable
+  with `CORTEXM_PII_MODE` (or legacy `CONTEXT_M_PII_MODE`) set to `redact`
+  (`block`/`tag` also available) for personal or untrusted corpora.
+  When enabled, agents MUST NOT disable it without a recorded
+  justification in the fact's `provenance.pii` field.
 - Prompt-injection defense: facts ingested from untrusted text are
   tagged `untrusted=True`; the reader demotes them in ranking and the
   context block formatter escapes their values. Do not bypass.

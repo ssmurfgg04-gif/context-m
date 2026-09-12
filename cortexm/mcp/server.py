@@ -479,7 +479,8 @@ TOOLS = [
     {
         "name": "contextm_fork",
         "description": "DSH session fork — copy the session's event prefix "
-                       "up to ``at_event_id``, then continue from there "
+                       "up to ``at_event_id`` (a replay event ``id`` "
+                       "works as alias), then continue from there "
                        "with a new run_id. Returns the prefix + a fresh "
                        "run_id. Caller is responsible for switching the "
                        "run_id on subsequent mem.add() calls.",
@@ -569,8 +570,11 @@ class MCPServer:
                             agent_id=args.get("agent_id"),
                             run_id=args.get("run_id"),
                             timestamp=args.get("timestamp"))
-                text = json.dumps({"stored": len(out.get("results", [])),
-                                   "stats": out.get("stats")}, default=str)
+                text = json.dumps({
+                    "stored": out.get("stats", {}).get(
+                        "facts_inserted", 0),
+                    "decisions": len(out.get("results", [])),
+                    "stats": out.get("stats")}, default=str)
             elif name == "contextm_search":
                 out = m.search(args.get("query", ""),
                                user_id=args.get("user_id", "default"),
@@ -585,6 +589,12 @@ class MCPServer:
                 text = json.dumps(out, indent=1, default=str)
             elif name == "contextm_temporal":
                 op = args.get("op", "between")
+                if op not in ("before", "after", "between"):
+                    return {"content": [{"type": "text",
+                                         "text": f"error: op must be one "
+                                         f"of 'before' | 'after' | "
+                                         f"'between', got {op!r}"}],
+                            "isError": True}
                 if op == "before":
                     out = m.get_before(args.get("end") or args.get("start"),
                                        user_id=args.get("user_id", "default"),
@@ -740,7 +750,8 @@ class MCPServer:
             elif name == "contextm_fork":
                 out = m.fork(
                     user_id=args.get("user_id", "default"),
-                    at_event_id=args.get("at_event_id"),
+                    # replay emits the key as `id`; accept it as alias.
+                    at_event_id=args.get("at_event_id") or args.get("id"),
                     new_run_id=args.get("new_run_id"))
                 text = json.dumps({
                     "new_run_id": out["new_run_id"],
@@ -1246,10 +1257,16 @@ def serve(db_path: str | None = None) -> None:
         cfg.db_path = db_path
     memory = Memory(cfg)
     server = MCPServer(memory)
+    # stderr only: stdout carries JSON-RPC and must stay clean.
+    sys.stderr.write(f"context-m serve: db={cfg.db_path} "
+                     f"tools={len(TOOLS)} (stdio JSON-RPC)\n")
+    sys.stderr.flush()
+    n = 0
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
+        n += 1
         try:
             request = json.loads(line)
         except json.JSONDecodeError:
@@ -1258,6 +1275,9 @@ def serve(db_path: str | None = None) -> None:
         if response is not None:
             sys.stdout.write(json.dumps(response) + "\n")
             sys.stdout.flush()
+    sys.stderr.write(f"context-m serve: stdin closed after {n} "
+                     f"requests, exiting\n")
+    sys.stderr.flush()
 
 
 if __name__ == "__main__":

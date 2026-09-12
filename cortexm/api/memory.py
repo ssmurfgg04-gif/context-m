@@ -985,6 +985,7 @@ class Memory:
         s["hash_provider"] = self.store.hasher.name
         s["vsa_mode"] = self.config.vsa_mode
         s["dims"] = self.config.dims
+        s["pii_mode"] = self.config.pii_mode
         return s
 
     def storage_stats(self) -> dict:

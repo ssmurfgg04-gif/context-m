@@ -3744,3 +3744,46 @@ Stage Summary:
   full-size ZK prove (6,144 bits, verified:true) takes 906s
   pure-Python — minutes not ms, as documented. Private vectors
   are 768B (dims int8); stats' 770 includes 2B overhead.
+
+---
+Task ID: 25
+Agent: opencode session (Jackb workstation, dogfood pass as MCP user)
+Task: Use context-m the way an agent does; fix every papercut found
+
+Work Log:
+- Dogfood harness (outside repo): session-start preload, realistic
+  adds, recall/export/import/consolidate round-trips, adversarial
+  inputs (2MB, SQLi, RTL/NUL, nulls, malformed JSON, unknown
+  method). Zero crashes/hangs; malformed line skipped, server
+  stayed alive. Normal adds 5-40ms, searches ~10ms.
+- Gaps found and fixed (all live-verified over real stdio):
+  * no `cortexm --version` (argparse had none) — added.
+  * `serve` exited silently on closed stdin (this exact confusion
+    burned an hour of debugging) — now logs db path + tool
+    count at boot and request count at EOF, stderr only.
+  * `contextm_add` reported `stored: <decision count>` while
+    `facts_inserted: 0` — now reports stored=facts_inserted plus
+    a `decisions` field. Same shape adopted by new `cortexm add`
+    CLI shortcut (no direct add existed; scripts had to speak
+    JSON-RPC or python API).
+  * `contextm_temporal` silently treated any `op` as `between`
+    (op="someday" returned facts!) — now isError with the valid
+    enum. Omitted bounds stay unbounded (documented behavior).
+  * `contextm_fork` required `at_event_id` while replay emits
+    `id` (burned a stress harness) — accepts `id` as alias,
+    noted in the tool description.
+  * `contextm_stats` now exposes `pii_mode` (was invisible).
+  * AGENTS.md fixes: PII redaction claimed on-by-default but
+    code default is `off` (doc now says so + how to enable);
+    `serve-mcp --allow-writes` never existed (doc now describes
+    the real stdio surface + client-side restriction).
+- Left alone on purpose: extractor pickiness (lowercase values,
+  unblessed verbs, number specs never extract — chunk-recall
+  covers; redesigning patterns is a product call, not a
+  papercut), 2MB-single-message 83s (O(n) constants —
+  batch smaller), pure-Python ZK minutes (documented).
+- Tests: 77 passed across bm25/inspect-cli, fabric, stress_v067,
+  cognition+provenance; ruff adds zero new errors (file baseline
+  50 pre-existing); every changed path re-verified live over
+  stdio (version, add CLI, bad-op isError, fork-by-id, pii in
+  stats, clean exit with stderr intact).
