@@ -73,6 +73,12 @@ class Config:
     history_window: int = 3            # superseded facts shown per chain
     fusion_vsa_weight: float = 0.6
     fusion_symbolic_weight: float = 0.4
+    # v0.6.8: RRF fusion mode (Cormack et al. 2009) — rank-based
+    # combination needs no normalization across the incomparable
+    # VSA-cosine / symbolic-boost / chunk-score scales. "weighted"
+    # is the default (protects tuned Tier-1 numbers); "rrf" opts in.
+    fusion_method: str = "weighted"  # "weighted" | "rrf"
+    rrf_k: int = 60                  # RRF rank offset (standard value)
 
     # --- OOD ingestion (Unmess + DisSim + Bitap trigger widening) -----------
     # When True, the main `mem.add()` path runs the chaos-mode pipeline
@@ -349,6 +355,9 @@ class Config:
     audit_actions: str = "security"    # "security" | "all" | "none"
     rate_limit_rps: float = 50.0        # REST server, requests/second/key
     rate_limit_burst: int = 100
+    # v0.6.8: warm one recall at MCP serve boot so the first real
+    # query skips cold-start costs (kernels, caches). Best-effort.
+    serve_warmup_enabled: bool = True
 
     # --- ZK-SQL proofs (Halo2/PLONKish-inspired, pure-Python) ----------------
     # When True, the MCP server exposes `contextm_zk_sql_proof` (membership /
@@ -391,6 +400,14 @@ class Config:
     # the query. μ=0: pure regex + dict, no LLM. See
     # cortexm/bridge/negation.py for the detector + SQL schema.
     negation_indexing_enabled: bool = True
+    # v0.6.8: gist fallback — when a message yields zero extractor
+    # candidates, commit one low-confidence ("noted") gist fact quoting
+    # the message instead of dropping it silently. Guarantees every
+    # ingest leaves an indexable triple; runs on the FULL message text
+    # (pre-negation-split) so negated sentences still leave a record.
+    gist_fallback_enabled: bool = True      # never silently drop a message
+    gist_min_chars: int = 30                # shorter messages skip the gist
+    gist_confidence: float = 0.32           # above min_confidence (0.30)
 
     # Multilingual routing — detect non-English text via Unicode script
     # analysis and route to verbatim-only storage (skip the English

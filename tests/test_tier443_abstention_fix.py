@@ -123,6 +123,9 @@ def test_tier443_chunk_recall_off_baseline():
     cfg.verbatim_ingest_enabled = False  # v0.5.3: isolate chunk-recall path
     cfg.verbatim_search_enabled = False
     cfg.recall_step_in_search = False
+    cfg.gist_fallback_enabled = False  # v0.6.8: gist facts would
+    # otherwise surface the answer chunks as VSA-visible triples —
+    # this baseline isolates the pre-gist world on purpose
     m = Memory(cfg)
     _ingest(m, SYNTHETIC_THREAD)
     n = _n_gold_in_context_block(m, QUESTIONS)

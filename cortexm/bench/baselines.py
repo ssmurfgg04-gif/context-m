@@ -18,8 +18,9 @@ from cortexm.text.tokenizer import STOPWORDS, words
 
 # ---------------------------------------------------------------- BM25
 class BM25Index:
-    def __init__(self, docs: list[dict], k1: float = 1.5, b: float = 0.75) -> None:
-        self.k1, self.b = k1, b
+    def __init__(self, docs: list[dict], k1: float = 1.5, b: float = 0.75,
+                 delta: float = 0.0) -> None:
+        self.k1, self.b, self.delta = k1, b, delta
         self.docs = docs
         self.doc_ids = [d["id"] for d in docs]
         self.doc_len = []
@@ -46,8 +47,12 @@ class BM25Index:
             idf = math.log(1 + (self.N - self.df[t] + 0.5) / (self.df[t] + 0.5))
             for i, c in postings:
                 dl = self.doc_len[i] or 1
-                s = idf * (c * (self.k1 + 1)) / (
+                # BM25+ (Lv & Zhai): the delta lower-bounds the TF
+                # component so short docs with tf=1 aren't crushed by
+                # the length norm. delta=0.0 reproduces classic Okapi.
+                s = idf * ((c * (self.k1 + 1)) / (
                     c + self.k1 * (1 - self.b + self.b * dl / self.avgdl))
+                    + self.delta)
                 scores[i] = scores.get(i, 0.0) + s
         top = sorted(scores.items(), key=lambda kv: -kv[1])[:k]
         return [(self.doc_ids[i], s) for i, s in top]

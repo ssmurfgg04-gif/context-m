@@ -1261,6 +1261,14 @@ def serve(db_path: str | None = None) -> None:
     sys.stderr.write(f"context-m serve: db={cfg.db_path} "
                      f"tools={len(TOOLS)} (stdio JSON-RPC)\n")
     sys.stderr.flush()
+    if getattr(cfg, "serve_warmup_enabled", True):
+        # One warm recall so the first real query skips cold-start
+        # costs (kernels, LRU caches). Best-effort: never block boot.
+        try:
+            memory.search("warmup", limit=1,
+                          user_id=cfg.default_user_id)
+        except Exception:
+            pass
     n = 0
     for line in sys.stdin:
         line = line.strip()

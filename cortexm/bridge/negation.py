@@ -75,6 +75,30 @@ _MARKERS_RE = re.compile(
 
 
 # ---------------------------------------------------------------------------
+# Pseudo-negations (NegEx PSEU) — phrases containing a marker surface form
+# that do NOT negate: "not only", "not necessarily", ... A marker match
+# fully inside a pseudo span is ignored. Domain-neutral subset of
+# Chapman's negex_triggers.txt (clinical entries like "no interval
+# change" deliberately excluded — wrong domain, would over-trigger).
+# ---------------------------------------------------------------------------
+PSEUDO_NEGATIONS: List[str] = [
+    "not only",
+    "not just",
+    "not necessarily",
+    "not certain if",
+    "not certain whether",
+    "no matter",
+    "without doubt",
+    "without question",
+    "no wonder",
+]
+
+_PSEUDO_RE = re.compile(
+    rf"\b(?:{'|'.join(re.escape(m) for m in PSEUDO_NEGATIONS)})\b",
+    re.IGNORECASE)
+
+
+# ---------------------------------------------------------------------------
 # Sentence-level negation detection
 # ---------------------------------------------------------------------------
 
@@ -100,9 +124,33 @@ def detect_negation(text: str) -> List[Dict]:
     if not text:
         return out
     for s_start, s_end, sentence in _split_sentences(text):
-        m = _MARKERS_RE.search(sentence)
+        # Pseudo-negation spans first: a real-marker match that even
+        # TOUCHES a pseudo span is a false trigger ("is not" inside
+        # "is not only"). Overlap — not just containment — because
+        # multi-word markers ("is not") routinely straddle the pseudo
+        # phrase boundary.
+        pseudo = [pm.span() for pm in _PSEUDO_RE.finditer(sentence)]
+        m = next((mm for mm in _MARKERS_RE.finditer(sentence)
+                  if not any(ps < mm.end() and mm.start() < pe
+                             for ps, pe in pseudo)), None)
         if not m:
             continue
+        marker = m.group(0)
+        # Determiner-"no" disambiguation: bare "no" after a comma,
+        # semicolon, colon, or and/or/but/nor ("pros and no cons")
+        # denies a noun phrase, it doesn't negate the sentence.
+        # Record the row (explicit-denial answers keep working) but
+        # flag it so extract_with_negation leaves the sentence in
+        # positive text. Verb-adjacent "no" ("eat no meat") and
+        # sentence-initial "No ..." still strip as before.
+        determiner = False
+        if marker.lower() == "no":
+            before = sentence[:m.start()].rstrip()
+            prev = before.split()[-1].lower().strip(",;:") \
+                if before.split() else ""
+            if prev in ("and", "or", "but", "nor") or \
+                    before.endswith((",", ";", ":")):
+                determiner = True
         # Heuristic implied subject: the words between the sentence
         # start and the negation marker. For "I don't eat meat",
         # the implied subject is "I" and the negated verb is "eat".
@@ -112,10 +160,11 @@ def detect_negation(text: str) -> List[Dict]:
         implied_subject = prefix.split()[-1] if prefix.split() else ""
         out.append({
             "sentence": sentence,
-            "marker": m.group(0),
+            "marker": marker,
             "marker_span": (s_start + m.start(), s_start + m.end()),
             "sentence_span": (s_start, s_end),
             "implied_subject": implied_subject,
+            "determiner": determiner,
         })
     return out
 
@@ -136,9 +185,13 @@ def extract_with_negation(text: str) -> Dict:
     negations = detect_negation(text)
     if not negations:
         return {"positive_text": text, "negations": []}
-    # Sort negations by start so we can splice out the spans
+    # Sort negations by start so we can splice out the spans.
+    # Determiner-"no" rows are recorded but NOT spliced — the
+    # sentence stays in positive text (see detect_negation).
     spans_to_remove = sorted(
-        (n["sentence_span"] for n in negations), key=lambda s: s[0])
+        (n["sentence_span"] for n in negations
+         if not n.get("determiner")),
+        key=lambda s: s[0])
     # Build the positive text by skipping the negated sentence spans
     out: List[str] = []
     last_end = 0

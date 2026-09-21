@@ -44,12 +44,16 @@ No LLM call. The NL strings are templated and deterministic.
 from __future__ import annotations
 
 import datetime as _dt
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 
 from cortexm.trace.edges import REFERS_TO
 from cortexm.trace.fact import make_fact
 from cortexm.util import iso
+
+
+_log = logging.getLogger("cortexm.trace")
 
 
 def _now() -> datetime:
@@ -237,6 +241,13 @@ def tmt_build(store, palace=None, *,
         for g in group[:50]:  # cap edges for storage
             store.add_edge(f.id, g.id, REFERS_TO,
                            {"tmt": "l2_constituent"})
+        # Add vector to palace for retrieval
+        if palace is not None:
+            try:
+                palace.add(f.id, palace.encode_fact(f))
+            except Exception:  # noqa: BLE001 — indexing must never break TMT
+                _log.warning("palace.add failed for fact %s", f.id,
+                             exc_info=True)
         l2_facts.append(f)
         stats["l2_sessions_built"] += 1
 
@@ -283,6 +294,13 @@ def tmt_build(store, palace=None, *,
         for g in l2_in_group[:50]:
             store.add_edge(f.id, g.id, REFERS_TO,
                            {"tmt": "l3_constituent"})
+        # Add vector to palace for retrieval
+        if palace is not None:
+            try:
+                palace.add(f.id, palace.encode_fact(f))
+            except Exception:  # noqa: BLE001 — indexing must never break TMT
+                _log.warning("palace.add failed for fact %s", f.id,
+                             exc_info=True)
         l3_facts.append(f)
         user_days[uid].add(day_str)
         stats["l3_days_built"] += 1
@@ -324,6 +342,13 @@ def tmt_build(store, palace=None, *,
             if d.user_id == uid:
                 store.add_edge(f.id, d.id, REFERS_TO,
                                {"tmt": "l4_constituent"})
+        # Add vector to palace for retrieval
+        if palace is not None:
+            try:
+                palace.add(f.id, palace.encode_fact(f))
+            except Exception:  # noqa: BLE001 — indexing must never break TMT
+                _log.warning("palace.add failed for fact %s", f.id,
+                             exc_info=True)
         stats["l4_personas_built"] += 1
 
     if not dry_run:

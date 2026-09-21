@@ -37,8 +37,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from cortexm.cognition.scanner import ScanResult
+from cortexm.trace.fact import deterministic_fact_id, make_fact
 from cortexm.trace.store import TraceStore
-from cortexm.trace.fact import deterministic_fact_id
 from cortexm.util import iso, new_id
 
 
@@ -76,7 +76,8 @@ class AnalogyDetector:
     def run(self, scan: ScanResult, *,
             dry_run: bool = False,
             commit_id: str | None = None,
-            user_id: str | None = None) -> AnalogyResult:
+            user_id: str | None = None,
+            palace=None) -> AnalogyResult:
         """Find analogies by comparing relation subject sets."""
         import time
         t0 = time.perf_counter()
@@ -150,6 +151,22 @@ class AnalogyDetector:
                              "shared_fanout": a.shared_fanout,
                              "generated_by": "cognition.analogy",
                          })))
+                    # Add vector to palace for retrieval
+                    if palace is not None:
+                        fact = make_fact(
+                            subject=a.relation_a, relation=ANALOGOUS_TO,
+                            value=a.relation_b,
+                            user_id=user_id or "default",
+                            confidence=a.confidence,
+                            memory_type="long_term",
+                            is_derived=True, is_active=True,
+                            now=_now(),
+                            provenance={"kind": "analogy",
+                                        "overlap_score": round(a.overlap_score, 4),
+                                        "shared_fanout": a.shared_fanout,
+                                        "generated_by": "cognition.analogy"})
+                        fact.id = fid
+                        palace.add(fid, palace.encode_fact(fact))
                     edges_added += 1
                 except sqlite3.IntegrityError:
                     pass  # already derived (deterministic id) — idempotent

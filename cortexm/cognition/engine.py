@@ -117,7 +117,8 @@ class CognitionEngine:
 
         # 2. AbstractionEngine
         ab = self.abstraction.run(scan, dry_run=dry_run,
-                                    commit_id=commit_id, user_id=user_id)
+                                    commit_id=commit_id, user_id=user_id,
+                                    palace=self.palace)
         report.abstraction = {
             "abstractions": len(ab.abstractions),
             "membership_edges_added": ab.membership_edges_added,
@@ -135,7 +136,8 @@ class CognitionEngine:
 
         # 4. HypothesisEngine
         hyp = self.hypothesis.run(gaps.gaps, dry_run=dry_run,
-                                    commit_id=commit_id, user_id=user_id)
+                                    commit_id=commit_id, user_id=user_id,
+                                    palace=self.palace)
         report.hypotheses = {
             "hypotheses": len(hyp.hypotheses),
             "facts_added": hyp.facts_added,
@@ -144,7 +146,8 @@ class CognitionEngine:
 
         # 5. AnalogyDetector
         ana = self.analogy.run(scan, dry_run=dry_run,
-                                 commit_id=commit_id, user_id=user_id)
+                                 commit_id=commit_id, user_id=user_id,
+                                 palace=self.palace)
         report.analogies = {
             "analogies": len(ana.analogies),
             "edges_added": ana.edges_added,

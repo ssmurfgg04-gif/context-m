@@ -37,6 +37,23 @@ def _content_key(f: "Fact | None") -> tuple:
     return (f.subject, f.relation, f.value, str(f.valid_from))
 
 
+def rrf_fuse(rank_lists: list[list[str]], k: int = 60) -> dict[str, float]:
+    """Reciprocal Rank Fusion (Cormack et al. 2009).
+
+    score(d) = sum over lists of 1/(k + rank). Rank-based fusion
+    needs no normalization across incomparable signal scales
+    (VSA cosine vs symbolic boosts vs chunk scores) — the weakness
+    of hand-tuned linear weights. Deterministic: ties resolve by
+    first-seen order and every input ranking is deterministically
+    ordered by its producer. μ=0, pure arithmetic.
+    """
+    scores: dict[str, float] = {}
+    for lst in rank_lists:
+        for rank, fid in enumerate(lst, start=1):
+            scores[fid] = scores.get(fid, 0.0) + 1.0 / (k + rank)
+    return scores
+
+
 def _query_relevant_window(text: str, query: str, *,
                            max_chars: int = 300,
                            padding: int = 30) -> str:
@@ -933,25 +950,52 @@ class MemoryReader:
                 chunk_recall_stats = ChunkRecallStats(skipped="exception")
 
         # --- fusion ---------------------------------------------------------
-        # 'mentioned' anchors are retrieval scaffolding, not answers: their
-        # long snippets inflate lexical similarity, so ONLY their VSA
-        # contribution is damped. Symbolic exacts always dominate.
+        rrf_mode = getattr(self.cfg, "fusion_method", "weighted") == "rrf"
         vsa_ids = list(vsa_scores.keys())
         fact_map = {f.id: f for f in self.store.get_facts(vsa_ids)}
         sym_map = {f.id: f for f, _ in sym_facts}
         fact_map.update({k: v for k, v in sym_map.items() if k not in fact_map})
         candidates: dict[str, float] = {}
-        for fid, s in vsa_scores.items():
-            f = fact_map.get(fid)
-            rel = f.relation if f else None
-            damp = 0.45 if rel == "mentioned" else 1.0
-            candidates[fid] = candidates.get(fid, 0.0) + \
-                self.cfg.fusion_vsa_weight * max(0.0, s) * damp
-        for f, boost in sym_facts:
-            hinted = f.relation in plan.relations
-            b = boost + (0.2 if hinted else 0.0)
-            candidates[f.id] = candidates.get(f.id, 0.0) + \
-                self.cfg.fusion_symbolic_weight * b
+        if rrf_mode:
+            # RRF over the three signal rankings (VSA order, symbolic
+            # boost order, chunk-score order). No score normalization,
+            # no tuned weights. Downstream additive boosts (graph,
+            # prefetch) and expansion/rerank apply unchanged.
+            rrf_k = int(getattr(self.cfg, "rrf_k", 60))
+            vsa_rank = [fid for fid, _ in sorted(
+                vsa_scores.items(), key=lambda kv: -kv[1])]
+            sym_rank = [f.id for f, _ in sorted(
+                sym_facts, key=lambda fb: -fb[1])]
+            chunk_rank: list[str] = []
+            if chunk_recall_scores:
+                _seen: set[str] = set()
+                for cid in sorted(
+                        chunk_recall_scores,
+                        key=lambda c: -chunk_recall_scores[c]):
+                    for f in self.store.facts_for_chunk(
+                            cid, active_only=True):
+                        if f.id in scope and f.id not in _seen:
+                            _seen.add(f.id)
+                            chunk_rank.append(f.id)
+                            if f.id not in fact_map:
+                                fact_map[f.id] = f
+            candidates = rrf_fuse([vsa_rank, sym_rank, chunk_rank],
+                                  k=rrf_k)
+        else:
+            # 'mentioned' anchors are retrieval scaffolding, not answers: their
+            # long snippets inflate lexical similarity, so ONLY their VSA
+            # contribution is damped. Symbolic exacts always dominate.
+            for fid, s in vsa_scores.items():
+                f = fact_map.get(fid)
+                rel = f.relation if f else None
+                damp = 0.45 if rel == "mentioned" else 1.0
+                candidates[fid] = candidates.get(fid, 0.0) + \
+                    self.cfg.fusion_vsa_weight * max(0.0, s) * damp
+            for f, boost in sym_facts:
+                hinted = f.relation in plan.relations
+                b = boost + (0.2 if hinted else 0.0)
+                candidates[f.id] = candidates.get(f.id, 0.0) + \
+                    self.cfg.fusion_symbolic_weight * b
 
         # Inject chunk-recall hits into the candidate pool. We do this
         # AFTER the VSA/symbolic fusion so chunk-recall facts get an
@@ -959,7 +1003,22 @@ class MemoryReader:
         # and a chunk-recall hit gets the sum, which is what we want —
         # multiple retrieval paths agree → higher rank.
         chunk_recall_notes: list[str] = []
-        if chunk_recall_scores:
+        if chunk_recall_scores and rrf_mode:
+            # RRF mode: scores already fused above — only emit RECALL
+            # notes for factless chunks (chunk facts are already in
+            # fact_map from the fusion pre-block).
+            for chunk_id in chunk_recall_scores:
+                if self.store.facts_for_chunk(
+                        chunk_id, active_only=True):
+                    continue
+                chunk_row = self.store.get_chunk(chunk_id)
+                if chunk_row:
+                    snippet = _query_relevant_window(
+                        chunk_row["text"], query,
+                        max_chars=300)
+                    chunk_recall_notes.append(
+                        f"RECALL from thread: {snippet}")
+        elif chunk_recall_scores:
             cr_weight = float(getattr(self.cfg,
                                       "chunk_recall_weight", 0.35))
             for chunk_id, cscore in chunk_recall_scores.items():

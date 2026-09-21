@@ -43,8 +43,8 @@ from typing import Any
 
 from cortexm.cognition.abstraction import Abstraction
 from cortexm.cognition.scanner import ScanResult
+from cortexm.trace.fact import deterministic_fact_id, make_fact
 from cortexm.trace.store import TraceStore
-from cortexm.trace.fact import deterministic_fact_id
 from cortexm.util import iso, new_id
 
 
@@ -200,13 +200,14 @@ class HypothesisEngine:
                  palace=None,
                  max_confidence: float | None = None) -> None:
         self.store = store
-        self.palace = palace  # optional, for Hopfield cleanup path
+        self.palace = palace  # for Hopfield cleanup AND vector indexing
         self.max_conf = max_confidence or self.MAX_HYPOTHESIS_CONFIDENCE
 
     def run(self, gaps: list[Gap], *,
             dry_run: bool = False,
             commit_id: str | None = None,
-            user_id: str | None = None) -> HypothesisResult:
+            user_id: str | None = None,
+            palace=None) -> HypothesisResult:
         """Propose and write hypothesis facts for each gap."""
         import time
         t0 = time.perf_counter()
@@ -251,6 +252,24 @@ class HypothesisEngine:
                          "peer_values_sample": gap.peer_values,
                          "generated_by": "cognition.hypothesis",
                      })))
+                # Add vector to palace for retrieval
+                use_palace = palace or self.palace
+                if use_palace is not None:
+                    fact = make_fact(
+                        subject=proposed.subject, relation=proposed.relation,
+                        value=proposed.proposed_value,
+                        user_id=user_id or "default",
+                        confidence=proposed.confidence,
+                        memory_type="long_term",
+                        is_derived=True, is_active=True,
+                        now=datetime.now(timezone.utc),
+                        provenance={"kind": "hypothesis", "basis": proposed.basis,
+                                    "supporting_facts": proposed.supporting_facts,
+                                    "peer_count": gap.peer_count,
+                                    "peer_values_sample": gap.peer_values,
+                                    "generated_by": "cognition.hypothesis"})
+                    fact.id = fid
+                    use_palace.add(fid, use_palace.encode_fact(fact))
             except sqlite3.IntegrityError:
                 continue  # already derived (deterministic id) — idempotent
             # wire HYPOTHESIZED_BY edges from each supporting fact

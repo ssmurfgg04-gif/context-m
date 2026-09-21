@@ -29,11 +29,15 @@ an `on_idle` hook in the MCP server).
 from __future__ import annotations
 
 import datetime as _dt
+import logging
 from datetime import datetime, timezone
 from typing import Iterable
 
 from cortexm.trace.edges import MERGED_WITH, RETRACTED_BY
 from cortexm.util import iso, similarity
+
+
+_log = logging.getLogger("cortexm.trace")
 
 
 def _now() -> datetime:
@@ -179,13 +183,49 @@ def consolidate(store, palace=None, prefetcher=None, *,
                             "consolidated_at": iso(_now())})
     stats["retired_facts"] = len(retire_ids)
 
-    # ---------- 3. Palace defrag ----------------------------------------
+    # ---------- 3. Palace defrag + vector backfill -------------------
     # Rebuild the palace's packed matrix from active facts only.
-    # This drops retired / merged IDs from the in-memory index and
-    # re-tightens the page-clustered tree (currently a no-op for the
-    # SQLite-backed palace; for the in-memory palace it compacts).
+    # ALSO: backfill vectors for any active facts (including derived)
+    # that don't have them yet. Two-tier gate so repeat runs are O(1):
+    # (1) kv watermark on the (active-facts, vectors) count pair — every
+    # mutation flows through those two tables, so an unchanged pair
+    # means nothing can be missing; (2) otherwise a single SQL
+    # anti-join finds the missing IDs without Python-side set building.
     if defrag_palace and palace is not None and not dry_run:
         try:
+            bf_where = "is_active=1 AND quarantined=0"
+            bf_args: tuple = ()
+            if user_id is not None:
+                bf_where += " AND user_id=?"
+                bf_args = (user_id,)
+            n_facts = store.conn.execute(
+                f"SELECT COUNT(*) FROM facts WHERE {bf_where}",
+                bf_args).fetchone()[0]
+            n_vecs = store.conn.execute(
+                "SELECT COUNT(*) FROM vectors").fetchone()[0]
+            kv_key = f"__vector_backfill:{user_id or 'all'}"
+            mark = f"{n_facts}:{n_vecs}"
+            backfilled = 0
+            stats["vector_backfill_skipped"] = False
+            stats["vectors_backfilled"] = 0
+            if store.kv_get(kv_key) != mark:
+                missing = store.conn.execute(
+                    f"SELECT id FROM facts WHERE {bf_where} AND id NOT IN "
+                    f"(SELECT fact_id FROM vectors)", bf_args).fetchall()
+                for (fid,) in missing:
+                    fact = store.get_fact(fid)
+                    if fact:
+                        try:
+                            palace.add(fid, palace.encode_fact(fact))
+                            backfilled += 1
+                        except Exception:  # noqa: BLE001 — backfill never breaks consolidate
+                            _log.warning("backfill palace.add failed for %s",
+                                         fid, exc_info=True)
+                if not missing:
+                    store.kv_set(kv_key, mark)
+            else:
+                stats["vector_backfill_skipped"] = True
+            
             # the palace's _n tracks active entries — a defrag pass
             # re-builds the matrix by re-adding only active fact IDs.
             # For the SQLite-backed palace this is a no-op (vectors
@@ -196,8 +236,10 @@ def consolidate(store, palace=None, prefetcher=None, *,
             elif hasattr(palace, "close"):
                 palace.close()
             stats["palace_defragged"] = True
-        except Exception:
-            pass
+            stats["vectors_backfilled"] = backfilled
+        except Exception as e:
+            stats["palace_defragged"] = False
+            stats["backfill_error"] = str(e)
 
     # ---------- 4. Prefetcher retrain ------------------------------------
     # The MBTB prefetcher tracks co-access patterns. Re-training from

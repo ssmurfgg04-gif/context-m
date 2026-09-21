@@ -327,9 +327,29 @@ def _skill_learn(m, ctx, sp, ts, sent):
     return [Candidate("SELF", "has_skill", v, 0.8, "skill_learning")] if v else []
 
 
-@pattern("skill_prof", rf"\bi'?m\s+(?:proficient|skilled|experienced)\s+in\s+(?P<val>[\w+#. ]{{2,40}})")
+@pattern("skill_prof", rf"\bi(?:'?m|\s+am)\s+(?:proficient|skilled|experienced)\s+(?:in|at)\s+(?P<val>[\w+#. ]{{2,40}})")
 def _skill_prof(m, ctx, sp, ts, sent):
     return [Candidate("SELF", "has_skill", clean_value(m.group("val")), 0.85, "skill_prof")]
+
+
+@pattern("skill_have", rf"\bi\s+have\s+(?:a\s+)?skills?\s+(?:in|with)\s+(?P<val>[A-Za-z+#.][\w+#.]*(?:\s+(?:and|&)\s+[A-Za-z+#.][\w+#.]*)*)")
+def _skill_have(m, ctx, sp, ts, sent):
+    # "I have skill in rust" / "I have skills with python and go".
+    # The in/with preposition is load-bearing: without it, "I have
+    # skill issues" would misfire — same shape as skill_know above.
+    out = []
+    for part in re.split(r"\s+(?:and|&)\s+", clean_value(m.group("val"))):
+        if len(part) > 1 and part.lower() not in ("it", "that", "this", "them"):
+            out.append(Candidate("SELF", "has_skill", part, 0.85, "skill_have"))
+    return out
+
+
+@pattern("skill_mine", rf"\bmy\s+skills?\s+(?:include|includes|are|:)\s*(?P<val>[A-Za-z+#.][\w+#.]*)(?=[.!?]|$)")
+def _skill_mine(m, ctx, sp, ts, sent):
+    # "My skills include welding." The end-anchor lookahead keeps
+    # multi-word tails ("paying bills on time") from matching.
+    v = clean_value(m.group("val") or "")
+    return [Candidate("SELF", "has_skill", v, 0.82, "skill_mine")] if v else []
 
 
 @pattern("studied_at", rf"\bi\s+studied\s+(?P<major>[a-z][a-z ]{{2,40}}?)\s+at\s+(?P<val>{ORG})")
@@ -483,6 +503,10 @@ SUMMARY_VERBS = {
     "speaks": "speaks", "owns": "owns", "enjoys": "likes",
     "hates": "dislikes", "dislikes": "dislikes",
     "studied": "studied", "plays": "plays",
+    # Third-person skill attribution ("Dave has skill rust") lands on
+    # the SAME has_skill relation as the first-person skill patterns,
+    # so both voices retrieve identically.
+    "has skill": "has_skill",
 }
 _SUMMARY_RX = (rf"\b(?P<subj>User|[A-Z][a-z]{{2,}})\s+(?P<verb>"
                + "|".join(re.escape(k) for k in

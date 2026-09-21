@@ -27,14 +27,15 @@ abstraction engine's. We only emit the membership edges here.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
 from cortexm.cognition.scanner import Pattern, ScanResult
+from cortexm.trace.fact import deterministic_fact_id, make_fact
 from cortexm.trace.store import TraceStore
-from cortexm.trace.fact import deterministic_fact_id
 from cortexm.util import iso, new_id
 
 
@@ -68,7 +69,8 @@ class AbstractionEngine:
     def run(self, scan: ScanResult, *,
             dry_run: bool = False,
             commit_id: str | None = None,
-            user_id: str | None = None) -> AbstractionResult:
+            user_id: str | None = None,
+            palace=None) -> AbstractionResult:
         """Build abstractions from scan results."""
         import time
         t0 = time.perf_counter()
@@ -178,9 +180,21 @@ class AbstractionEngine:
                              "long_term", 1, 1,
                              commit_id,
                              _prov_json(ab)))
+                        # Add vector to palace for retrieval
+                        if palace is not None:
+                            fact = make_fact(
+                                subject=ab.name, relation="member_of", value=member,
+                                user_id=user_id or "default",
+                                confidence=ab.confidence,
+                                memory_type="long_term",
+                                is_derived=True, is_active=True,
+                                now=_now(),
+                                provenance=json.loads(_prov_json(ab)))
+                            fact.id = fid
+                            palace.add(fid, palace.encode_fact(fact))
                         n_added += 1
                     except sqlite3.IntegrityError:
-                        pass  # already derived (deterministic id)
+                        pass  # already derived (deterministic id) — idempotent
             if commit_id:
                 self.store.update_commit_n_facts(commit_id, n_added)
 

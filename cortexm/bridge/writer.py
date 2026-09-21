@@ -10,11 +10,12 @@ API, never on this path).
 from __future__ import annotations
 
 import datetime as _dt
+import re
 from datetime import datetime, timezone
 
 from cortexm import metrics
 from cortexm.bridge.extractor import Extractor
-from cortexm.bridge.patterns import ExtractionContext
+from cortexm.bridge.patterns import Candidate, ExtractionContext
 from cortexm.bridge.negation import extract_with_negation
 from cortexm.config import Config
 from cortexm.security.injection import scan as injection_scan
@@ -326,6 +327,33 @@ class MemoryWriter:
                 if not clause or not clause.strip():
                     continue
                 candidates.extend(self.extractor.extract(clause, ctx))
+
+            # v0.6.8: gist fallback — never silently drop a message.
+            # If no pattern fired on any clause, commit one
+            # low-confidence gist fact quoting the FULL message text
+            # (pre-negation-split, so negated sentences still leave a
+            # retrievable record; the denial itself stays structured
+            # in negation_records). Skipped for quarantined text —
+            # never launder tainted input into clean facts.
+            # NOTE: "no candidates" means none that SURVIVE the
+            # min_confidence filter — sub-threshold noise (e.g. the
+            # tiny_transformer_fallback guess) must not suppress the
+            # gist, or the message still ends with zero facts.
+            survivors = [c for c in candidates
+                         if c.confidence >= self.cfg.min_confidence]
+            if (not survivors and not verdict.quarantined
+                    and getattr(self.cfg, "gist_fallback_enabled", True)
+                    and len(text.strip()) >= int(getattr(
+                        self.cfg, "gist_min_chars", 30))):
+                gist_value = re.sub(r"\s+", " ", text.strip())[:220]
+                candidates.append(Candidate(
+                    subject=ctx.subject, relation="noted",
+                    value=gist_value,
+                    confidence=float(getattr(
+                        self.cfg, "gist_confidence", 0.32)),
+                    pattern="gist_fallback", span=(0, 0),
+                    valid_from=iso(msg_time)[:10],
+                    note="gist_fallback: no pattern matched"))
 
             for cand in candidates:
                 if cand.confidence < self.cfg.min_confidence:
