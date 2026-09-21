@@ -40,9 +40,9 @@ def _mem():
     return mem
 
 
-def test_default_mode_is_weighted() -> None:
+def test_default_mode_is_rrf() -> None:
     mem = _mem()
-    assert getattr(mem.config, "fusion_method", "weighted") == "weighted"
+    assert getattr(mem.config, "fusion_method", "rrf") == "rrf"
     res = mem.search("Where does Alice work?", user_id="probe", limit=5)
     assert any("Google" in r["memory"] for r in res["results"])
 

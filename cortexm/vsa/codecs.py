@@ -32,6 +32,20 @@ def _norm(v: np.ndarray) -> np.ndarray:
     return (v / n).astype(np.float32) if n > 0 else v.astype(np.float32)
 
 
+def _popcount_sum(x: np.ndarray, axis=None) -> np.ndarray:
+    """Hamming weight summed over ``axis`` (mirrors
+    ``np.bitwise_count(x).sum(axis)``).
+
+    np.bitwise_count exists only on NumPy >= 2.0, but the floor is
+    numpy>=1.24 — the unpackbits fallback keeps binary-codec scoring
+    working on both. Deterministic, same integers either way.
+    """
+    if hasattr(np, "bitwise_count"):
+        return np.bitwise_count(x).sum(axis=axis)
+    return np.unpackbits(np.ascontiguousarray(x), axis=-1 if axis is None
+                         else axis).sum(axis=axis)
+
+
 class BaseCodec:
     name = "base"
 
@@ -177,7 +191,7 @@ class BinaryCodec(BaseCodec):
             k = arr.shape[1] // 3
             arr = _tmr_majority(arr[:, :k], arr[:, k:2 * k], arr[:, 2 * k:])
         x = np.bitwise_xor(arr, qbits[None, :])
-        ham = np.bitwise_count(x).sum(axis=1).astype(np.float32)
+        ham = _popcount_sum(x, axis=1).astype(np.float32)
         return 1.0 - 2.0 * ham / self.dims
 
     def to_bytes(self, packed_row: np.ndarray) -> bytes:
@@ -199,9 +213,9 @@ class BinaryCodec(BaseCodec):
         """Number of bit positions where the 3 copies disagree (corruption)."""
         k = len(packed_row) // 3
         a, b, c = packed_row[:k], packed_row[k:2 * k], packed_row[2 * k:]
-        ab = np.bitwise_count(np.bitwise_xor(a, b)).sum()
-        ac = np.bitwise_count(np.bitwise_xor(a, c)).sum()
-        bc = np.bitwise_count(np.bitwise_xor(b, c)).sum()
+        ab = _popcount_sum(np.bitwise_xor(a, b))
+        ac = _popcount_sum(np.bitwise_xor(a, c))
+        bc = _popcount_sum(np.bitwise_xor(b, c))
         return int((ab + ac + bc) // 6)
 
 
@@ -263,7 +277,7 @@ class RaBitQCodec(BaseCodec):
 
     def scores_packed(self, packed: np.ndarray, qbits: np.ndarray) -> np.ndarray:
         x = np.bitwise_xor(np.atleast_2d(packed), qbits[None, :])
-        ham = np.bitwise_count(x).sum(axis=1).astype(np.float32)
+        ham = _popcount_sum(x, axis=1).astype(np.float32)
         return 1.0 - 2.0 * ham / self.dims
 
     def to_bytes(self, packed_row: np.ndarray) -> bytes:

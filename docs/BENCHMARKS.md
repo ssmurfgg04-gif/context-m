@@ -1320,3 +1320,31 @@ matters — knowing what changed, when, and why.
 | tests/test_fusion_security.py | 240 | 14 tests |
 | scripts/codegraph_review.py | 250 | Static analysis pass |
 | **Total** | **~2240** | |
+
+## Tier 4.6 — Fusion shootout + session lifecycle (2026-09-21, v0.6.8)
+
+Harness: `benchmarks/bench_fusion_rrf.py` (kept). Synthetic judged
+corpus, both fusion methods on identical inputs (VSA ranking +
+chunk-recall ranking), recall@5 / MRR / ms per query class.
+
+| scale | method | recall@5 | MRR | ms/query |
+|---|---|---:|---:|---:|
+| 30 msgs / 26 facts | weighted (0.6/0.35) | 1.000 | 0.549 | 1.58 |
+| 30 msgs / 26 facts | RRF k=60 | 0.958 | 0.681 | 0.02 |
+| 300 msgs / 258 facts | weighted | 0.943 | 0.738 | 4.92 |
+| 300 msgs / 258 facts | RRF k=60 | 0.943 | 0.835 | 0.06 |
+
+Decision: recall ties at both scales; RRF leads MRR (+0.13, +0.10),
+needs no tuned weights, and runs leaner. Default flipped to
+`fusion_method="rrf"` (`"weighted"` kept as fallback). Caveat, stated
+plainly: synthetic micro-corpus, not LongMemEval — external validity
+is limited, and Tier-1 re-validation is the follow-up before any
+claim beyond "no regression here".
+
+Session lifecycle (`session_start/note/end` + handoff brief) ships in
+the same cycle with 4 tests; wiki auto-export on consolidate behind
+`wiki_dir` (default off — no surprise writes). Full suite at flip
+time: 827 passed, 24 skipped, 3 failed — 1 was the flip itself
+(tier443 baseline assumed gist-less world; re-isolated, now green),
+2 are pre-existing numpy-2.0-API env failures in test_fabric,
+untouched by this diff.

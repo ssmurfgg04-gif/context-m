@@ -527,6 +527,50 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "contextm_session_start",
+        "description": "Open a memory session: mints a run_id (if none "
+                       "given) and returns a briefing block for prompt "
+                       "injection. Wire to session.created hooks.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "default": "default"},
+                "run_id": {"type": "string"},
+                "n": {"type": "integer", "default": 20},
+            },
+        },
+    },
+    {
+        "name": "contextm_session_note",
+        "description": "Append a session observation (decision, lesson, "
+                       "progress). kind: observation | decision | lesson "
+                       "| progress. Lessons must be affirmative + "
+                       "imperative + keyword-rich.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "messages": {"type": ["string", "array"]},
+                "user_id": {"type": "string", "default": "default"},
+                "run_id": {"type": "string"},
+                "kind": {"type": "string", "default": "observation"},
+            },
+            "required": ["messages"],
+        },
+    },
+    {
+        "name": "contextm_session_end",
+        "description": "Close a session: refreshes summaries and renders "
+                       "a handoff markdown brief the next agent can "
+                       "resume from. Wire to session.idle hooks.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "default": "default"},
+                "run_id": {"type": "string"},
+            },
+        },
+    },
 ]
 
 
@@ -601,13 +645,13 @@ class MCPServer:
                                        field=args.get("field", "valid"))
                 elif op == "after":
                     out = m.get_after(args.get("start"),
-                                      user_id=args.get("user_id", "default"),
-                                      field=args.get("field", "valid"))
+                                       user_id=args.get("user_id", "default"),
+                                       field=args.get("field", "valid"))
                 else:
                     out = m.get_between(args.get("start"), args.get("end"),
                                         user_id=args.get("user_id", "default"),
                                         field=args.get("field", "valid"))
-                text = json.dumps(out, indent=1, default=str)
+                    text = json.dumps(out, indent=1, default=str)
             elif name == "contextm_audit":
                 out = m.audit(args.get("query", ""),
                               user_id=args.get("user_id", "default"))
@@ -785,6 +829,24 @@ class MCPServer:
                     except SystemExit:
                         pass
                 text = buf.getvalue() or "{}"
+            elif name == "contextm_session_start":
+                out = m.session_start(
+                    user_id=args.get("user_id", "default"),
+                    run_id=args.get("run_id"),
+                    n=int(args.get("n", 20)))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_session_note":
+                out = m.session_note(
+                    args.get("messages"),
+                    user_id=args.get("user_id", "default"),
+                    run_id=args.get("run_id"),
+                    kind=args.get("kind", "observation"))
+                text = json.dumps(out, indent=1, default=str)
+            elif name == "contextm_session_end":
+                out = m.session_end(
+                    user_id=args.get("user_id", "default"),
+                    run_id=args.get("run_id"))
+                text = out["handoff"]
             else:
                 return {"content": [{"type": "text",
                                      "text": f"unknown tool {name}"}],

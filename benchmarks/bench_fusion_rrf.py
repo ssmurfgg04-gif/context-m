@@ -81,6 +81,68 @@ QUERIES = [
 ]
 
 
+import os as _os
+
+# Scale harness: FUSION_BENCH_SCALE=1 keeps the hand-built 30-message
+# corpus above (stable regression fixture). N>1 generates a 30*N
+# message corpus from shared value pools (ambiguity preserved) to
+# test fusion at realistic sizes.
+_FUSION_SCALE = int(_os.environ.get("FUSION_BENCH_SCALE", "1"))
+
+_NAMES60 = ("Alice Bob Carol Dave Eve Frank Grace Heidi Ivan Judy Karl Laura "
+            "Mike Nina Oscar Paula Quinn Rosa Sam Tina Uma Victor Wendy Xena "
+            "Yusuf Zara Amir Bella Chris Dana Eli Fiona Gus Hazel Igor Jane "
+            "Kyle Lena Marco Nora Owen Pam Rick Sara Tom Ursula Vince Willa "
+            "Xander Yara Zane Omar Pia").split()
+
+
+def _scaled_corpus(n_names):
+    orgs = ["Google", "Stripe", "Anthropic", "Meta",
+            "Apple", "Netflix", "Adobe", "Shopify"]
+    items = ["tea", "coffee", "sake", "chess",
+             "hiking", "sailing", "ramen", "gin"]
+    cities = ["Toronto", "Berlin", "Paris", "Oslo",
+              "Lima", "Kyoto", "Austin", "Miami"]
+    langs = ["rust", "python", "go", "french",
+             "spanish", "hindi", "arabic", "korean"]
+    rels = ("works_at", "prefers", "lives_in", "knows")
+    names = _NAMES60[:n_names]
+    assign = {}
+    msgs = []
+    for i, n in enumerate(names):
+        vals = (orgs[i % 8], items[i % 8], cities[i % 8], langs[i % 8])
+        assign[n] = vals
+        org, item, city, lang = vals
+        msgs += [f"{n} works at {org}.", f"{n} prefers {item}.",
+                 f"{n} lives in {city}.", f"{n} knows {lang}.",
+                 f"{n} mentioned {city} traffic today."]
+    queries = []
+    for n in names[:4]:
+        org, item, city, lang = assign[n]
+        queries.append((f"Where does {n} work?", "lexical",
+                        [(n, "works_at", org)]))
+        queries.append((f"Which company employs {n}?", "paraphrase",
+                        [(n, "works_at", org)]))
+        queries.append((f"What does {n} prefer?", "lexical",
+                        [(n, "prefers", item)]))
+        queries.append((f"Where does {n} reside?", "paraphrase",
+                        [(n, "lives_in", city)]))
+    pools = (("works_at", orgs, "Who works at {}?"),
+             ("prefers", items, "Who prefers {}?"),
+             ("lives_in", cities, "Who lives in {}?"),
+             ("knows", langs, "Who knows {}?"))
+    for rel, pool, tmpl in pools:
+        v = pool[0]
+        gold = [(n, rel, v) for n in names
+                if assign[n][rels.index(rel)] == v]
+        queries.append((tmpl.format(v), "mixed", gold))
+    return msgs, queries
+
+
+if _FUSION_SCALE > 1:
+    MESSAGES, QUERIES = _scaled_corpus(6 * _FUSION_SCALE)
+
+
 def build():
     ctx = mount_default(db_path=":memory:")
     mem = ctx.inject("memory")["memory"]

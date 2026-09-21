@@ -308,6 +308,99 @@ class Memory:
                          f"(conf={float(getattr(f, 'confidence', 0.0) or 0.0):.2f})")
         return "\n".join(lines)
 
+    # ---------------------------------------------------- session lifecycle
+    def session_start(self, *, user_id: str | None = None,
+                      run_id: str | None = None, n: int = 20) -> dict:
+        """Open a session: mint a run_id (if none given) and return a
+        briefing block (recent facts) for prompt injection.
+
+        Wire to harness hooks: session.created → session_start,
+        then pass run_id to every session_note / session_end call.
+        μ=0 — pure reads.
+        """
+        user_id = user_id or self.config.default_user_id
+        if not run_id:
+            run_id = ("sess-"
+                      + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S"))
+        return {
+            "event": "SESSION_START",
+            "user_id": user_id,
+            "run_id": run_id,
+            "briefing": self.preload_context(n=n, user_id=user_id),
+            "guidance": ("Log decisions, lessons and observations via "
+                         "session_note as you work (same run_id); call "
+                         "session_end for a handoff brief the next agent "
+                         "can resume from."),
+        }
+
+    def session_note(self, messages, *, user_id: str | None = None,
+                     run_id: str | None = None,
+                     kind: str = "observation") -> dict:
+        """Append a session observation (decision, lesson, progress note).
+
+        ``kind`` is a client-side label (observation | decision |
+        lesson | progress) echoed back and audit-logged; run_id
+        scoping carries the session semantics. Lessons should ALSO
+        follow the Learning Loop form (affirmative, imperative,
+        keyword-rich) so they retrieve later.
+        """
+        user_id = user_id or self.config.default_user_id
+        out = self.writer.add(messages, user_id=user_id, run_id=run_id,
+                              force_gist=True)
+        self.reader.invalidate_caches()
+        try:
+            self.audit_log.log("memory.session_note", resource=user_id,
+                               meta={"run_id": run_id, "kind": kind,
+                                     "facts": len(out.get("results", []))})
+        except Exception:
+            pass
+        return {"event": "SESSION_NOTE", "user_id": user_id,
+                "run_id": run_id, "kind": kind,
+                "facts": len(out.get("results", [])),
+                "stats": out.get("stats", {})}
+
+    def session_end(self, *, user_id: str | None = None,
+                    run_id: str | None = None) -> dict:
+        """Close a session: refresh the TMT hierarchy (idempotent) and
+        render a handoff markdown brief — summary + key facts +
+        lessons — that any agent/harness can resume from. Wire to
+        session.idle / session.deleted hooks.
+        """
+        user_id = user_id or self.config.default_user_id
+        from cortexm.trace.tmt import tmt_build
+        tmt_build(self.store, self.palace, user_id=user_id)
+        self.reader.invalidate_caches()
+        facts = self.store.query_facts(user_id=user_id, run_id=run_id,
+                                       active=True, limit=200)
+        summaries = self.store.query_facts(
+            user_id=user_id, run_id=run_id, relation="session_summary",
+            active=True, limit=5)
+        summaries = sorted(
+            summaries, key=lambda f: str(getattr(f, "tx_from", "") or ""),
+            reverse=True)
+        summary = summaries[0].value if summaries else ""
+        lessons = [f for f in facts
+                   if f.relation in ("lesson", "instruction")][:10]
+        top = sorted(facts,
+                     key=lambda f: float(getattr(f, "confidence", 0.0) or 0.0),
+                     reverse=True)[:15]
+        lines = [f"# Handoff — run {run_id or '?'} (user {user_id})", ""]
+        if summary:
+            lines += ["## Session summary", "", summary, ""]
+        if lessons:
+            lines += ["## Lessons", ""]
+            lines += [f"- {f.value}" for f in lessons] + [""]
+        if top:
+            lines += ["## Key facts", ""]
+            lines += [f"- {f.subject} | {f.relation} | {f.value}"
+                      for f in top] + [""]
+        if not (summary or lessons or top):
+            lines += ["No observations recorded this run.", ""]
+        lines += [f"_facts: {len(facts)}_"]
+        return {"event": "SESSION_END", "user_id": user_id,
+                "run_id": run_id, "handoff": "\n".join(lines),
+                "facts": len(facts), "lessons": len(lessons)}
+
     # ---------------------------------------------------- markdown round-trip
     def export_markdown(self, out_dir, *, user_id: str | None = None,
                         include_inactive: bool = False,
@@ -965,6 +1058,17 @@ class Memory:
                                        run_fade=run_fade,
                                        run_tmt=run_tmt,
                                        run_cognition=run_cognition)
+        # v0.6.8: wiki-as-truth — human-ownable markdown export on
+        # every consolidate when wiki_dir is configured. Best-effort:
+        # never break consolidation on an export failure.
+        wiki_dir = getattr(self.config, "wiki_dir", None)
+        if wiki_dir and not kwargs.get("dry_run", False):
+            try:
+                rep = self.export_markdown(
+                    wiki_dir, user_id=kwargs.get("user_id"))
+                out["wiki_export"] = rep
+            except Exception as e:  # noqa: BLE001 — export never breaks consolidate
+                out["wiki_export"] = {"error": str(e)[:200]}
         return out
 
     def export_schema_report(self, user_id: str | None = None) -> dict:

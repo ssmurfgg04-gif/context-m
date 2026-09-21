@@ -243,7 +243,8 @@ class MemoryWriter:
     def add(self, messages, *, user_id: str = "default",
             agent_id: str | None = None, run_id: str | None = None,
             ts: datetime | None = None, source: str = "",
-            metadata: dict | None = None) -> dict:
+            metadata: dict | None = None,
+            force_gist: bool = False) -> dict:
         ts = ts or _now()
         norm = _normalize_messages(messages)
         tokens = sum(token_estimate(t) for _, t, _ in norm)
@@ -341,10 +342,13 @@ class MemoryWriter:
             # gist, or the message still ends with zero facts.
             survivors = [c for c in candidates
                          if c.confidence >= self.cfg.min_confidence]
+            # force_gist: explicit capture calls (session_note) always
+            # leave a record, even for short notes below gist_min_chars.
+            gist_ok = force_gist or len(text.strip()) >= int(getattr(
+                self.cfg, "gist_min_chars", 30))
             if (not survivors and not verdict.quarantined
                     and getattr(self.cfg, "gist_fallback_enabled", True)
-                    and len(text.strip()) >= int(getattr(
-                        self.cfg, "gist_min_chars", 30))):
+                    and gist_ok):
                 gist_value = re.sub(r"\s+", " ", text.strip())[:220]
                 candidates.append(Candidate(
                     subject=ctx.subject, relation="noted",

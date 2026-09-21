@@ -75,9 +75,10 @@ class Config:
     fusion_symbolic_weight: float = 0.4
     # v0.6.8: RRF fusion mode (Cormack et al. 2009) — rank-based
     # combination needs no normalization across the incomparable
-    # VSA-cosine / symbolic-boost / chunk-score scales. "weighted"
-    # is the default (protects tuned Tier-1 numbers); "rrf" opts in.
-    fusion_method: str = "weighted"  # "weighted" | "rrf"
+    # VSA-cosine / symbolic-boost / chunk-score scales. Default since
+    # the 10x fusion bench: recall tied with weighted, MRR higher,
+    # no tuned weights to rot. "weighted" kept as fallback.
+    fusion_method: str = "rrf"  # "rrf" | "weighted"
     rrf_k: int = 60                  # RRF rank offset (standard value)
 
     # --- OOD ingestion (Unmess + DisSim + Bitap trigger widening) -----------
@@ -358,6 +359,9 @@ class Config:
     # v0.6.8: warm one recall at MCP serve boot so the first real
     # query skips cold-start costs (kernels, caches). Best-effort.
     serve_warmup_enabled: bool = True
+    # v0.6.8: wiki-as-truth — auto-export the markdown wiki on every
+    # consolidate when set (None = off; no surprise writes by default).
+    wiki_dir: str | None = None
 
     # --- ZK-SQL proofs (Halo2/PLONKish-inspired, pure-Python) ----------------
     # When True, the MCP server exposes `contextm_zk_sql_proof` (membership /

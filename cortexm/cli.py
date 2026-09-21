@@ -258,6 +258,31 @@ def main(argv=None) -> int:
     p.add_argument("--agent-id", default=None)
     p.add_argument("--run-id", default=None)
 
+    # session lifecycle (v0.6.8 — hook-callable auto-capture surface:
+    # session.created -> session-start, session.idle -> session-end)
+    p = sub.add_parser("session-start", help="open a memory session: mint "
+                       "a run_id and print a briefing block")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--run-id", default=None)
+    p.add_argument("-n", type=int, default=20)
+
+    p = sub.add_parser("session-note", help="append a session observation "
+                       "(decision, lesson, progress) under a run_id")
+    p.add_argument("text", nargs="?", default="",
+                   help="the note (omit to read from stdin, e.g. in hooks)")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--run-id", default=None)
+    p.add_argument("--kind", default="observation",
+                   choices=["observation", "decision", "lesson", "progress"])
+
+    p = sub.add_parser("session-end", help="close a memory session: print "
+                       "a handoff markdown brief the next agent resumes from")
+    p.add_argument("--db", default=None)
+    p.add_argument("--user-id", default="default")
+    p.add_argument("--run-id", default=None)
+
     args = ap.parse_args(argv)
     if not args.cmd:
         ap.print_help()
@@ -450,6 +475,38 @@ def main(argv=None) -> int:
             print(json.dumps({
                 "stored": out.get("stats", {}).get("facts_inserted", 0),
                 "stats": out.get("stats")}, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "session-start":
+        m = _memory(args)
+        try:
+            out = m.session_start(user_id=args.user_id,
+                                  run_id=args.run_id, n=args.n)
+            print(json.dumps(out, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "session-note":
+        text = args.text
+        if not text and not sys.stdin.isatty():
+            text = sys.stdin.read()
+        m = _memory(args)
+        try:
+            out = m.session_note(text, user_id=args.user_id,
+                                 run_id=args.run_id, kind=args.kind)
+            print(json.dumps(out, indent=2, default=str))
+        finally:
+            m.close()
+        return 0
+
+    if args.cmd == "session-end":
+        m = _memory(args)
+        try:
+            print(m.session_end(user_id=args.user_id,
+                                run_id=args.run_id)["handoff"])
         finally:
             m.close()
         return 0
