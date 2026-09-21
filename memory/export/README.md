@@ -1,9 +1,9 @@
 # cortexm memory export
 
 user_id: `anatomy-arcade`
-exported_at: 2026-09-21T11:02:04.108967+00:00
-facts: 4
-chunks: 7
+exported_at: 2026-09-21T12:31:05.409199+00:00
+facts: 6
+chunks: 10
 
 ## Layout
 
