@@ -1,0 +1,6 @@
+{
+  "name": "opencode-auto-memory",
+  "version": "0.1.0",
+  "description": "Deterministic context-m capture for opencode: commits, todos, and decisions stored with zero LLM cost",
+  "license": "MIT"
+}
