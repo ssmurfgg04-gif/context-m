@@ -10,6 +10,7 @@ EXTRACTED_FROM edges materialized in the store.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
@@ -41,6 +42,47 @@ RELATION_CATEGORIES = {
     "temporal": {"moved_to"},
 }
 
+# First-person past-tense verbs signalling a lived event rather than a
+# stable world fact ("I fixed the bug" vs "Paris is the capital").
+# Heuristic on purpose: cheap, deterministic, documented. Ambiguous
+# identity statements ("My name is Bob") stay facts.
+_EXPERIENCE_VERBS = frozenset({
+    "did", "saw", "felt", "went", "tried", "fixed", "broke", "built",
+    "wrote", "read", "ran", "visited", "met", "ate", "bought", "sold",
+    "lost", "found", "won", "failed", "passed", "learned", "realized",
+    "noticed", "decided", "chose", "finished", "started", "shipped",
+    "deployed", "debugged", "tested", "installed", "deleted", "moved",
+})
+
+_FIRST_PERSON = re.compile(r"\bi\s+(?:'ve|'d|'ll|am|was|have|had|will)\b|\bi\s+[a-z]+\b", re.IGNORECASE)
+
+
+def classify_kind(text: str, speaker: str = "user") -> str:
+    """Kind for a new fact: ``experience`` or ``fact``.
+
+    Experience = the speaker reports something they lived through
+    (first-person + past-tense action verb). Everything else — world
+    facts, identity statements, preferences — stays a fact.
+    ``observation`` is reserved for consolidate-time beliefs (never
+    assigned at ingest).
+    """
+    if not text:
+        return "fact"
+    low = text.lower()
+    if speaker in ("assistant", "ai", "bot"):
+        return "fact"
+    words = re.findall(r"[a-z']+", low)
+    if not words or words[0] != "i":
+        # allow leading "yesterday/today/just" and "we"
+        stripped = low.lstrip()
+        if not (stripped.startswith(("yesterday", "today", "just ", "we "))
+                and " i " in f" {low} "):
+            if not stripped.startswith("we "):
+                return "fact"
+    if any(v in words for v in _EXPERIENCE_VERBS):
+        return "experience"
+    return "fact"
+
 
 @dataclass
 class Fact:
@@ -59,6 +101,7 @@ class Fact:
     agent_id: str | None = None
     run_id: str | None = None
     memory_type: str = "short_term"
+    kind: str = "fact"  # fact | experience | observation
     access_count: int = 0
     reinforcement: int = 1
     is_active: bool = True

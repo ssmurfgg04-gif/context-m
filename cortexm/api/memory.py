@@ -664,7 +664,8 @@ class Memory:
     def search(self, query: str, *, user_id: str | None = None,
                agent_id: str | None = None, run_id: str | None = None,
                limit: int | None = None, timestamp=None,
-               branch: str | None = None, **kw) -> dict:
+               branch: str | None = None,
+               kind: str | None = None, **kw) -> dict:
         """Neuro-symbolic retrieval with full provenance. Mem0-shaped output.
 
         v0.5.3: also runs recall_step (asymmetric step-distance boost)
@@ -677,7 +678,7 @@ class Memory:
         ts = parse_ts(timestamp) if timestamp else None
         result = self.reader.search(query, user_id=user_id, agent_id=agent_id,
                                     run_id=run_id, k=limit, ts=ts,
-                                    branch=branch)
+                                    branch=branch, kind=kind)
         hits = result.facts and self.prefetcher.note_hits(
             [f.id for f in result.facts])
         context_block = result.context_block
@@ -769,6 +770,7 @@ class Memory:
                              "valid_to": f.valid_to,
                              "confidence": f.confidence,
                              "memory_type": f.memory_type,
+                             "kind": f.kind,
                              "hash": f.source_hash} for f in facts]}
 
     def get(self, memory_id: str) -> dict | None:
@@ -779,6 +781,7 @@ class Memory:
         return {"id": f.id, "memory": f"{f.subject} | {f.relation} | {f.value}",
                 "event": "ADD", "valid_from": f.valid_from,
                 "valid_to": f.valid_to, "confidence": f.confidence,
+                "kind": f.kind,
                 "hash": f.source_hash, "source": chunk["text"] if chunk else None,
                 "verified": bool(chunk and chunk["hash"] == f.source_hash)}
 

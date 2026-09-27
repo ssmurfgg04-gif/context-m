@@ -50,6 +50,11 @@ TOOLS = [
                 "query": {"type": "string"},
                 "user_id": {"type": "string", "default": "default"},
                 "limit": {"type": "integer", "default": 12},
+                "kind": {"type": "string",
+                         "enum": ["fact", "experience", "observation"],
+                         "description": "Filter by memory kind: world fact, "
+                                        "lived experience, or consolidated "
+                                        "observation. Omit for all kinds."},
             },
             "required": ["query"],
         },
@@ -622,7 +627,8 @@ class MCPServer:
             elif name == "contextm_search":
                 out = m.search(args.get("query", ""),
                                user_id=args.get("user_id", "default"),
-                               limit=args.get("limit", 12))
+                               limit=args.get("limit", 12),
+                               kind=args.get("kind"))
                 text = out["context_block"]
             elif name == "contextm_get_all":
                 out = m.get_all(user_id=args.get("user_id", "default"),

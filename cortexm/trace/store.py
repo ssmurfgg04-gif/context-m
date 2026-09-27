@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS facts (
   source_hash TEXT DEFAULT '', source_id TEXT DEFAULT '',
   user_id TEXT DEFAULT 'default', agent_id TEXT, run_id TEXT,
   memory_type TEXT DEFAULT 'short_term',
+  kind TEXT DEFAULT 'fact',
   access_count INTEGER DEFAULT 0, reinforcement INTEGER DEFAULT 1,
   is_active INTEGER DEFAULT 1, is_derived INTEGER DEFAULT 0,
   quarantined INTEGER DEFAULT 0,
@@ -268,6 +269,7 @@ class TraceStore:
                 pass  # some PRAGMAs unavailable on older SQLite; ignore
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._ensure_columns()
         self._ancestry_cache: dict[str, frozenset[str]] = {}
         self._active_cache: dict[str, frozenset[str]] = {}
         self._batch_depth = 0
@@ -283,6 +285,33 @@ class TraceStore:
             raise StoreError(
                 f"database uses {stored_provider}, runtime configured for "
                 f"{self.hasher.name}; open with the original hash_provider")
+
+    def _ensure_columns(self) -> None:
+        """Additive schema migration for pre-existing databases.
+
+        CREATE TABLE IF NOT EXISTS never adds columns to old tables,
+        so each post-release column gets an explicit ALTER here.
+        Idempotent: checks PRAGMA table_info first.
+        """
+        want: dict[str, list[tuple[str, str]]] = {
+            "facts": [("kind", "TEXT DEFAULT 'fact'")],
+        }
+        for table, cols in want.items():
+            try:
+                have = {r[1] for r in
+                        self.conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            except sqlite3.OperationalError:
+                continue
+            for name, ddl in cols:
+                if name not in have:
+                    self.conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+            # The kind index lives here (not in SCHEMA) because creating
+            # it there would fail on pre-kinds databases before the
+            # ALTER above runs.
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_facts_kind ON facts(kind)")
+            self.conn.commit()
 
     def checkpoint(self, mode: str = "TRUNCATE") -> None:
         """Fold the WAL back into the main db file (shrink + fast reopen)."""

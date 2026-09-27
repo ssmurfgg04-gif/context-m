@@ -812,10 +812,14 @@ class MemoryReader:
     def search(self, query: str, *, user_id: str = "default",
                agent_id: str | None = None, run_id: str | None = None,
                k: int | None = None, ts: datetime | None = None,
-               branch: str | None = None) -> RetrievalResult:
+               branch: str | None = None,
+               kind: str | None = None) -> RetrievalResult:
         t0 = time.perf_counter()
         k = k or self.cfg.top_k_default
         branch = branch or self.store.current_branch()
+        if kind is not None and kind not in ("fact", "experience", "observation"):
+            raise ValueError(
+                f"unknown kind {kind!r} (expected fact|experience|observation)")
         metrics.bump_retrieval()
         self._queries += 1
 
@@ -831,12 +835,13 @@ class MemoryReader:
         # chain expansion (in _build_narrative) can pull inactive facts.
         slb_ok = (plan.intent not in ("ordering", "temporal", "count", "list")
                   and not getattr(self.cfg, "slb_disabled", False))
-        scope_key = (user_id, agent_id, run_id, branch)
+        scope_key = (user_id, agent_id, run_id, branch, kind)
         cached = self.slb.lookup(q_vec, scope_key) if slb_ok else None
         if cached is not None:
             facts = self.store.get_facts([fid for fid, _ in cached])
             facts = [f for f in facts if f.is_active and not f.quarantined
                      and f.matches_scope(user_id, agent_id, run_id)
+                     and (kind is None or f.kind == kind)
                      and (agent_id is not None or f.agent_id is None
                           or not getattr(self.cfg, "sandbox_enabled", True))]
             facts = facts[:k]
@@ -1161,7 +1166,8 @@ class MemoryReader:
         # pool; allow_inactive is what lets them survive the filter here.
         allow_inactive = plan.intent in ("temporal", "current", "count", "list")
         facts = [f for f in facts if not f.quarantined
-                 and (f.is_active or allow_inactive)]
+                 and (f.is_active or allow_inactive)
+                 and (kind is None or f.kind == kind)]
         # Tier-4 fix: temporal_list fusion — if LIST + window were both
         # set, apply the temporal window AS A FILTER on the recalled
         # set (return only facts whose valid_from falls in the window)

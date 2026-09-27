@@ -25,7 +25,7 @@ from cortexm.trace.contradictions import Action
 from cortexm.trace.edges import (
     wire_causal_edge, wire_refers_to, REFERS_TO,
 )
-from cortexm.trace.fact import Fact, make_fact
+from cortexm.trace.fact import Fact, classify_kind, make_fact
 from cortexm.trace.rules import RuleEngine
 from cortexm.trace.store import TraceStore
 from cortexm.util import iso, new_id, similarity, token_estimate
@@ -372,6 +372,7 @@ class MemoryWriter:
                     source_hash=self.store.hasher.hash_text(text),
                     memory_type=("short_term" if cand.confidence < 0.6
                                  else "short_term"),
+                    kind=classify_kind(text, speaker),
                     provenance={"pattern": cand.pattern,
                                 "speaker": speaker,
                                 "span": list(cand.span),

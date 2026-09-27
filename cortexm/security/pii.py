@@ -78,7 +78,23 @@ DETECTORS: list[tuple[str, re.Pattern]] = [
                          r"\d{3,4}[\s.-]?\d{3,4}(?:[\s.-]?\d{2,4})?\b")),
     ("SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
     ("IP", re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}"
-                      r"(?:25[0-5]|2[0-4]\d|1?\d?\d)\b")),
+                       r"(?:25[0-5]|2[0-4]\d|1?\d?\d)\b")),
+    # --- secret keys: specific prefixes BEFORE the generic API_KEY bucket
+    # so labels stay precise (Hindsight-style per-kind redaction) ---
+    ("RSA_PRIVATE_KEY", re.compile(
+        r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]+?"
+        r"-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
+    ("ANTHROPIC_KEY", re.compile(r"\bsk-ant-[A-Za-z0-9-_]{20,}\b")),
+    ("OPENAI_PROJECT_KEY", re.compile(r"\bsk-proj-[A-Za-z0-9-_]{20,}\b")),
+    ("GROQ_KEY", re.compile(r"\bgsk_[A-Za-z0-9]{20,}\b")),
+    ("XAI_KEY", re.compile(r"\bxai-[A-Za-z0-9]{20,}\b")),
+    ("GITHUB_PAT", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b")),
+    ("REPLICATE_KEY", re.compile(r"\br8_[A-Za-z0-9_]{20,}\b")),
+    ("HF_TOKEN", re.compile(r"\bhf_[A-Za-z0-9]{25,}\b")),
+    ("STRIPE_KEY", re.compile(r"\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b")),
+    ("NPM_TOKEN", re.compile(r"(?://registry\.npmjs\.org/:_authToken=[A-Za-z0-9\-_.=]+|"
+                             r"\bnpm_[A-Za-z0-9]{20,}\b)")),
+    ("DISCORD_TOKEN", re.compile(r"\bmfa\.[\w-]{20,}|\b[A-Za-z0-9-_]{24}\.[A-Za-z0-9-_]{6}\.[\w-]{20,}")),
     ("API_KEY", re.compile(r"\b(?:sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{36}|"
                            r"gho_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]{10,}|"
                            r"AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})\b")),
