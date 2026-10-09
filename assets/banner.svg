@@ -2,73 +2,73 @@
 
   <defs>
     <linearGradient id="nSky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0B0F1A"/><stop offset="0.62" stop-color="#0C1322"/><stop offset="1" stop-color="#0D1424"/>
+      <stop offset="0" stop-color="#0B0F1A" /><stop offset="0.62" stop-color="#0C1322" /><stop offset="1" stop-color="#0D1424" />
     </linearGradient>
     <linearGradient id="nCard" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#101526"/><stop offset="1" stop-color="#0B0F1A"/>
+      <stop offset="0" stop-color="#101526" /><stop offset="1" stop-color="#0B0F1A" />
     </linearGradient>
     <linearGradient id="nBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1A2033"/><stop offset="1" stop-color="#0A0E1A"/>
+      <stop offset="0" stop-color="#1A2033" /><stop offset="1" stop-color="#0A0E1A" />
     </linearGradient>
     <linearGradient id="nWing" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1E2438"/><stop offset="1" stop-color="#0D1119"/>
+      <stop offset="0" stop-color="#1E2438" /><stop offset="1" stop-color="#0D1119" />
     </linearGradient>
     <linearGradient id="nSun" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F6C177"/><stop offset="0.25" stop-color="#FFB25E"/><stop offset="0.5" stop-color="#FF7A59"/><stop offset="0.75" stop-color="#FF4D6D"/><stop offset="1" stop-color="#FF2A6D"/>
+      <stop offset="0" stop-color="#F6C177" /><stop offset="0.25" stop-color="#FFB25E" /><stop offset="0.5" stop-color="#FF7A59" /><stop offset="0.75" stop-color="#FF4D6D" /><stop offset="1" stop-color="#FF2A6D" />
     </linearGradient>
     <linearGradient id="nFloor" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0D1424" stop-opacity="0"/><stop offset="1" stop-color="#05070F" stop-opacity="0.85"/>
+      <stop offset="0" stop-color="#0D1424" stop-opacity="0" /><stop offset="1" stop-color="#05070F" stop-opacity="0.85" />
     </linearGradient>
     <linearGradient id="nFadeWhite" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9" /><stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
     </linearGradient>
     <radialGradient id="nShadow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#FF2A6D" stop-opacity="0.34"/><stop offset="0.55" stop-color="#FF2A6D" stop-opacity="0.12"/><stop offset="1" stop-color="#FF2A6D" stop-opacity="0"/>
+      <stop offset="0" stop-color="#FF2A6D" stop-opacity="0.34" /><stop offset="0.55" stop-color="#FF2A6D" stop-opacity="0.12" /><stop offset="1" stop-color="#FF2A6D" stop-opacity="0" />
     </radialGradient>
     <radialGradient id="nScreen" cx="0.5" cy="0.35" r="0.75">
-      <stop offset="0" stop-color="#05D9E8" stop-opacity="0.16"/><stop offset="1" stop-color="#05D9E8" stop-opacity="0"/>
+      <stop offset="0" stop-color="#05D9E8" stop-opacity="0.16" /><stop offset="1" stop-color="#05D9E8" stop-opacity="0" />
     </radialGradient>
     <linearGradient id="sweepG" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#05D9E8" stop-opacity="0.02"/><stop offset="0.75" stop-color="#05D9E8" stop-opacity="0.16"/><stop offset="1" stop-color="#05D9E8" stop-opacity="0.22"/>
+      <stop offset="0" stop-color="#05D9E8" stop-opacity="0.02" /><stop offset="0.75" stop-color="#05D9E8" stop-opacity="0.16" /><stop offset="1" stop-color="#05D9E8" stop-opacity="0.22" />
     </linearGradient>
     <pattern id="nDots" width="22" height="22" patternUnits="userSpaceOnUse">
-      <circle cx="11" cy="11" r="0.9" fill="#05D9E8" opacity="0.14"/>
+      <circle cx="11" cy="11" r="0.9" fill="#05D9E8" opacity="0.14" />
     </pattern>
     <radialGradient id="nVig" cx="0.45" cy="0.42" r="0.78">
-      <stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="0.7" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#03050A" stop-opacity="0.55"/>
+      <stop offset="0" stop-color="#000000" stop-opacity="0" /><stop offset="0.7" stop-color="#000000" stop-opacity="0" />
+      <stop offset="1" stop-color="#03050A" stop-opacity="0.55" />
     </radialGradient>
     <radialGradient id="nSunHalo" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#FF2A6D" stop-opacity="0.32"/><stop offset="1" stop-color="#FF2A6D" stop-opacity="0"/>
+      <stop offset="0" stop-color="#FF2A6D" stop-opacity="0.32" /><stop offset="1" stop-color="#FF2A6D" stop-opacity="0" />
     </radialGradient>
     <filter id="glowC" x="-90%" y="-90%" width="280%" height="280%">
-      <feGaussianBlur stdDeviation="2.6" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <feGaussianBlur stdDeviation="2.6" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
     </filter>
     <filter id="glowM" x="-90%" y="-90%" width="280%" height="280%">
-      <feGaussianBlur stdDeviation="3.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <feGaussianBlur stdDeviation="3.2" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
     </filter>
     <filter id="glowG" x="-90%" y="-90%" width="280%" height="280%">
-      <feGaussianBlur stdDeviation="2.0" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <feGaussianBlur stdDeviation="2.0" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
     </filter>
     <filter id="titleGlow" x="-60%" y="-120%" width="220%" height="340%">
-      <feGaussianBlur stdDeviation="5.5" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <feGaussianBlur stdDeviation="5.5" result="b" />
+      <feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
     </filter>
     <filter id="soft6" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="5"/>
+      <feGaussianBlur stdDeviation="5" />
     </filter>
   </defs>
-  <rect width="900" height="118" fill="url(#nCard)"/>
-  <line x1="450" y1="112" x2="-120" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45"/><line x1="450" y1="112" x2="60" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45"/><line x1="450" y1="112" x2="240" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45"/><line x1="450" y1="112" x2="420" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45"/><line x1="450" y1="112" x2="600" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45"/><line x1="450" y1="112" x2="780" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45"/><line x1="450" y1="112" x2="960" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45"/><line x1="0" y1="113" x2="900" y2="113" stroke="#05D9E8" stroke-width="1" opacity="0.3"/><line x1="0" y1="116" x2="900" y2="116" stroke="#05D9E8" stroke-width="1" opacity="0.3"/>
-  <line x1="860" y1="10" x2="860" y2="92" stroke="#05D9E8" stroke-width="1.4" stroke-dasharray="2 12" opacity="0.14"><animate attributeName="stroke-dashoffset" values="0;-56" dur="6.2s" repeatCount="indefinite"/></line>
-  <g><animateTransform attributeName="transform" type="translate" values="0 0;0 0;-5 0;4 0;-2 0;0 0;0 0" keyTimes="0;0.953;0.958;0.968;0.978;0.988;1" dur="5.2s" repeatCount="indefinite" additive="sum"/><text x="107.10000000000001" y="64" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="30" font-weight="700" letter-spacing="3" fill="#05D9E8" opacity="0">cortexm<animate attributeName="opacity" values="0;0;0.9;0;0.7;0;0" keyTimes="0;0.955;0.965;0.975;0.985;0.995;1" dur="5.2s" repeatCount="indefinite" calcMode="discrete"/></text><text x="113.10000000000001" y="64" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="30" font-weight="700" letter-spacing="3" fill="#FF2A6D" opacity="0">cortexm<animate attributeName="opacity" values="0;0;0;0.85;0;0.6;0" keyTimes="0;0.955;0.962;0.972;0.982;0.992;1" dur="5.2s" repeatCount="indefinite" calcMode="discrete"/></text><text x="110.10000000000001" y="64" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="30" font-weight="700" letter-spacing="3" fill="#EAF6FF" filter="url(url(#titleGlow))">cortexm</text></g>
+  <rect width="900" height="118" fill="url(#nCard)" />
+  <line x1="450" y1="112" x2="-120" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45" /><line x1="450" y1="112" x2="60" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45" /><line x1="450" y1="112" x2="240" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45" /><line x1="450" y1="112" x2="420" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45" /><line x1="450" y1="112" x2="600" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45" /><line x1="450" y1="112" x2="780" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45" /><line x1="450" y1="112" x2="960" y2="118" stroke="#5B21B6" stroke-width="1.1" opacity="0.45" /><line x1="0" y1="113" x2="900" y2="113" stroke="#05D9E8" stroke-width="1" opacity="0.3" /><line x1="0" y1="116" x2="900" y2="116" stroke="#05D9E8" stroke-width="1" opacity="0.3" />
+  <line x1="860" y1="10" x2="860" y2="92" stroke="#05D9E8" stroke-width="1.4" stroke-dasharray="2 12" opacity="0.14" stroke-dashoffset="0" />
+  <g><text x="107.10000000000001" y="64" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="30" font-weight="700" letter-spacing="3" fill="#05D9E8" opacity="0">cortexm</text><text x="113.10000000000001" y="64" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="30" font-weight="700" letter-spacing="3" fill="#FF2A6D" opacity="0">cortexm</text><text x="110.10000000000001" y="64" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="30" font-weight="700" letter-spacing="3" fill="#EAF6FF" filter="url(url(#titleGlow))">cortexm</text></g>
   <text x="36" y="92" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12.5" letter-spacing="1.8" fill="#9CCFD8" opacity="0.92">deterministic agent memory · μ=0 · mem0-compatible</text>
   <text x="878" y="26" text-anchor="end" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="9" letter-spacing="2" fill="#6E6A86">TUX.SYS/CONTEXT-M</text>
-  <line x1="778" y1="43" x2="770" y2="43" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="785" y1="36" x2="785" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="822" y1="43" x2="830" y2="43" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="785" y1="80" x2="785" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="778" y1="53" x2="770" y2="53" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="795" y1="36" x2="795" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="822" y1="53" x2="830" y2="53" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="795" y1="80" x2="795" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="778" y1="63" x2="770" y2="63" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="805" y1="36" x2="805" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="822" y1="63" x2="830" y2="63" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="805" y1="80" x2="805" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="778" y1="73" x2="770" y2="73" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="815" y1="36" x2="815" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="822" y1="73" x2="830" y2="73" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><line x1="815" y1="80" x2="815" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8"/><rect x="778" y="36" width="44" height="44" rx="6" fill="none" stroke="#FF2A6D" stroke-width="2.2" filter="url(#glowM)"/><text x="800" y="65" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="20" font-weight="700" fill="#FF2A6D">M</text>
-  <g opacity="1"><rect x="0" y="2" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="7" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="12" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="17" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="22" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="27" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="32" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="37" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="42" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="47" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="52" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="57" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="62" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="67" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="72" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="77" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="82" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="87" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="92" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="97" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="102" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="107" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="112" width="900" height="1.6" fill="#000000" opacity="0.05"/><rect x="0" y="117" width="900" height="1.6" fill="#000000" opacity="0.05"/></g>
-  <rect x="3" y="3" width="894" height="112" rx="10" fill="none" stroke="#FF2A6D" stroke-width="1.2" opacity="0.3"/>
-  <path d="M 20,6 H 6 V 20" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square"/><path d="M 880,6 H 894 V 20" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square"/><path d="M 20,112 H 6 V 98" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square"/><path d="M 880,112 H 894 V 98" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square"/>
+  <line x1="778" y1="43" x2="770" y2="43" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="785" y1="36" x2="785" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="822" y1="43" x2="830" y2="43" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="785" y1="80" x2="785" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="778" y1="53" x2="770" y2="53" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="795" y1="36" x2="795" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="822" y1="53" x2="830" y2="53" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="795" y1="80" x2="795" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="778" y1="63" x2="770" y2="63" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="805" y1="36" x2="805" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="822" y1="63" x2="830" y2="63" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="805" y1="80" x2="805" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="778" y1="73" x2="770" y2="73" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="815" y1="36" x2="815" y2="28" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="822" y1="73" x2="830" y2="73" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><line x1="815" y1="80" x2="815" y2="88" stroke="#FF2A6D" stroke-width="2" opacity="0.8" /><rect x="778" y="36" width="44" height="44" rx="6" fill="none" stroke="#FF2A6D" stroke-width="2.2" filter="url(#glowM)" /><text x="800" y="65" text-anchor="middle" font-family="ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="20" font-weight="700" fill="#FF2A6D">M</text>
+  <g opacity="1"><rect x="0" y="2" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="7" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="12" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="17" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="22" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="27" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="32" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="37" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="42" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="47" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="52" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="57" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="62" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="67" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="72" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="77" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="82" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="87" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="92" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="97" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="102" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="107" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="112" width="900" height="1.6" fill="#000000" opacity="0.05" /><rect x="0" y="117" width="900" height="1.6" fill="#000000" opacity="0.05" /></g>
+  <rect x="3" y="3" width="894" height="112" rx="10" fill="none" stroke="#FF2A6D" stroke-width="1.2" opacity="0.3" />
+  <path d="M 20,6 H 6 V 20" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square" /><path d="M 880,6 H 894 V 20" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square" /><path d="M 20,112 H 6 V 98" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square" /><path d="M 880,112 H 894 V 98" fill="none" stroke="#FF2A6D" stroke-width="2.4" opacity="0.75" stroke-linecap="square" />
 </svg>
