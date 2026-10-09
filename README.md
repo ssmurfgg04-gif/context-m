@@ -1,18 +1,19 @@
 <div align="center">
-  <h1>cortexm</h1>
-  <h3>Deterministic agent memory. μ=0. Free, local, forever. Same result every time.</h3>
-</div>
 
-<div align="center">
-  <a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml"><img src="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml/badge.svg?branch=main" alt="Tests"></a>
-  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/v/cortexm?color=%2334D058&label=pypi" alt="PyPI"></a>
-  <a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/pyversions/cortexm.svg?color=%2334D058" alt="Python"></a>
-  <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://www.npmjs.com/package/dsh-cortexm"><img src="https://img.shields.io/npm/v/dsh-cortexm?color=%2334D058&label=npm%20%7Cdsh" alt="npm"></a>
-  <a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/AGENTS.md"><img src="https://img.shields.io/badge/AGENTS.md-2026-2f2f2f?logo=github" alt="AGENTS.md"></a>
-</div>
+<img src="assets/banner.svg" width="100%" alt="cortexm — arctic banner: deterministic agent memory" />
 
-<br>
+**Deterministic agent memory. μ=0. Free, local, forever. Same result every time.**
+
+<a href="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml"><img src="https://github.com/ssmurfgg04-gif/context-m/actions/workflows/test.yml/badge.svg?branch=main" alt="Tests"></a>
+<a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/v/cortexm?color=%2334D058&label=pypi" alt="PyPI"></a>
+<a href="https://pypi.org/project/cortexm/"><img src="https://img.shields.io/pypi/pyversions/cortexm.svg?color=%2334D058" alt="Python"></a>
+<a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+<a href="https://www.npmjs.com/package/dsh-cortexm"><img src="https://img.shields.io/npm/v/dsh-cortexm?color=%2334D058&label=npm%20%7Cdsh" alt="npm"></a>
+<a href="https://github.com/ssmurfgg04-gif/context-m/blob/main/AGENTS.md"><img src="https://img.shields.io/badge/AGENTS.md-2026-2f2f2f?logo=github" alt="AGENTS.md"></a>
+<img src="https://img.shields.io/github/stars/ssmurfgg04-gif/context-m?color=FF9E1B&label=%E2%98%85%20stars&style=flat" alt="stars">
+<img src="https://img.shields.io/github/forks/ssmurfgg04-gif/context-m?color=7CDBF5&label=forks&style=flat" alt="forks">
+
+</div>
 
 > **cortexm remembers what you tell it. Forever. For free. On your machine. Same result every time.**
 
@@ -196,3 +197,11 @@ The README is intentionally short. Everything else lives in `docs/`:
 ### License
 
 Apache 2.0 — open core done right: the memory fabric is and stays open; federated sync and the audit UI are the enterprise tier.
+
+---
+
+<div align="center">
+
+<sub>🐧 part of <a href="https://github.com/ssmurfgg04-gif">the ice shelf</a> · cold code, warm commits ❄️</sub>
+
+</div>
