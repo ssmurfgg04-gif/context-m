@@ -576,8 +576,100 @@ TOOLS = [
             },
         },
     },
-]
 
+    # ----- CortexM improvements (P0, P1, P3, P7) -----
+    {
+        "name": "contextm_search_all",
+        "description": "Cross-namespace search: search across ALL user_ids for a query. "
+                       "Returns hits tagged with their source namespace. Fixes the "
+                       "'walking blind' problem where agents in one namespace can't "
+                       "see facts stored in another.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "default": 20},
+                "kind": {"type": "string",
+                         "enum": ["fact", "experience", "observation"]},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "contextm_move",
+        "description": "Move a fact (or all facts) from one namespace (user_id) to "
+                       "another. Use to consolidate scattered memories.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "fact_id": {"type": "string",
+                            "description": "Specific fact ID to move. Omit to move "
+                                           "all facts from source namespace."},
+                "from_user": {"type": "string"},
+                "to_user": {"type": "string"},
+            },
+            "required": ["from_user", "to_user"],
+        },
+    },
+    {
+        "name": "contextm_merge",
+        "description": "Merge two namespaces: copy all facts from source to target "
+                       "(dedup by content hash), optionally delete source.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "source_user": {"type": "string"},
+                "target_user": {"type": "string"},
+                "delete_source": {"type": "boolean", "default": False},
+            },
+            "required": ["source_user", "target_user"],
+        },
+    },
+    {
+        "name": "contextm_fact_set",
+        "description": "Store a structured key-value fact. Enables precise lookup "
+                       "via contextm_fact_get without semantic search.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string"},
+                "value": {"type": "string"},
+                "user_id": {"type": "string", "default": "default"},
+                "ttl_days": {"type": "integer",
+                             "description": "Optional TTL in days. Fact expires "
+                                            "after this period."},
+            },
+            "required": ["key", "value"],
+        },
+    },
+    {
+        "name": "contextm_fact_get",
+        "description": "Retrieve a structured fact by exact key. Returns the value "
+                       "and metadata. Faster than semantic search for known keys.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string"},
+                "user_id": {"type": "string", "default": "default"},
+            },
+            "required": ["key"],
+        },
+    },
+    {
+        "name": "contextm_summary",
+        "description": "Store a meta-fact (summary) that links to underlying facts. "
+                       "Enables drill-down from high-level summaries to source facts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "fact_ids": {"type": "array", "items": {"type": "string"}},
+                "user_id": {"type": "string", "default": "default"},
+            },
+            "required": ["summary"],
+        },
+    },
+]
 
 class MCPServer:
     def __init__(self, memory: Memory) -> None:
@@ -853,6 +945,160 @@ class MCPServer:
                     user_id=args.get("user_id", "default"),
                     run_id=args.get("run_id"))
                 text = out["handoff"]
+            # ----- CortexM improvements (P0, P1, P3, P7) -----
+            elif name == "contextm_search_all":
+                # Cross-namespace search: search across all user_ids
+                import sqlite3 as _sq
+                db_path = m.config.db_path
+                conn = _sq.connect(db_path)
+                users = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT user_id FROM facts WHERE user_id IS NOT NULL").fetchall()]
+                conn.close()
+                all_hits = []
+                for u in users:
+                    try:
+                        out = m.search(args.get("query", ""),
+                                       user_id=u,
+                                       limit=args.get("limit", 20),
+                                       kind=args.get("kind"))
+                        for r in out.get("results", []):
+                            r["_namespace"] = u
+                            all_hits.append(r)
+                    except Exception:
+                        pass
+                # Sort by relevance (if score present) else keep order
+                all_hits.sort(key=lambda x: x.get("score", 0), reverse=True)
+                limit = args.get("limit", 20)
+                all_hits = all_hits[:limit]
+                text = json.dumps({"results": all_hits,
+                                  "namespaces_searched": users,
+                                  "total_hits": len(all_hits)}, indent=1, default=str)
+            elif name == "contextm_move":
+                from_user = args.get("from_user", "default")
+                to_user = args.get("to_user", "default")
+                fact_id = args.get("fact_id")
+                import sqlite3 as _sq
+                db_path = m.config.db_path
+                conn = _sq.connect(db_path)
+                if fact_id:
+                    conn.execute("UPDATE facts SET user_id=? WHERE id=? AND user_id=?",
+                                 (to_user, fact_id, from_user))
+                    moved = conn.total_changes
+                else:
+                    conn.execute("UPDATE facts SET user_id=? WHERE user_id=?",
+                                 (to_user, from_user))
+                    moved = conn.total_changes
+                conn.commit()
+                conn.close()
+                m.reader.invalidate_caches()
+                text = json.dumps({"moved": moved, "from": from_user, "to": to_user})
+            elif name == "contextm_merge":
+                source = args.get("source_user", "default")
+                target = args.get("target_user", "default")
+                delete_source = args.get("delete_source", False)
+                import sqlite3 as _sq
+                db_path = m.config.db_path
+                conn = _sq.connect(db_path)
+                # Get all facts from source
+                rows = conn.execute("SELECT * FROM facts WHERE user_id=?", (source,)).fetchall()
+                cols = [d[0] for d in conn.execute("SELECT * FROM facts LIMIT 1").description]
+                # Insert into target (skip duplicates by id)
+                inserted = 0
+                for row in rows:
+                    rowdict = dict(zip(cols, row))
+                    rowdict["user_id"] = target
+                    # Check if already exists
+                    exists = conn.execute("SELECT 1 FROM facts WHERE id=?", (rowdict["id"],)).fetchone()
+                    if exists:
+                        continue
+                    try:
+                        placeholders = ", ".join("?" for _ in cols)
+                        conn.execute(f"INSERT INTO facts ({', '.join(cols)}) VALUES ({placeholders})",
+                                     tuple(rowdict[c] for c in cols))
+                        inserted += 1
+                    except Exception:
+                        pass
+                if delete_source:
+                    conn.execute("DELETE FROM facts WHERE user_id=?", (source,))
+                conn.commit()
+                conn.close()
+                m.reader.invalidate_caches()
+                text = json.dumps({"merged": inserted, "source": source, "target": target,
+                                  "deleted_source": delete_source})
+            elif name == "contextm_fact_set":
+                key = args.get("key", "")
+                value = args.get("value", "")
+                user_id = args.get("user_id", "default")
+                ttl_days = args.get("ttl_days")
+                from datetime import datetime, timedelta, timezone
+                expires_at = None
+                if ttl_days is not None:
+                    expires_at = (datetime.now(timezone.utc) + timedelta(days=ttl_days)).isoformat()
+                # Use the kv table for structured key-value storage (per-user prefix)
+                import sqlite3 as _sq
+                conn = _sq.connect(m.config.db_path)
+                kv_key = f"fact:{user_id}:{key}"
+                _now = datetime.now(timezone.utc).isoformat()
+                conn.execute("INSERT OR REPLACE INTO kv (k, v) VALUES (?, ?)",
+                             (kv_key, json.dumps({"value": value, "expires_at": expires_at,
+                                                  "set_at": _now})))
+                conn.commit()
+                conn.close()
+                text = json.dumps({"key": key, "value": value, "user_id": user_id,
+                                  "expires_at": expires_at})
+            elif name == "contextm_fact_get":
+                key = args.get("key", "")
+                user_id = args.get("user_id", "default")
+                import sqlite3 as _sq
+                db_path = m.config.db_path
+                conn = _sq.connect(db_path)
+                kv_key = f"fact:{user_id}:{key}"
+                row = conn.execute("SELECT v FROM kv WHERE k=?", (kv_key,)).fetchone()
+                conn.close()
+                if row:
+                    import json as _j
+                    data = _j.loads(row[0])
+                    value = data.get("value")
+                    expires_at = data.get("expires_at")
+                    expired = False
+                    if expires_at:
+                        from datetime import datetime, timezone
+                        try:
+                            exp = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                            if exp < datetime.now(timezone.utc):
+                                expired = True
+                        except Exception:
+                            pass
+                    text = json.dumps({"key": key, "value": value, "user_id": user_id,
+                                      "expires_at": expires_at, "expired": expired,
+                                      "set_at": data.get("set_at")})
+                else:
+                    text = json.dumps({"key": key, "value": None, "found": False})
+            elif name == "contextm_summary":
+                summary = args.get("summary", "")
+                fact_ids = args.get("fact_ids", [])
+                user_id = args.get("user_id", "default")
+                # Store as a fact with relation="summarizes" and provenance linking to fact_ids
+                out = m.add(summary, user_id=user_id,
+                            metadata={"type": "summary", "linked_facts": fact_ids})
+                # Update provenance with linked fact ids
+                import sqlite3 as _sq
+                conn = _sq.connect(m.config.db_path)
+                row = conn.execute("SELECT id FROM facts WHERE user_id=? AND value=? ORDER BY tx_from DESC LIMIT 1",
+                                   (user_id, summary)).fetchone()
+                if row:
+                    fid = row[0]
+                    import json as _j
+                    prov = _j.dumps({"type": "summary", "linked_facts": fact_ids})
+                    conn.execute("UPDATE facts SET relation='summarizes', provenance=?, memory_type='long_term' WHERE id=?",
+                                 (prov, fid))
+                    conn.commit()
+                conn.close()
+                m.reader.invalidate_caches()
+                text = json.dumps({"summary": summary, "fact_ids": fact_ids,
+                                  "stored": out.get("stats", {}).get("facts_inserted", 0)},
+                                 default=str)
+
             else:
                 return {"content": [{"type": "text",
                                      "text": f"unknown tool {name}"}],

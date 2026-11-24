@@ -92,6 +92,7 @@ class Fact:
     value: str
     valid_from: str                 # when it became true in reality
     valid_to: str | None = None     # when it stopped being true (None = now)
+    expires_at: str | None = None    # TTL expiry (None = never)
     tx_from: str = ""               # when we recorded it
     tx_to: str | None = None
     confidence: float = 0.8
@@ -130,6 +131,7 @@ class Fact:
         d["is_derived"] = int(self.is_derived)
         d["quarantined"] = int(self.quarantined)
         d["provenance"] = json.dumps(self.provenance, default=str)
+        d["expires_at"] = self.expires_at
         return d
 
     @staticmethod
@@ -138,6 +140,7 @@ class Fact:
         row["is_active"] = bool(row["is_active"])
         row["is_derived"] = bool(row["is_derived"])
         row["quarantined"] = bool(row.get("quarantined", 0))
+        row["expires_at"] = row.get("expires_at")
         row["provenance"] = json.loads(row.get("provenance") or "{}")
         return Fact(**row)
 

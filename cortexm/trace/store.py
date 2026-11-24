@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS facts (
   confidence REAL DEFAULT 0.8,
   source_hash TEXT DEFAULT '', source_id TEXT DEFAULT '',
   user_id TEXT DEFAULT 'default', agent_id TEXT, run_id TEXT,
+  expires_at TEXT,
   memory_type TEXT DEFAULT 'short_term',
   kind TEXT DEFAULT 'fact',
   access_count INTEGER DEFAULT 0, reinforcement INTEGER DEFAULT 1,
@@ -45,6 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_facts_valid ON facts(valid_from);
 CREATE INDEX IF NOT EXISTS idx_facts_birth ON facts(birth_commit);
 -- composite indexes added for the v2 SPARQL + REST query paths
 CREATE INDEX IF NOT EXISTS idx_facts_user_active ON facts(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_facts_expires ON facts(expires_at);
 CREATE INDEX IF NOT EXISTS idx_facts_value ON facts(value);
 CREATE INDEX IF NOT EXISTS idx_facts_subject_value ON facts(subject, value);
 
@@ -101,7 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_neg_active ON negation_records(is_active);
 FACT_COLUMNS = ("id, subject, relation, value, valid_from, valid_to, tx_from, tx_to, "
                 "confidence, source_hash, source_id, user_id, agent_id, run_id, "
                 "memory_type, access_count, reinforcement, is_active, is_derived, "
-                "quarantined, birth_commit, retired_commit, provenance")
+                "quarantined, birth_commit, retired_commit, provenance, expires_at")
 
 
 class _SafeCursor:
@@ -757,6 +759,10 @@ class TraceStore:
             clauses.append("quarantined=0")
         if user_id is not None:
             clauses.append("user_id=?"); params.append(user_id)
+        # TTL: exclude expired facts
+        from datetime import datetime, timezone
+        clauses.append("(expires_at IS NULL OR expires_at > ?)")
+        params.append(datetime.now(timezone.utc).isoformat())
         if agent_id is not None:
             clauses.append("agent_id=?"); params.append(agent_id)
         if run_id is not None:
