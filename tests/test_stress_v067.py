@@ -350,8 +350,12 @@ def _scrub(o):
 def _e2e_run():
     m = Memory(config=Config(db_path=":memory:"))
     try:
+        # μ=0: pin ingestion time. Without this, provenance tx_from carries
+        # wall-clock seconds and two runs straddling a second boundary
+        # differ, making this byte-exact test flaky.
         for msg in CORPUS:
-            m.add([{"role": "user", "content": msg}], user_id="det")
+            m.add([{"role": "user", "content": msg}], user_id="det",
+                  timestamp="2026-01-01T00:00:00Z")
         outs = [m.search(q, user_id="det", limit=5) for q in QUERIES]
         return json.dumps(_scrub(outs), sort_keys=True, default=str)
     finally:
